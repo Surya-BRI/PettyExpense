@@ -1,0 +1,14 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+pydantic-settings>=2.2.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+sqlalchemy>=2.0.0
+pyodbc>=5.0.0
+boto3>=1.34.0
+python-dotenv>=1.0.0
+httpx>=0.27.0
+pillow>=10.0.0
+# Optional: real OCR (falls back to stub if not installed)
+# paddleocr>=2.7.0
