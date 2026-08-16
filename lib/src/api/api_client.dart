@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
@@ -39,7 +39,9 @@ class ApiClient {
       };
 
   Uri _uri(String path, [Map<String, String>? query]) {
-    return Uri.parse('$baseUrl$path').replace(queryParameters: query);
+    final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
+    if (kDebugMode) debugPrint('[API] → $uri');
+    return uri;
   }
 
   /// Runs an authenticated request; on a 401, refreshes the access token once

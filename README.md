@@ -88,19 +88,24 @@ flutter pub get
 
 ### Connect Flutter → backend (`.env`)
 
-Root file [`.env`](.env) (loaded by the app):
+Root file [`.env`](.env) (loaded by the app) — a single `API_BASE_URL`, **defaulting to production**:
 
 ```env
-API_BASE_URL=http://10.0.2.2:8000
+API_BASE_URL=https://expensetracker-api.app-brisigns.com
 ```
+
+The file's top comments list the alternative dev URLs to copy in when you want a local backend instead:
 
 | Where the app runs | `API_BASE_URL` |
 |--------------------|----------------|
-| Android emulator | `http://10.0.2.2:8000` ← default in `.env` |
-| iOS simulator / Windows / Chrome | `http://127.0.0.1:8000` |
-| Physical phone (same Wi‑Fi) | `http://<your-PC-LAN-IP>:8000` |
+| Production (default) | `https://expensetracker-api.app-brisigns.com` |
+| Android emulator, local backend | `http://10.0.2.2:8000` |
+| iOS simulator / Windows / Chrome, local backend | `http://127.0.0.1:8000` |
+| Physical phone, local backend (same Wi‑Fi) | `http://<your-PC-LAN-IP>:8000` |
 
 `127.0.0.1` inside the Android emulator is the **phone itself**, not your PC — that causes `Connection refused`.
+
+One-off override without editing the file: `flutter run --dart-define=API_BASE_URL=http://...`
 
 ### Run from terminal
 
@@ -109,14 +114,14 @@ flutter devices
 flutter run -d emulator-5554
 ```
 
-No `--dart-define` needed if `.env` is set. Full restart after changing `.env` (not just hot reload).
+Hits production by default (see above). Full restart after changing `.env` (not just hot reload).
 
-**Windows / Chrome:** set `API_BASE_URL=http://127.0.0.1:8000` in `.env`, then `flutter run -d windows`.
+**Local backend on Windows / Chrome:** set `API_BASE_URL=http://127.0.0.1:8000` in `.env`, then `flutter run -d windows`.
 
 ### Run from Android Studio
 
-1. Open `expense_app`, start AVD, Run.
-2. Ensure root `.env` has `API_BASE_URL=http://10.0.2.2:8000`.
+1. Open `expense_app`, start AVD, Run. Hits production by default.
+2. For a local backend: set `API_BASE_URL=http://10.0.2.2:8000` in root `.env`.
 3. After editing `.env`, stop and Run again (full restart).
 
 Camera / gallery need an emulator camera or a real device; gallery works with sample images.
@@ -209,8 +214,8 @@ Status as of 2026-08-16: backend deployed and running; public HTTPS pending a DN
 | Deploy loop | WinSCP upload of `backend/`'s `main.py`, `api/`, `services/`, `database/`, `auth/`, `config.py`, `requirements.txt`, `scripts/` (never `.venv`, `uploads/`, `.env`) → `pip install -r requirements.txt` if deps changed → `pm2 restart expensetracker-api` |
 
 **Open items:**
-- [ ] Add DNS A record `expensetracker-api.app-brisigns.com` → `3.7.128.46`, then run `sudo certbot --nginx -d expensetracker-api.app-brisigns.com` — this is what's blocking the public HTTPS link.
-- [ ] Commit + push this session's local changes (AED currency default, OCR rewrite, `bcrypt<4.1` pin, `backend/.venv` setup, login-screen password eye-toggle) — the server currently has the `bcrypt` fix applied manually via `pip install`, not yet reflected in committed `requirements.txt` history, so a future fresh clone/deploy would hit the same bug again until this is pushed.
+- [ ] Add DNS A record `expensetracker-api.app-brisigns.com` → `3.7.128.46`, then run `sudo certbot --nginx -d expensetracker-api.app-brisigns.com` — this is what's blocking the public HTTPS link. **Until this lands, the Flutter app's default `API_BASE_URL` (production) cannot reach the backend at all** — set `API_BASE_URL` to a local/LAN dev URL in `.env` (or `--dart-define=API_BASE_URL=...`) in the meantime.
+- [x] Commit + push this session's local changes — done (`6409e0c` on `main`).
 
 **Known deployment gotcha:** `passlib[bcrypt]>=1.7.4` (2020) is incompatible with `bcrypt>=4.1` — passlib's internal self-test hits a `ValueError: password cannot be longer than 72 bytes` on *any* login attempt, not because of the actual user's password length. Fixed by pinning `bcrypt<4.1` in `requirements.txt`. If a fresh `pip install` on a new box still shows this, run `pip install "bcrypt<4.1"` and restart.
 
