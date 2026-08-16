@@ -46,40 +46,80 @@ class OcrResult {
     required this.receiptId,
     required this.s3Key,
     required this.vendor,
-    required this.amount,
+    this.expenseType,
+    this.amount,
+    this.vatAmount,
+    this.totalAmount,
+    this.currency,
     required this.date,
     this.confidence,
+    this.fieldConfidence,
+    this.lowConfidenceFields,
     this.rawText,
     this.imageUrl,
     this.imageHash,
     this.duplicateWarning,
+    this.ocrStatus,
+    this.reconciliationMismatch = false,
   });
 
   final int receiptId;
   final String s3Key;
   final String vendor;
-  final double amount;
+  final String? expenseType;
+  final double? amount;
+  final double? vatAmount;
+  final double? totalAmount;
+  final String? currency;
   final String date;
   final double? confidence;
+  final Map<String, double>? fieldConfidence;
+  final List<String>? lowConfidenceFields;
   final String? rawText;
   final String? imageUrl;
   final String? imageHash;
   final DuplicateWarning? duplicateWarning;
+  final String? ocrStatus;
+  final bool reconciliationMismatch;
+
+  bool get isPending => ocrStatus == 'pending';
+
+  bool isLow(String field) =>
+      (lowConfidenceFields ?? const <String>[]).contains(field);
+
+  double? confidenceFor(String field) =>
+      (fieldConfidence ?? const <String, double>{})[field];
 
   factory OcrResult.fromJson(Map<String, dynamic> json) {
+    final rawConfidence = json['field_confidence'];
+    final fieldConfidence = <String, double>{};
+    if (rawConfidence is Map) {
+      rawConfidence.forEach((key, value) {
+        if (value is num) fieldConfidence[key.toString()] = value.toDouble();
+      });
+    }
+    final rawLow = json['low_confidence_fields'];
     return OcrResult(
       receiptId: (json['receipt_id'] as num).toInt(),
       s3Key: json['s3_key'] as String,
       vendor: (json['vendor'] ?? '') as String,
-      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      expenseType: json['expense_type'] as String?,
+      amount: (json['amount'] as num?)?.toDouble(),
+      vatAmount: (json['vat_amount'] as num?)?.toDouble(),
+      totalAmount: (json['total_amount'] as num?)?.toDouble(),
+      currency: json['currency'] as String?,
       date: (json['date'] ?? '') as String,
       confidence: (json['confidence'] as num?)?.toDouble(),
+      fieldConfidence: fieldConfidence,
+      lowConfidenceFields: rawLow is List ? rawLow.map((e) => e.toString()).toList() : const [],
       rawText: json['raw_text'] as String?,
       imageUrl: json['image_url'] as String?,
       imageHash: json['image_hash'] as String?,
       duplicateWarning: json['duplicate_warning'] == null
           ? null
           : DuplicateWarning.fromJson(json['duplicate_warning'] as Map<String, dynamic>),
+      ocrStatus: json['ocr_status'] as String?,
+      reconciliationMismatch: json['reconciliation_mismatch'] == true,
     );
   }
 }
@@ -181,6 +221,7 @@ class ExpenseClaim {
     required this.status,
     this.type = 'reimbursement',
     this.regionCode,
+    this.employeeName,
     this.vendorName,
     this.categoryName,
     this.vatAmount = 0,
@@ -199,12 +240,14 @@ class ExpenseClaim {
     this.receipt,
     this.history,
     this.duplicateWarning,
+    this.stageSequence = const [],
   });
 
   final int id;
   final int employeeId;
   final String type;
   final String? regionCode;
+  final String? employeeName;
   final String? vendorName;
   final double amount;
   final String currency;
@@ -227,6 +270,7 @@ class ExpenseClaim {
   final ReceiptInfo? receipt;
   final List<ClaimHistoryItem>? history;
   final DuplicateWarning? duplicateWarning;
+  final List<String> stageSequence;
 
   /// Backward-compat display helper — old UI code refers to "vendor".
   String get vendor => vendorName ?? '';
@@ -234,15 +278,32 @@ class ExpenseClaim {
   /// Backward-compat display helper — old UI code refers to "category".
   String get category => categoryName ?? '';
 
+  /// Falls back to "employee #N" only if the display name genuinely isn't
+  /// available (e.g. an orphaned employee_id) — never shown otherwise.
+  String get employeeDisplay => employeeName ?? 'employee #$employeeId';
+
+  /// Most recent dispute/reject history entry — the authoritative source for
+  /// "why was this sent back," since `remarks` alone can be stale (it's also
+  /// written by unrelated edit paths).
+  ClaimHistoryItem? get lastReturnEntry {
+    final h = history;
+    if (h == null) return null;
+    for (final entry in h.reversed) {
+      if (entry.action == 'dispute' || entry.action == 'reject') return entry;
+    }
+    return null;
+  }
+
   factory ExpenseClaim.fromJson(Map<String, dynamic> json) {
     return ExpenseClaim(
       id: (json['id'] as num).toInt(),
       employeeId: (json['employee_id'] as num?)?.toInt() ?? 0,
       type: json['type'] as String? ?? 'reimbursement',
       regionCode: json['region_code'] as String?,
+      employeeName: json['employee_name'] as String?,
       vendorName: json['vendor_name'] as String?,
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
-      currency: json['currency'] as String? ?? 'INR',
+      currency: json['currency'] as String? ?? 'AED',
       vatAmount: (json['vat_amount'] as num?)?.toDouble() ?? 0,
       totalAmount: (json['total_amount'] as num?)?.toDouble(),
       billDate: json['bill_date'] as String?,
@@ -268,6 +329,7 @@ class ExpenseClaim {
       duplicateWarning: json['duplicate_warning'] == null
           ? null
           : DuplicateWarning.fromJson(json['duplicate_warning'] as Map<String, dynamic>),
+      stageSequence: (json['stage_sequence'] as List?)?.map((e) => e as String).toList() ?? const [],
     );
   }
 }

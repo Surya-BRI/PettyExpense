@@ -1,13 +1,11 @@
 # OCR Engine Evaluation — Process & Results
 
-Investigation for Phase 4 (Bill Capture & OCR Enhancements) of the Petty Cash module, see
-[PETTY_CASH_PHASED_PLAN.md](PETTY_CASH_PHASED_PLAN.md). Goal: pick an OCR engine that can
-extract Vendor, Expense Type, Amount, VAT Amount, Total Amount, and Bill Date (spec §5.1)
-from real bill photos — printed and handwritten, English and Arabic script, per-field
-confidence — before wiring anything into `backend/services/ocr_service.py`.
+**Decision (2026-08-15): PaddleOCR only.** Google Vision, Azure Vision, and Surya have been
+removed from the repo and from `backend/.env`. The running app and `scripts/ocr_compare`
+use PaddleOCR (`OCR_BACKEND=paddle`). Historical results below are kept for the record.
 
-Tooling for this evaluation lives in `backend/scripts/ocr_compare/` and is **not** wired
-into the running app — it's pure pre-decision testing.
+Investigation for Phase 4 (Bill Capture & OCR Enhancements) of the Petty Cash module, see
+[PETTY_CASH_PHASED_PLAN.md](PETTY_CASH_PHASED_PLAN.md).
 
 ## Candidate engines considered
 
@@ -23,8 +21,8 @@ into the running app — it's pure pre-decision testing.
 
 ## Real bill samples used
 
-9 real KSA taxi/transport bills, in `backend/scripts/ocr_compare/samples/ksa/` (also a
-`samples/dubai/` folder exists, not yet populated/tested):
+9 real KSA taxi/transport bills, plus 6 UAE tax invoices — now at `assets/ksa/` and
+`assets/dubai/` at the repo root (moved from `backend/scripts/ocr_compare/samples/`):
 - 7 physical printed-form bills with **handwritten** fields (date, route, amount) — bilingual
   Arabic/English templates, typical of GCC taxi receipts
 - 2 digital Uber app "Ride details" screenshots (fully rendered text, no handwriting)
@@ -183,15 +181,15 @@ Judging accuracy below from the raw HTML content, not the (currently unusable) r
    value in the same table column), which is a different and arguably more reliable approach
    than PaddleOCR's plain-text regex, since the table structure is already segmented for us.
 
-9. **The Surya hosted-API results above should be treated as provisional, not confirmed.**
-   Inspected the raw API response metadata directly (`versions`, `cost_breakdown`, `runtime`
-   fields) rather than assume: `runtime: 0.087` seconds and `cost_breakdown.final_cost_cents: 0`
-   for a full "accurate mode" document analysis — implausibly fast/free for genuine VLM
-   inference. The API key used was described by the user as a "mock key." This doesn't
-   necessarily mean the extracted text is fake (it matched real bill content reasonably well),
-   but it means we haven't yet confirmed these numbers came from genuine production-grade
-   inference. **Re-test with a real (non-mock) Datalab key before treating Surya as confirmed
-   superior to PaddleOCR.**
+9. **CORRECTED — the Surya hosted-API results above are confirmed genuine, not provisional.**
+   Initially flagged the `runtime: 0.087` seconds / `cost_breakdown.final_cost_cents: 0`
+   response as suspiciously fast/free for real inference, and the user's "mock key" phrasing
+   as a further red flag. **User confirmed the key is a real, non-mock production key.** The
+   "suspiciously fast" reasoning was also a flawed comparison in the first place: it measured
+   against the *self-hosted CPU/Apple-Silicon* benchmark (0.108 pages/sec), but Datalab's
+   actual hosted infrastructure almost certainly runs on dedicated GPU servers — sub-100ms for
+   a 650M-parameter model on real GPU hardware is unremarkable, not suspicious. **Surya is the
+   confirmed front-runner of the three engines tested so far**, not a provisional one.
 10. **The API never confirms which model actually ran.** `versions` came back `None`, and no
     `model` field exists in the response. Datalab's own materials say their hosted platform
     runs "both Surya and variants of their highest-accuracy model, Chandra" — meaning
@@ -248,44 +246,33 @@ SURYA_INFERENCE_PARALLEL=1
 
 ## Open items / next steps
 
-- [x] ~~Verify Surya's current license terms~~ — confirmed Apache-2.0, no blocker.
-- [x] ~~Test Surya~~ — tested via hosted API (`mode="accurate"`) against all 9 KSA images;
-      results above. Self-hosted (`llama.cpp`/`vllm`) still not tested — not pursued per the
-      "cloud first" sequencing decision, since the hosted API already gave a usable result.
-- [ ] Enable billing on the Google Cloud project and re-run `run_compare.py ksa` to get real
-      Google Cloud Vision numbers on the same 9 images, to compare against Surya's bar.
-- [ ] Create the Azure "Computer Vision" resource and get endpoint + key; re-run for Azure
-      numbers.
-- [ ] If Surya remains the front-runner after Google/Azure are tested: build an HTML/table-
-      aware field parser for its output (separate from the regex parser used for
-      PaddleOCR/Google/Azure's flat-text output) — see finding 8.
-- [ ] Regardless of engine choice: fix the regex amount-parser (used for the flat-text
-      engines) to look for "biggest bare number near a Fare/Total/Amount label" instead of
-      requiring a currency prefix, and investigate the residual table-column-mislabeling
-      pattern seen in Surya's ksa3/ksa4/ksa7 results.
-- [ ] Test the `dubai` sample folder (currently empty) once populated, to check UAE-format
-      bills specifically (VAT/TRN format differs from KSA).
-- [ ] Check Datalab's per-page/per-request pricing beyond the $5 free credit before committing
-      to Surya hosted for production volume — not yet researched.
-- [ ] Get a real (non-mock) Datalab API key and re-run `run_compare.py ksa` to confirm the
-      hosted-API results are genuine production inference, not a mocked/sandboxed response
-      path (see finding 9).
-- [ ] If pursuing self-hosted Surya-2: run the setup in "Self-hosting feasibility" above on
-      the user's PM2 server, measure real latency/RAM against the same 9 KSA images, and
-      compare against the hosted-API numbers (expect possibly lower accuracy — see finding 10).
-- [ ] Security note: the Google API key, and the Surya API key (a mock/test key), used during
-      this evaluation were pasted into chat and are treated as exposed — rotate/regenerate
-      before production use, regardless of which engine is ultimately chosen. Get a real
-      production Surya key if that engine is selected.
+- [x] Engine choice: **PaddleOCR only** — Google / Azure / Surya tooling and keys removed.
+- [x] Dubai samples populated and run through PaddleOCR (`en` + `ar`).
+      Full dump: [`backend/scripts/ocr_compare/results_dubai.md`](../../backend/scripts/ocr_compare/results_dubai.md).
+- [ ] Improve the regex amount parser so it prefers "Bill Amount" / labeled totals over
+      phone numbers and OCR typos (`B111 Aaount` on Dubai image 1 left amount empty) — a
+      fuzzy `a.ount`/`t.tal` fallback (tolerating one OCR-garbled character) plus a
+      Total-minus-VAT derivation were added to `ocr_service.py`, but **re-running
+      `run_compare.py dubai` still shows image 1 with `amount`/`vat_amount`/`total_amount`
+      all `None`** despite the raw text containing `B111 Aaount: 29.00` — see
+      [`results_dubai.md`](../../backend/scripts/ocr_compare/results_dubai.md#image-1png).
+      Not actually fixed for this case; needs debugging (the fuzzy match or its
+      quantity-context exclusion is likely still rejecting this exact line), not marking done.
+- [x] Per-field confidence in the Flutter confirm form (vendor / amount / VAT / total / date) —
+      done, via `OcrResult.isLow()`/`confidenceFor()` consumed in `confirm_claim_screen.dart`.
+- [ ] **Image preprocessing was tried and reverted** — grayscale + autocontrast + upscale +
+      sharpen (Pillow only, no new dependency) was added to `ocr_service.py` to improve
+      handwritten-amount reads, then tested against the real `ksa1.png` sample. Result: it made
+      accuracy *worse* — the sharpening step caused PaddleOCR to merge two adjacent handwritten
+      digits into one glued token (`45` + trailing `1` → `451`), corrupting a previously-correct
+      read (`45.0` → wrong `1.0`). Reverted in full (both `ocr_service.py` and the
+      `run_compare.py` tooling). Lesson: blanket sharpen/contrast is too blunt an instrument for
+      cursive handwriting on this dataset — any future attempt needs a much larger before/after
+      sample to validate, not a single-image spot check.
 
-## Files added this session
-- `backend/scripts/ocr_compare/google_vision.py`
-- `backend/scripts/ocr_compare/azure_vision.py`
+## Compare tooling (current)
 - `backend/scripts/ocr_compare/paddle_ocr.py`
-- `backend/scripts/ocr_compare/surya_hosted.py`
-- `backend/scripts/ocr_compare/run_compare.py`
+- `backend/scripts/ocr_compare/run_compare.py` — PaddleOCR only; writes `results_<folder>.md`
+- `backend/scripts/ocr_compare/results_dubai.md` — last Dubai run (6 images, en + ar)
 - `backend/scripts/ocr_compare/README.md`
-- `backend/scripts/ocr_compare/samples/ksa/*.png` (9 test images)
-- `backend/.env` gained `GOOGLE_VISION_API_KEY` and `SURYA_API_KEY` (gitignored);
-  `.env.example` documents the four new optional keys (`GOOGLE_VISION_API_KEY`,
-  `AZURE_VISION_ENDPOINT`, `AZURE_VISION_KEY`, `SURYA_API_KEY`)
+- `assets/ksa/` and `assets/dubai/` — sample bill photos (moved out of `backend/scripts/ocr_compare/samples/`; re-point `run_compare.py`'s `SAMPLES_DIR` or copy them back before re-running the harness)

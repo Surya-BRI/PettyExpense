@@ -39,6 +39,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _selectedUsername = 'surya';
   String? _error;
   bool _busy = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -137,8 +138,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: _passCtrl,
-                        obscureText: true,
-                        decoration: const InputDecoration(labelText: 'Password'),
+                        obscureText: _obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 12),

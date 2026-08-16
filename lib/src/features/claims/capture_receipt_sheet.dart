@@ -41,12 +41,13 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
         setState(() => _busy = false);
         return;
       }
-      final draft = await ref.read(apiClientProvider).uploadOcr(File(xfile.path));
+      final stored = await ref.read(apiClientProvider).uploadReceipt(File(xfile.path));
       if (!mounted) return;
-      Navigator.of(context).pop(); // close sheet
+      Navigator.of(context).pop();
       context.push('/confirm', extra: {
-        'ocr': draft,
+        'ocr': stored,
         'localPath': xfile.path,
+        'runOcr': true,
       });
     } catch (e) {
       setState(() {
@@ -95,7 +96,13 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
           if (_busy)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 28),
-              child: Center(child: CircularProgressIndicator()),
+              child: Column(
+                children: [
+                  Center(child: CircularProgressIndicator()),
+                  SizedBox(height: 12),
+                  Text('Saving receipt…', textAlign: TextAlign.center),
+                ],
+              ),
             )
           else ...[
             FilledButton.icon(

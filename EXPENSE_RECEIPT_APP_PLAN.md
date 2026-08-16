@@ -1,5 +1,7 @@
 # Expense Receipt App — Architecture & Build Plan
 
+> **Historical planning doc.** Sections 6–8 below (data model, API sketch) describe the original single-approver MVP (`expense_claims`/`expense_receipts`, one `finance` role). The app has since been rebuilt around the "Petty Cash & Expense Bill Scanning Module v1.2" spec — multi-region, multi-level approval (HOD → dept-HOD → Accountant → Finance Manager), `ErpExpenseTransaction`/`ErpExpenseDocument` schema. See [`assets/docs/PETTY_CASH_PHASED_PLAN.md`](assets/docs/PETTY_CASH_PHASED_PLAN.md) for the current, code-verified state — this file is kept for the original problem statement, stack rationale, and OCR strategy discussion (§9), which are still accurate.
+
 Planning document for a **new internal app** that reuses Task Lens tech stack and patterns, but solves a different problem: **salesman expense reimbursement from bill photos**.
 
 This is **not** a fork of Task Lens domain logic (estimation approvals). It is a sibling product with the same engineering foundation.
@@ -134,7 +136,7 @@ EXPENSE-APP/   (or similar repo name)
 - `submitted_by` (employee / user id)
 - `vendor` / provider name
 - `amount`
-- `currency` (default INR)
+- `currency` (AED or SAR, chosen at capture — UAE/KSA only, no INR)
 - `bill_date`
 - `category` (`petrol` | `food` | `other`)
 - `project_id` / `op_number` (optional)
@@ -247,7 +249,7 @@ OCR alone returns lines of text. Still need to pull:
 - date
 
 Options:
-1. **Regex / rules** — `₹`, `Rs`, `Total`, date patterns (fast, brittle)
+1. **Regex / rules** — `AED`, `SAR`, `Total`, date patterns (fast, brittle)
 2. **Ollama LLM** — “Extract vendor, amount, date as JSON from this receipt text”
 3. Hybrid: regex first, LLM fallback when confidence is low
 
@@ -317,7 +319,6 @@ Camera / gallery → POST /api/claims/ocr
 - GPS at pump / geofence
 - Mileage calculation
 - Bulk Excel / ERP export
-- Multi-currency
 - Offline capture queue + sync
 - Push notifications
 - Advanced fraud scoring

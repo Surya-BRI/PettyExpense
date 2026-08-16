@@ -8,6 +8,7 @@ import '../../api/enums.dart';
 import '../../api/models.dart';
 import '../../routing/role_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/money.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../authentication/auth_controller.dart';
 
@@ -54,7 +55,7 @@ final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(
         AppNotification(
           id: 'sub-${c.id}',
           title: c.status == 'disputed' ? 'Disputed claim resubmitted' : 'New claim to review',
-          body: '${c.vendor} · ₹${c.amount.toStringAsFixed(2)} · ${c.category}',
+          body: '${c.vendor} · ${formatMoney(c.currency, c.amount)} · ${c.category}',
           createdAt: when,
           kind: 'submitted',
           route: '/approvals/${c.currentStage ?? defaultStageFor(role)}/${c.id}',
@@ -97,7 +98,7 @@ final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(
         'paid' => AppNotification(
             id: 'mine-pd-${c.id}',
             title: 'Claim paid',
-            body: '${c.vendor} · ₹${c.amount.toStringAsFixed(2)} marked as paid',
+            body: '${c.vendor} · ${formatMoney(c.currency, c.amount)} marked as paid',
             createdAt: when,
             kind: 'paid',
             route: '/claim/${c.id}',

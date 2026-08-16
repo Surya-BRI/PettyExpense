@@ -88,6 +88,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 return ConfirmClaimScreen(
                   ocr: extra['ocr'] as OcrResult,
                   localPath: extra['localPath'] as String?,
+                  runOcr: extra['runOcr'] == true,
                 );
               }
               return const Scaffold(

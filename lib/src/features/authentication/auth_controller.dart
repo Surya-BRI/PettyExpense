@@ -62,9 +62,45 @@ class AuthController extends StateNotifier<AuthState> {
         );
         return;
       } catch (_) {
-        await _storage.deleteAll();
+        // Access tokens are short-lived (60 min) — this is the expected, common
+        // case on every app reopen after that window, not just an edge case.
+        // Try the 7-day refresh token before wiping the session and dropping
+        // back to the mock user.
+        if (await _tryRefresh(refresh) != null) return;
       }
     }
+    await _fallbackToMock();
+  }
+
+  /// Shared by `_bootstrap` (app launch) and `refreshOnUnauthorized`
+  /// (mid-session, called by `ApiClient` when a request comes back 401) — one
+  /// place that knows how to turn a refresh token into a new session.
+  /// Returns the new access token, or null if the refresh token itself is
+  /// missing/expired/invalid.
+  Future<String?> _tryRefresh(String? refreshToken) async {
+    if (refreshToken == null || refreshToken.isEmpty) return null;
+    try {
+      final client = ApiClient(baseUrl: kDefaultApiBase);
+      final data = await client.refresh(refreshToken);
+      final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+      final access = data['access_token'] as String;
+      final newRefresh = data['refresh_token'] as String;
+      await _storage.write(key: 'access_token', value: access);
+      await _storage.write(key: 'refresh_token', value: newRefresh);
+      state = AuthState(
+        user: user,
+        accessToken: access,
+        refreshToken: newRefresh,
+        useMockBypass: false,
+      );
+      return access;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _fallbackToMock() async {
+    await _storage.deleteAll();
     // Phase-friendly mock bypass until an employee logs in
     state = const AuthState(
       user: AuthUser(
@@ -75,6 +111,18 @@ class AuthController extends StateNotifier<AuthState> {
       ),
       useMockBypass: true,
     );
+  }
+
+  /// Called by `ApiClient` when any authenticated request comes back 401 —
+  /// tries the refresh token so the request can be retried once with a new
+  /// access token, without the user noticing their session ever briefly
+  /// invalidated. Falls back to the mock session if the refresh token itself
+  /// is dead (matches `_bootstrap`'s behavior for that case).
+  Future<String?> refreshOnUnauthorized() async {
+    final refreshToken = state.refreshToken ?? await _storage.read(key: 'refresh_token');
+    final access = await _tryRefresh(refreshToken);
+    if (access == null) await _fallbackToMock();
+    return access;
   }
 
   Future<void> login(String username, String password) async {

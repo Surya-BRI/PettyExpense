@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     s3_bucket: str = ""  # optional fallback
     s3_prefix: str = ""  # optional extra path under folder
 
-    ocr_backend: str = "stub"  # stub | paddle
+    ocr_backend: str = "paddle"  # paddle | stub
 
     auth_mode: str = "mock"  # mock | erp
     cors_origins: str = "*"

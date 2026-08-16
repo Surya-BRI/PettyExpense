@@ -5,6 +5,10 @@
 *.swp
 .DS_Store
 
+# Python (backend)
+backend/.venv/
+__pycache__/
+
 # Secrets / local env (never commit backend secrets)
 backend/.env
 # Root .env is Flutter API_BASE_URL only (safe to commit); keep example in sync
@@ -35,6 +39,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# Flutter build cache moved from /build/ into assets/build/ — not the app's real assets
+assets/build/
 /coverage/
 
 # Symbolication related

@@ -19,6 +19,19 @@ from services.ocr_service import ocr_service
 from services.storage import storage_service
 
 
+def _field_confidence_json(document: Optional[ErpExpenseDocument]) -> Optional[str]:
+    if not document or not document.ocr_raw_json:
+        return None
+    try:
+        data = json.loads(document.ocr_raw_json) if isinstance(document.ocr_raw_json, str) else document.ocr_raw_json
+        if isinstance(data, str):
+            data = json.loads(data)
+        confidence = data.get("field_confidence") if isinstance(data, dict) else None
+        return json.dumps(confidence) if confidence else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _history(db: Session, transaction_id: int, actor_id: int, stage: str, action: str, comment: Optional[str] = None) -> None:
     db.add(
         ErpExpenseApprovalHistory(
@@ -51,12 +64,17 @@ def _resolve_region(db: Session, region_code: str) -> ErpExpenseRegionConfig:
     return region
 
 
-def transaction_to_dict(txn: ErpExpenseTransaction, include_history: bool = False) -> dict[str, Any]:
+def transaction_to_dict(
+    txn: ErpExpenseTransaction,
+    include_history: bool = False,
+    db: Optional[Session] = None,
+) -> dict[str, Any]:
     document = txn.documents[0] if txn.documents else None
     data: dict[str, Any] = {
         "id": txn.transaction_id,
         "type": txn.type,
         "employee_id": txn.employee_id,
+        "employee_name": txn.employee.display_name if txn.employee else None,
         "region_id": txn.region_id,
         "region_code": txn.region.region_code if txn.region else None,
         "project_id": txn.project_cache_id,
@@ -76,6 +94,7 @@ def transaction_to_dict(txn: ErpExpenseTransaction, include_history: bool = Fals
         "dispute_returned": bool(txn.dispute_returned),
         "remarks": txn.remarks,
         "duplicate_flag": bool(txn.duplicate_flag),
+        "ocr_confidence_json": txn.ocr_confidence_json,
         "created_at": txn.created_on.isoformat() if txn.created_on else None,
         "updated_at": txn.modified_on.isoformat() if txn.modified_on else None,
         "submitted_at": txn.submitted_on.isoformat() if txn.submitted_on else None,
@@ -83,7 +102,17 @@ def transaction_to_dict(txn: ErpExpenseTransaction, include_history: bool = Fals
         "paid_at": txn.paid_on.isoformat() if txn.paid_on else None,
         "receipt": None,
         "duplicate_warning": None,
+        "stage_sequence": [],
     }
+    if db is not None:
+        # Lazy import mirrors the existing reverse-direction lazy import in
+        # approval_service.py, avoiding a circular import between the two modules.
+        from services.approval_service import resolve_stage_sequence
+
+        try:
+            data["stage_sequence"] = resolve_stage_sequence(db, txn)
+        except Exception:
+            data["stage_sequence"] = []
     if document:
         proxy = f"/api/claims/receipts/{document.document_id}/image"
         signed = storage_service.presigned_url(document.s3_key)
@@ -93,6 +122,9 @@ def transaction_to_dict(txn: ErpExpenseTransaction, include_history: bool = Fals
             "content_type": document.content_type,
             "ocr_vendor": document.ocr_vendor,
             "ocr_amount": document.ocr_amount,
+            "ocr_vat_amount": document.ocr_vat_amount,
+            "ocr_total_amount": document.ocr_total_amount,
+            "ocr_currency": document.ocr_currency,
             "ocr_date": document.ocr_date,
             "ocr_confidence": document.ocr_confidence,
             "image_hash": document.hash,
@@ -115,43 +147,80 @@ def transaction_to_dict(txn: ErpExpenseTransaction, include_history: bool = Fals
 
 
 class TransactionService:
-    def run_ocr(self, db: Session, image_bytes: bytes, content_type: str, filename: str) -> dict[str, Any]:
+    def store_receipt(self, db: Session, image_bytes: bytes, content_type: str, filename: str) -> dict[str, Any]:
+        """Upload to S3 and insert the document row. Does not run OCR."""
         key = storage_service.save_bytes(
             image_bytes,
             content_type=content_type,
             ext=(filename.rsplit(".", 1)[-1] if "." in filename else "jpg"),
         )
         img_hash = storage_service.image_hash(image_bytes)
-        ocr = ocr_service.run(image_bytes, filename)
-
         document = ErpExpenseDocument(
             transaction_id=None,
             s3_key=key,
             content_type=content_type,
-            ocr_raw_json=ocr.get("raw_json") if isinstance(ocr.get("raw_json"), str) else json.dumps(ocr.get("raw_json")),
-            ocr_vendor=ocr.get("vendor"),
-            ocr_amount=ocr.get("amount"),
-            ocr_date=ocr.get("date"),
-            ocr_confidence=ocr.get("confidence"),
             hash=img_hash,
         )
         db.add(document)
         db.commit()
         db.refresh(document)
+        return self._receipt_payload(document, ocr=None, duplicate=None, ocr_status="pending")
 
-        duplicate = self._find_duplicate(db, img_hash, ocr.get("vendor"), ocr.get("amount"), ocr.get("date"))
+    def analyze_receipt(self, db: Session, receipt_id: int) -> dict[str, Any]:
+        document = self.get_receipt(db, receipt_id)
+        image_bytes = storage_service.read_bytes(document.s3_key)
+        if not image_bytes:
+            raise LookupError("Receipt image not found in storage")
+        ocr = ocr_service.run(image_bytes, "receipt.jpg")
+        document.ocr_raw_json = (
+            ocr.get("raw_json") if isinstance(ocr.get("raw_json"), str) else json.dumps(ocr.get("raw_json"))
+        )
+        document.ocr_vendor = ocr.get("vendor") or None
+        document.ocr_amount = ocr.get("amount")
+        document.ocr_vat_amount = ocr.get("vat_amount")
+        document.ocr_total_amount = ocr.get("total_amount")
+        document.ocr_currency = ocr.get("currency")
+        document.ocr_date = ocr.get("date") or None
+        document.ocr_confidence = ocr.get("confidence")
+        db.commit()
+        db.refresh(document)
+        duplicate = self._find_duplicate(
+            db, ocr.get("vendor"), ocr.get("amount"), ocr.get("date")
+        )
+        return self._receipt_payload(document, ocr=ocr, duplicate=duplicate, ocr_status="done")
 
+    def run_ocr(self, db: Session, image_bytes: bytes, content_type: str, filename: str) -> dict[str, Any]:
+        stored = self.store_receipt(db, image_bytes, content_type, filename)
+        return self.analyze_receipt(db, stored["receipt_id"])
+
+    def _receipt_payload(
+        self,
+        document: ErpExpenseDocument,
+        *,
+        ocr: Optional[dict[str, Any]],
+        duplicate: Optional[dict[str, Any]],
+        ocr_status: str,
+    ) -> dict[str, Any]:
         proxy = f"/api/claims/receipts/{document.document_id}/image"
-        signed = storage_service.presigned_url(key)
+        signed = storage_service.presigned_url(document.s3_key)
+        ocr = ocr or {}
         return {
             "receipt_id": document.document_id,
-            "s3_key": key,
-            "vendor": ocr.get("vendor"),
-            "amount": ocr.get("amount"),
-            "date": ocr.get("date"),
-            "confidence": ocr.get("confidence"),
+            "s3_key": document.s3_key,
+            "ocr_status": ocr_status,
+            "vendor": ocr.get("vendor") or document.ocr_vendor or "",
+            "expense_type": ocr.get("expense_type"),
+            "amount": ocr.get("amount", document.ocr_amount),
+            "vat_amount": ocr.get("vat_amount", document.ocr_vat_amount),
+            "total_amount": ocr.get("total_amount", document.ocr_total_amount),
+            "currency": ocr.get("currency") or document.ocr_currency,
+            "date": ocr.get("date") or document.ocr_date or "",
+            "confidence": ocr.get("confidence", document.ocr_confidence),
+            "field_confidence": ocr.get("field_confidence") or {},
+            "low_confidence_fields": ocr.get("low_confidence_fields") or [],
+            "reconciliation_mismatch": ocr.get("reconciliation_mismatch") or False,
             "raw_text": ocr.get("raw_text"),
-            "image_hash": img_hash,
+            "image_hash": document.hash,
             "image_url": signed or proxy,
             "image_proxy_url": proxy,
             "duplicate_warning": duplicate,
@@ -160,24 +229,16 @@ class TransactionService:
     def _find_duplicate(
         self,
         db: Session,
-        image_hash: Optional[str],
         vendor_name: Optional[str],
         amount: Optional[float],
         bill_date: Optional[str],
         exclude_transaction_id: Optional[int] = None,
     ) -> Optional[dict[str, Any]]:
-        if image_hash:
-            q = db.query(ErpExpenseDocument).filter(ErpExpenseDocument.hash == image_hash)
-            if exclude_transaction_id:
-                q = q.filter(ErpExpenseDocument.transaction_id != exclude_transaction_id)
-            hit = q.first()
-            if hit and hit.transaction_id:
-                return {
-                    "reason": "same_image_hash",
-                    "existing_claim_id": hit.transaction_id,
-                    "message": "A receipt with the same image was already uploaded.",
-                }
-
+        # Same-image-hash matching was dropped: it's common and legitimate for a
+        # near-identical or even byte-identical photo to be uploaded more than once
+        # (retake, re-crop, re-scan the same physical bill for a different claim) —
+        # that alone isn't evidence of a duplicate claim. Same vendor+amount+date
+        # together is a much stronger signal, so that's the one duplicate check kept.
         if vendor_name and amount is not None and bill_date:
             vendor = db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_name == vendor_name).first()
             if vendor:
@@ -207,7 +268,7 @@ class TransactionService:
         amount: float,
         vat_amount: float = 0.0,
         total_amount: Optional[float] = None,
-        currency: str = "INR",
+        currency: str = "AED",
         exchange_rate: float = 1.0,
         bill_date: Optional[str],
         category_id: int,
@@ -254,12 +315,12 @@ class TransactionService:
             document = db.query(ErpExpenseDocument).filter(ErpExpenseDocument.s3_key == s3_key).first()
         if document:
             document.transaction_id = txn.transaction_id
+            txn.ocr_confidence_json = _field_confidence_json(document)
 
         _history(db, txn.transaction_id, user.id, "employee", "created" if not submit else "submitted")
 
-        duplicate = self._find_duplicate(
-            db, document.hash if document else None, vendor, amount, bill_date, txn.transaction_id
-        )
+        duplicate = self._find_duplicate(db, vendor, amount, bill_date, txn.transaction_id)
+        txn.duplicate_flag = 1 if duplicate else 0
 
         db.commit()
         txn = (
@@ -274,7 +335,7 @@ class TransactionService:
             .filter(ErpExpenseTransaction.transaction_id == txn.transaction_id)
             .one()
         )
-        result = transaction_to_dict(txn, include_history=True)
+        result = transaction_to_dict(txn, include_history=True, db=db)
         result["duplicate_warning"] = duplicate
 
         if submit:
@@ -311,6 +372,13 @@ class TransactionService:
             raise ValueError("Only draft claims can be submitted")
         txn.status = "submitted"
         txn.submitted_on = datetime.utcnow()
+        # Re-check for duplicates at submission time — draft edits (update_draft) can change
+        # vendor/amount/date after the initial creation-time check, so that first check alone
+        # can go stale.
+        duplicate = self._find_duplicate(
+            db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id
+        )
+        txn.duplicate_flag = 1 if duplicate else 0
         _history(db, txn.transaction_id, user.id, "employee", "submitted")
         db.commit()
         self._notify_finance_on_submit(db, txn)
@@ -329,7 +397,7 @@ class TransactionService:
             .order_by(ErpExpenseTransaction.created_on.desc())
             .all()
         )
-        return [transaction_to_dict(t) for t in txns]
+        return [transaction_to_dict(t, db=db) for t in txns]
 
     def get_claim(self, db: Session, user: CurrentUser, transaction_id: int) -> dict[str, Any]:
         txn = (
@@ -348,11 +416,10 @@ class TransactionService:
             raise LookupError("Claim not found")
         if txn.employee_id != user.id and not user.is_approver:
             raise PermissionError("Not allowed")
-        data = transaction_to_dict(txn, include_history=True)
+        data = transaction_to_dict(txn, include_history=True, db=db)
         if txn.documents:
-            doc = txn.documents[0]
             data["duplicate_warning"] = self._find_duplicate(
-                db, doc.hash, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id
+                db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id
             )
         return data
 
@@ -380,7 +447,7 @@ class TransactionService:
         if project_id:
             q = q.filter(ErpExpenseTransaction.project_cache_id == project_id)
         txns = q.order_by(ErpExpenseTransaction.created_on.desc()).all()
-        return [transaction_to_dict(t) for t in txns]
+        return [transaction_to_dict(t, db=db) for t in txns]
 
     def mark_paid(self, db: Session, user: CurrentUser, transaction_id: int, remarks: Optional[str]) -> dict[str, Any]:
         txn = self._get(db, transaction_id)

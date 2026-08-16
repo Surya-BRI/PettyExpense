@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 /// Primary UI tokens (brand). Slight tints allowed for status/success.
 class AppColors {
@@ -50,11 +51,19 @@ class AppTheme {
       error: AppColors.danger,
     );
 
+    const baseTextTheme = TextTheme(
+      bodyLarge: TextStyle(color: AppColors.textPrimary),
+      bodyMedium: TextStyle(color: AppColors.textPrimary),
+      bodySmall: TextStyle(color: AppColors.textSecondary),
+      titleLarge: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700),
+      titleMedium: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+      titleSmall: TextStyle(color: AppColors.textSecondary),
+    );
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       scaffoldBackgroundColor: AppColors.background,
-      fontFamily: 'Segoe UI',
       dividerColor: AppColors.divider,
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.darkBlue,
@@ -121,14 +130,7 @@ class AppTheme {
         labelStyle: const TextStyle(color: AppColors.textPrimary),
         side: const BorderSide(color: AppColors.divider),
       ),
-      textTheme: const TextTheme(
-        bodyLarge: TextStyle(color: AppColors.textPrimary),
-        bodyMedium: TextStyle(color: AppColors.textPrimary),
-        bodySmall: TextStyle(color: AppColors.textSecondary),
-        titleLarge: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w700),
-        titleMedium: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
-        titleSmall: TextStyle(color: AppColors.textSecondary),
-      ),
+      textTheme: GoogleFonts.interTextTheme(baseTextTheme),
     );
   }
 }

@@ -159,7 +159,7 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
         approver = resolve_stage_approver(db, txn, stage)
         if not user.is_admin and (not approver or approver.user_id != user.id):
             continue
-        results.append(transaction_to_dict(txn))
+        results.append(transaction_to_dict(txn, db=db))
     return results
 
 
@@ -202,15 +202,17 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
     elif action == "reject":
         txn.status = "rejected"
         txn.decided_on = datetime.utcnow()
+        txn.remarks = comment
         _history(db, txn.transaction_id, user.id, stage, "reject", comment)
     else:  # dispute
         txn.status = "disputed"
         txn.dispute_returned = 1
+        txn.remarks = comment
         _history(db, txn.transaction_id, user.id, stage, "dispute", comment)
 
     db.commit()
     txn = _load_txn(db, transaction_id)
-    return transaction_to_dict(txn, include_history=True)
+    return transaction_to_dict(txn, include_history=True, db=db)
 
 
 def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) -> dict[str, Any]:
@@ -227,7 +229,7 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
     txn.dispute_returned = 0
     db.commit()
     txn = _load_txn(db, transaction_id)
-    return transaction_to_dict(txn, include_history=True)
+    return transaction_to_dict(txn, include_history=True, db=db)
 
 
 def bulk_approve(db: Session, user: CurrentUser, transaction_ids: list[int]) -> dict[str, Any]:

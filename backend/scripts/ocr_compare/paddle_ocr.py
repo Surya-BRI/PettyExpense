@@ -1,5 +1,4 @@
-"""PaddleOCR — free, self-hosted OCR. Same interface shape as google_vision.py /
-azure_vision.py so run_compare.py can report all three side by side.
+"""PaddleOCR — the only OCR engine this project uses.
 
 First call downloads model weights (cached under ~/.paddlex/official_models/) —
 expect the first run per language to be slow, subsequent runs fast.

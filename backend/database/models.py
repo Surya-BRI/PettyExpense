@@ -165,7 +165,7 @@ class ErpExpenseTransaction(Base):
         "vendorId", Integer, ForeignKey("ErpExpenseVendor.vendorId"), nullable=True
     )
     bill_date: Mapped[Optional[str]] = mapped_column("billDate", String(32), nullable=True)
-    currency: Mapped[str] = mapped_column("currency", String(8), default="INR")
+    currency: Mapped[str] = mapped_column("currency", String(8), default="AED")
     exchange_rate: Mapped[float] = mapped_column("exchangeRate", Float, default=1.0)
     amount: Mapped[float] = mapped_column("amount", Float, default=0.0)
     vat_amount: Mapped[float] = mapped_column("vatAmount", Float, default=0.0)
@@ -212,6 +212,9 @@ class ErpExpenseDocument(Base):
     ocr_raw_json: Mapped[Optional[str]] = mapped_column("ocrRawJson", Text, nullable=True)
     ocr_vendor: Mapped[Optional[str]] = mapped_column("ocrVendor", String(256), nullable=True)
     ocr_amount: Mapped[Optional[float]] = mapped_column("ocrAmount", Float, nullable=True)
+    ocr_vat_amount: Mapped[Optional[float]] = mapped_column("ocrVatAmount", Float, nullable=True)
+    ocr_total_amount: Mapped[Optional[float]] = mapped_column("ocrTotalAmount", Float, nullable=True)
+    ocr_currency: Mapped[Optional[str]] = mapped_column("ocrCurrency", String(8), nullable=True)
     ocr_date: Mapped[Optional[str]] = mapped_column("ocrDate", String(32), nullable=True)
     ocr_confidence: Mapped[Optional[float]] = mapped_column("ocrConfidence", Float, nullable=True)
     hash: Mapped[Optional[str]] = mapped_column("hash", String(128), nullable=True, index=True)
@@ -279,4 +282,7 @@ def get_db():
 
 
 def init_db() -> None:
+    # create_all() only creates missing tables, it does not add columns to existing ones.
+    # For ocrVatAmount / ocrTotalAmount / ocrCurrency on ErpExpenseDocument, run:
+    #   python scripts/add_ocr_document_columns.py
     Base.metadata.create_all(bind=engine)

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/money.dart';
+import '../../widgets/app_card.dart';
+import '../../widgets/authenticated_image.dart';
 import '../../widgets/brand_app_bar.dart';
+import '../../widgets/claim_ui_helpers.dart';
 import '../claims/claim_detail_screen.dart';
 import '../shared/status_chip.dart';
 import 'approval_queue_screen.dart';
@@ -61,7 +64,6 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(approvalDetailProvider(widget.transactionId));
     final api = ref.watch(apiClientProvider);
-    final currency = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
 
     return Scaffold(
       appBar: const BrandAppBar(title: 'Review claim', automaticallyImplyLeading: true),
@@ -70,44 +72,76 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
         error: (e, _) => Center(child: Text('$e')),
         data: (claim) {
           final imagePath = claim.receipt?.imageUrl;
+          final total = claim.totalAmount ?? (claim.amount + claim.vatAmount);
           final awaitingThisStage =
               (claim.status == 'submitted' || claim.status == 'disputed') && claim.currentStage == widget.stage;
           final awaitingPayment = claim.status == 'approved';
 
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      claim.vendor,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            claim.vendor,
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        StatusChip(status: claim.status),
+                      ],
                     ),
-                  ),
-                  StatusChip(status: claim.status),
-                ],
+                    const SizedBox(height: 8),
+                    ClaimTypeTag(type: claim.type),
+                    const SizedBox(height: 16),
+                    MoneyBreakdownRow('Amount excl. VAT', formatMoney(claim.currency, claim.amount)),
+                    const SizedBox(height: 6),
+                    MoneyBreakdownRow('VAT', formatMoney(claim.currency, claim.vatAmount)),
+                    const Divider(height: 20),
+                    MoneyBreakdownRow('Total', formatMoney(claim.currency, total), emphasize: true),
+                  ],
+                ),
               ),
-              Text(currency.format(claim.amount), style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              if (imagePath != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.network(
-                    api.imageUrl(imagePath),
-                    headers: api.authHeaders(),
-                    height: 240,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
+              if (imagePath != null && imagePath.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                AppCard(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Receipt', style: Theme.of(context).textTheme.titleSmall),
+                      const SizedBox(height: 10),
+                      AuthenticatedImage(
+                        path: imagePath,
+                        height: 240,
+                        width: double.infinity,
+                      ),
+                    ],
                   ),
                 ),
+              ],
               const SizedBox(height: 16),
-              Text('Employee: #${claim.employeeId}'),
-              Text('Category: ${claim.category}'),
-              Text('Bill date: ${claim.billDate ?? '-'}'),
-              Text('Current stage: ${claim.currentStage ?? '-'}'),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    KeyValueRow('Employee', claim.employeeDisplay),
+                    KeyValueRow('Category', claim.category),
+                    KeyValueRow('Bill date', claim.billDate ?? 'None'),
+                    KeyValueRow(
+                      'Current stage',
+                      _stageLabels[claim.currentStage] ?? claim.currentStage ?? 'None',
+                      isLast: true,
+                    ),
+                  ],
+                ),
+              ),
               if (claim.duplicateWarning != null) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 Material(
                   color: AppColors.warningSoft,
                   borderRadius: BorderRadius.circular(12),
@@ -133,6 +167,7 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                 TextField(
                   controller: _comment,
                   maxLines: 2,
+                  onChanged: (_) => setState(() {}),
                   decoration: const InputDecoration(
                     labelText: 'Comment',
                     helperText: 'Required when disputing or rejecting a claim',
@@ -147,13 +182,17 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
-                  onPressed: _busy ? null : () => _requireComment(() => api.disputeTransaction(claim.id, comment: _comment.text.trim())),
+                  onPressed: _busy || _comment.text.trim().isEmpty
+                      ? null
+                      : () => _requireComment(() => api.disputeTransaction(claim.id, comment: _comment.text.trim())),
                   child: const Text('Dispute (send back to employee)'),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton(
                   style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
-                  onPressed: _busy ? null : () => _requireComment(() => api.rejectTransaction(claim.id, comment: _comment.text.trim())),
+                  onPressed: _busy || _comment.text.trim().isEmpty
+                      ? null
+                      : () => _requireComment(() => api.rejectTransaction(claim.id, comment: _comment.text.trim())),
                   child: const Text('Reject'),
                 ),
               ],
@@ -165,12 +204,25 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
               ],
               const SizedBox(height: 20),
               Text('History', style: Theme.of(context).textTheme.titleMedium),
-              ...(claim.history ?? []).map(
-                (h) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text('${h.stage ?? '-'} · ${h.action}'),
-                  subtitle: Text('actor #${h.actorId}${h.remarks != null ? ' · ${h.remarks}' : ''}'),
-                ),
+              const SizedBox(height: 8),
+              AppCard(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: (claim.history ?? []).isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        child: Text('None', style: TextStyle(color: AppColors.textSecondary)),
+                      )
+                    : Column(
+                        children: [
+                          for (final h in claim.history!)
+                            ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('${_stageLabels[h.stage] ?? h.stage ?? 'None'} · ${h.action}'),
+                              subtitle: Text(h.remarks != null && h.remarks!.isNotEmpty ? h.remarks! : ''),
+                            ),
+                        ],
+                      ),
               ),
             ],
           );
@@ -189,3 +241,10 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
     _act(action);
   }
 }
+
+const _stageLabels = {
+  'hod': 'HOD',
+  'department_hod': 'Department HOD',
+  'accountant': 'Accountant',
+  'finance_manager': 'Finance Manager',
+};

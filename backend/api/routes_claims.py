@@ -28,7 +28,7 @@ class CreateClaimRequest(BaseModel):
     amount: float
     vat_amount: float = 0.0
     total_amount: Optional[float] = None
-    currency: str = "INR"
+    currency: str = "AED"
     exchange_rate: float = 1.0
     bill_date: Optional[str] = None
     category_id: int
@@ -60,11 +60,39 @@ async def ocr_receipt(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Store + OCR in one call (scripts / fallback). The app uses upload then analyze."""
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     content_type = file.content_type or "image/jpeg"
     return transaction_service.run_ocr(db, data, content_type, file.filename or "receipt.jpg")
+
+
+@router.post("/ocr/upload")
+async def upload_receipt(
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Save the photo to S3 only — returns immediately so the UI can leave Add receipt."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    content_type = file.content_type or "image/jpeg"
+    return transaction_service.store_receipt(db, data, content_type, file.filename or "receipt.jpg")
+
+
+@router.post("/receipts/{receipt_id}/ocr")
+def analyze_receipt(
+    receipt_id: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Run PaddleOCR on an already-stored receipt."""
+    try:
+        return transaction_service.analyze_receipt(db, receipt_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("")

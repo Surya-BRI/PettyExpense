@@ -23,7 +23,7 @@ CREATE TABLE dbo.expense_claims (
     submitted_by NVARCHAR(64) NOT NULL,
     vendor NVARCHAR(256) NOT NULL DEFAULT '',
     amount FLOAT NOT NULL DEFAULT 0,
-    currency NVARCHAR(8) NOT NULL DEFAULT 'INR',
+    currency NVARCHAR(8) NOT NULL DEFAULT 'AED',
     bill_date NVARCHAR(32) NULL,
     category NVARCHAR(32) NOT NULL DEFAULT 'other',
     project_id NVARCHAR(128) NULL,
