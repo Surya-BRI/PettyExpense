@@ -197,7 +197,7 @@ Tables are created on ERP-Dev at backend startup (`create_all`, additive only �
 
 ## Production deployment
 
-Status as of 2026-08-16: backend deployed and running; public HTTPS pending a DNS record.
+Status as of 2026-08-16: backend deployed and running; public HTTPS live and verified.
 
 | Item | Value |
 |---|---|
@@ -206,7 +206,7 @@ Status as of 2026-08-16: backend deployed and running; public HTTPS pending a DN
 | PM2 name | `expensetracker-api` |
 | Process | Gunicorn + `uvicorn.workers.UvicornWorker` (`ecosystem.config.js`, `--workers 1`) |
 | Internal port | `127.0.0.1:5930` |
-| Public URL (pending DNS) | `https://expensetracker-api.app-brisigns.com` — Nginx site config already written and reloaded (`/etc/nginx/sites-available/expensetracker-api.app-brisigns.com.conf` → `localhost:5930`); **blocked on an A record** (`expensetracker-api` → `3.7.128.46`, the server's public IP) not yet added to `app-brisigns.com` DNS. No wildcard covers it — confirmed via `dig` against a made-up subdomain returning nothing. Once added, run `sudo certbot --nginx -d expensetracker-api.app-brisigns.com` to provision SSL. |
+| Public URL | `https://expensetracker-api.app-brisigns.com` — live. Nginx (`/etc/nginx/sites-available/expensetracker-api.app-brisigns.com.conf` → `localhost:5930`) + Let's Encrypt via `certbot --nginx` (cert auto-renews, expires 2026-11-15). DNS A record (`expensetracker-api` → `3.7.128.46`) added via GoDaddy. Verified end-to-end: `curl https://expensetracker-api.app-brisigns.com/health` → `200 OK`. |
 | DB | Same `ERP-Dev` SQL Server as local dev (`13.234.241.125`) — no separate prod DB |
 | S3 | Same production bucket as local dev (`bri-erp-production`, folder `live`) |
 | `AUTH_MODE` | `erp` (real JWT login required — deliberately **not** `mock` on this deployment, unlike the local-dev default) |
@@ -214,7 +214,7 @@ Status as of 2026-08-16: backend deployed and running; public HTTPS pending a DN
 | Deploy loop | WinSCP upload of `backend/`'s `main.py`, `api/`, `services/`, `database/`, `auth/`, `config.py`, `requirements.txt`, `scripts/` (never `.venv`, `uploads/`, `.env`) → `pip install -r requirements.txt` if deps changed → `pm2 restart expensetracker-api` |
 
 **Open items:**
-- [ ] Add DNS A record `expensetracker-api.app-brisigns.com` → `3.7.128.46`, then run `sudo certbot --nginx -d expensetracker-api.app-brisigns.com` — this is what's blocking the public HTTPS link. **Until this lands, the Flutter app's default `API_BASE_URL` (production) cannot reach the backend at all** — set `API_BASE_URL` to a local/LAN dev URL in `.env` (or `--dart-define=API_BASE_URL=...`) in the meantime.
+- [x] DNS A record + certbot SSL — done. Public HTTPS live and verified.
 - [x] Commit + push this session's local changes — done (`6409e0c` on `main`).
 
 **Known deployment gotcha:** `passlib[bcrypt]>=1.7.4` (2020) is incompatible with `bcrypt>=4.1` — passlib's internal self-test hits a `ValueError: password cannot be longer than 72 bytes` on *any* login attempt, not because of the actual user's password length. Fixed by pinning `bcrypt<4.1` in `requirements.txt`. If a fresh `pip install` on a new box still shows this, run `pip install "bcrypt<4.1"` and restart.
