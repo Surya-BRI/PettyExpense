@@ -95,7 +95,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Spacer(flex: 2),
-                      // Full Blue Rhine logo — center of login (no title text)
+                      // Full Blue Rhine logo — center of login
                       Center(
                         child: Image.asset(
                           'assets/brand/Br_fulllogo.png',
@@ -108,9 +108,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Petty Cash and Expense Tracker',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const Spacer(flex: 2),
                       InputDecorator(
-                        decoration: const InputDecoration(labelText: 'Demo user'),
+                        decoration: const InputDecoration(labelText: 'User'),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
                             isExpanded: true,
@@ -155,18 +161,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       FilledButton(
                         onPressed: _busy ? null : _login,
                         child: Text(_busy ? 'Signing in…' : 'Sign in'),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: _busy
-                            ? null
-                            : () async {
-                                await ref
-                                    .read(authControllerProvider.notifier)
-                                    .continueAsMockSalesman();
-                                if (context.mounted) context.go('/claims');
-                              },
-                        child: const Text('Continue as mock salesman'),
                       ),
                       const Spacer(flex: 1),
                     ],

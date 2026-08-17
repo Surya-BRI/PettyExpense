@@ -37,10 +37,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final loc = state.matchedLocation;
       final role = UserRoleX.fromJson(auth.user?.role);
       final approver = role.isApprover;
-      final loggedOut = auth.user == null && !auth.useMockBypass && !auth.isLoading;
+      final loggedOut = auth.user == null && !auth.isLoading;
 
       if (loc == '/login') {
-        if (auth.user != null && !auth.useMockBypass) {
+        if (auth.user != null) {
           return homeRouteFor(role);
         }
         return null;

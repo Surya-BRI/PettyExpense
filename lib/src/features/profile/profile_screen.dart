@@ -145,20 +145,12 @@ class ProfileScreen extends ConsumerWidget {
                       background: AppColors.lightBlue,
                       foreground: AppColors.darkBlue,
                     ),
-                    if (auth.useMockBypass)
-                      const _InfoChip(
-                        icon: Icons.science_outlined,
-                        label: 'Mock session',
-                        background: AppColors.warningSoft,
-                        foreground: AppColors.orange,
-                      )
-                    else
-                      const _InfoChip(
-                        icon: Icons.verified_user_outlined,
-                        label: 'Signed in',
-                        background: AppColors.successSoft,
-                        foreground: AppColors.success,
-                      ),
+                    const _InfoChip(
+                      icon: Icons.verified_user_outlined,
+                      label: 'Signed in',
+                      background: AppColors.successSoft,
+                      foreground: AppColors.success,
+                    ),
                   ],
                 ),
                 if (user?.email != null && user!.email!.isNotEmpty) ...[
