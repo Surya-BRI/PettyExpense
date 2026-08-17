@@ -203,7 +203,7 @@ Status as of 2026-08-16: backend deployed and running; public HTTPS live and ver
 |---|---|
 | Server | `ubuntu@ip-172-20-1-210` (same box as Task Lens / other `bri-erp-api` apps) |
 | Folder | `~/bri-erp-api/expensetracker-api` |
-| PM2 name | `expensetracker-api` |
+| PM2 name / id | `expensetracker-api` / `75` — use `pm2 restart 75` or `pm2 restart expensetracker-api` interchangeably |
 | Process | Gunicorn + `uvicorn.workers.UvicornWorker` (`ecosystem.config.js`, `--workers 1`) |
 | Internal port | `127.0.0.1:5930` |
 | Public URL | `https://expensetracker-api.app-brisigns.com` — live. Nginx (`/etc/nginx/sites-available/expensetracker-api.app-brisigns.com.conf` → `localhost:5930`) + Let's Encrypt via `certbot --nginx` (cert auto-renews, expires 2026-11-15). DNS A record (`expensetracker-api` → `3.7.128.46`) added via GoDaddy. Verified end-to-end: `curl https://expensetracker-api.app-brisigns.com/health` → `200 OK`. |
@@ -216,6 +216,7 @@ Status as of 2026-08-16: backend deployed and running; public HTTPS live and ver
 **Open items:**
 - [x] DNS A record + certbot SSL — done. Public HTTPS live and verified.
 - [x] Commit + push this session's local changes — done (`6409e0c` on `main`).
+- [ ] Confirm `pm2 save` actually completed for `expensetracker-api` (id `75`) — needed so it survives a server reboot; a `pm2 restart 75` was confirmed, but `pm2 save`'s own success output hasn't been.
 
 **Known deployment gotcha:** `passlib[bcrypt]>=1.7.4` (2020) is incompatible with `bcrypt>=4.1` — passlib's internal self-test hits a `ValueError: password cannot be longer than 72 bytes` on *any* login attempt, not because of the actual user's password length. Fixed by pinning `bcrypt<4.1` in `requirements.txt`. If a fresh `pip install` on a new box still shows this, run `pip install "bcrypt<4.1"` and restart.
 

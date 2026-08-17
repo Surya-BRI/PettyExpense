@@ -23,7 +23,7 @@ Each phase below = one deliverable slice. Do not start phase N+1 until phase N i
 | 3 — Petty Cash Fund & Settlement | ⬜ Not started | No fund/top-up/payment/NetSuite tables; hard-limit config flag exists but is never read |
 | 4 — Bill Capture & OCR Enhancements | 🟡 Partial | Per-field confidence + always-editable fields genuinely done; duplicate flag column never actually gets set; unmatched vendors auto-create instead of flagging; no image-quality block |
 | 5 — Notifications | ⬜ Not started | In-app "Notifications" screen is a client-side feed re-derived from claim data each load — not backed by any notifications table or event log |
-| 6 — Branding & Multi-Region Users | ⬜ Not started | Region hardcoded to `'IN'` on every claim; branding is a static asset, ignoring the per-region fields the backend already serves |
+| 6 — Branding & Multi-Region Users | ⬜ Not started | Region still hardcoded on every claim (now `'UAE'`, was `'IN'`); `UAE`/`KSA` region_config rows seeded 2026-08-17 but no picker consumes them yet; branding is a static asset, ignoring the per-region fields the backend already serves |
 | 7 — Arabic UI, RTL & Arabic OCR | 🟡 Partial | Bilingual (en/ar) OCR is real and solid; zero Flutter localization/RTL infrastructure exists |
 | 8 — Budget Forecasting & Dashboards | ⬜ Not started | No forecasting table, no dashboard screens of any kind |
 | 9 — Hardening (audit/offline/security) | ⬜ Not started | No dedicated field-level audit log, no offline capture queue, coarse document visibility, no encryption/retention config |
@@ -91,7 +91,7 @@ Each phase below = one deliverable slice. Do not start phase N+1 until phase N i
 **Spec refs:** §5.9, §6 Rules 16/17/18
 
 - [ ] Branding (company name, logo, accent) resolved from `region_config`, cached client-side, refreshed on Admin update — `BrandAppBar` hardcodes a static logo asset and app name; the backend already returns `company_name`/`logo_url`/`brand_color` per region but the Flutter app never reads them
-- [ ] Multi-region user: explicit region picker per new bill (never inferred); selection drives branding, approval chain, fund, compliance rules for that transaction only — `confirm_claim_screen.dart` hardcodes `'region_code': 'IN'` on every claim; no picker UI exists
+- [ ] Multi-region user: explicit region picker per new bill (never inferred); selection drives branding, approval chain, fund, compliance rules for that transaction only — `confirm_claim_screen.dart` still hardcodes a single `region_code` on every claim (now `'UAE'`, previously `'IN'`); no picker UI exists. `UAE` and `KSA` `region_config` rows now exist on ERP-Dev (2026-08-17, both seeded with the same approval matrix as the pre-existing `IN` row) so a picker has real regions to select from, but nothing selects between them yet — every claim still hits `UAE` regardless of which country the bill is actually from. Approver assignment (`ErpExpenseHodAssignment`) also isn't region-scoped — UAE and KSA claims would resolve to the same HOD/Accountant/Finance Manager today even with a picker.
 - [ ] Region-split dashboard (no blending across regions) — no dashboards exist at all yet (see Phase 8)
 - [ ] Approvers see the transaction under its selected region, not their own — trivially true only because there's a single region in practice; nothing built or tested for multiple
 

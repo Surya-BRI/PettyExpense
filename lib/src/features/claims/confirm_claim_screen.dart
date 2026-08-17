@@ -222,7 +222,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         'currency': _currency,
         'bill_date': _date.text.trim(),
         'category_id': _categoryId,
-        'region_code': 'IN',
+        // TODO(region picker): hardcoded until a real per-bill region picker exists (Phase 6).
+        'region_code': 'UAE',
         'type': _type,
         'project_id': _projectId,
         'op_number': selectedProject?.opNumber,

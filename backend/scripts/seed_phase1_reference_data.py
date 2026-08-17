@@ -27,6 +27,16 @@ DEFAULT_APPROVAL_MATRIX = {
     "sla_hours": {"hod": 24, "department_hod": 24, "accountant": 48, "finance_manager": 48},
 }
 
+# App scope is UAE/KSA (see README) — UAE is the default region. IN is kept seeded
+# for existing pre-UAE/KSA data; not part of the app's actual scope going forward.
+# Same approval matrix for all three to start; regions can diverge later if the
+# business needs differ (e.g. different SLA/thresholds per country).
+REGIONS = [
+    ("UAE", "United Arab Emirates"),
+    ("KSA", "Kingdom of Saudi Arabia"),
+    ("IN", "India"),
+]
+
 ROLE_NAMES = {
     "employee": "Employee",
     "hod": "Head of Department",
@@ -74,20 +84,21 @@ def seed_reference_data() -> None:
         dept_by_name = {d.department_name: d for d in db.query(ErpExpenseDepartment).all()}
 
         # Region config
-        if not db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == "IN").first():
-            db.add(
-                ErpExpenseRegionConfig(
-                    region_code="IN",
-                    region_name="India",
-                    allocation_model="petty_cash",
-                    approval_matrix_json=json.dumps(DEFAULT_APPROVAL_MATRIX),
-                    petty_cash_hard_limit_enabled=0,
-                    company_name="Expense Receipt App",
-                    is_active=1,
+        for region_code, region_name in REGIONS:
+            if not db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == region_code).first():
+                db.add(
+                    ErpExpenseRegionConfig(
+                        region_code=region_code,
+                        region_name=region_name,
+                        allocation_model="petty_cash",
+                        approval_matrix_json=json.dumps(DEFAULT_APPROVAL_MATRIX),
+                        petty_cash_hard_limit_enabled=0,
+                        company_name="Expense Receipt App",
+                        is_active=1,
+                    )
                 )
-            )
-            db.commit()
-        region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == "IN").first()
+        db.commit()
+        region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == "UAE").first()
 
         # Categories
         existing_categories = {c.category_name for c in db.query(ErpExpenseCategory).all()}
