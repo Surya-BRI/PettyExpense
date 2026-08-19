@@ -89,7 +89,11 @@ def _report(label: str, result: dict) -> None:
 
 
 def _md_escape(text: str) -> str:
-    return (text or "").replace("\r\n", "\n").replace("```", "'''")
+    text = (text or "").replace("\r\n", "\n").replace("```", "'''")
+    # Raw OCR lines routinely carry trailing spaces (garbled recognition,
+    # stray whitespace tokens) — strip per-line so the generated report never
+    # introduces trailing-whitespace diff-check warnings.
+    return "\n".join(line.rstrip() for line in text.split("\n"))
 
 
 def _md_pass(label: str, result: dict) -> str:
@@ -132,13 +136,13 @@ def write_markdown(out_path: Path, folder: str, rows: list[dict]) -> None:
         f = _merged_fields_of(row["en"], row["ar"])
         lines.append(
             "| {name} | {vendor} | {amount} | {vat} | {total} | {date} | {currency} |".format(
-                name=row["name"],
-                vendor=f.get("vendor") or f.get("error") or "",
+                name=row["name"].strip(),
+                vendor=(f.get("vendor") or f.get("error") or "").strip(),
                 amount=f.get("amount") if f.get("amount") is not None else "",
                 vat=f.get("vat_amount") if f.get("vat_amount") is not None else "",
                 total=f.get("total_amount") if f.get("total_amount") is not None else "",
-                date=f.get("date") or "",
-                currency=f.get("currency") or "",
+                date=(f.get("date") or "").strip(),
+                currency=(f.get("currency") or "").strip(),
             )
         )
     lines.append("")

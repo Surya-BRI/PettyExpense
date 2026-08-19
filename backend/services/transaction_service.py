@@ -15,7 +15,7 @@ from database.models import (
     ErpExpenseVendor,
 )
 from services.email_service import email_service
-from services.ocr_service import ocr_service
+from services.ocr_service import ocr_service, refresh_reference_data
 from services.storage import storage_service
 
 
@@ -171,6 +171,7 @@ class TransactionService:
         image_bytes = storage_service.read_bytes(document.s3_key)
         if not image_bytes:
             raise LookupError("Receipt image not found in storage")
+        refresh_reference_data(db)
         ocr = ocr_service.run(image_bytes, "receipt.jpg")
         document.ocr_raw_json = (
             ocr.get("raw_json") if isinstance(ocr.get("raw_json"), str) else json.dumps(ocr.get("raw_json"))

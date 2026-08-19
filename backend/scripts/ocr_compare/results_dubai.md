@@ -5,28 +5,172 @@ Summary reflects the merged (production) result — see `ocr_service.merge_bilin
 each language pass is parsed separately and merged field-by-field, matching what
 `ocr_service._paddle_ocr` actually does for real uploads. The per-image sections below
 still show each language pass on its own for debugging, plus the merged result.
-Images: `6`.
+Images: `7`.
 
 ## Summary
 
 | Image | Vendor (merged) | Amount (merged) | VAT (merged) | Total (merged) | Date (merged) | Currency (merged) |
 |---|---|---|---|---|---|---|
-| image (1).png | HYPERMARKET LLC |  |  |  | 03-Aug-2026 | SAR |
-| image (2).png | TRADING L.L.C | 20.0 | 20.0 | 21.0 |  | AED |
-| image (3).png | SUPERMARKETL.L.C | 46.84 | 2.24 | 49.18 |  |  |
-| image (4).png | SUPERMARKETLL.C | 45.21 | 2.28 | 47.49 | 05-Aug-202 |  |
-| image (5).png | QAMAR ALHUDA ALJADEED GENERAL TRADING L.L.U | 45.0 | 2.25 | 47.25 |  |  |
-| image (6).png | Pasons S/M&Dept.Store | 49.52 | 2.48 | 52.0 | 04/08/2026 |  |
+| enoc_test.jpg | ENOC RETAIL | 6.0 | 0.29 | 6.0 | 8/18/2026 | AED |
+| image (1).png | BlueR in |  |  |  | 03-Aug-2026 |  |
+| image (2).png | TUFFCO BUILDING MATERIALS TRADING L.L.G TRADING L.L.C | 20.0 | 1383.0 | 21.0 |  |  |
+| image (3).png | OAMAR AL MADINA | 46.84 | 2.34 | 49.18 |  |  |
+| image (4).png | M.S | 0.0 | 45.21 | 45.21 | 05-Aug-202 |  |
+| image (5).png | amar Alhuda حارة العامةذمم | 45.0 | 2.25 | 47.25 |  |  |
+| image (6).png | Slue Rhme | 1.0 | 2.48 | 52.0 | 04/08/2026 |  |
+
+## enoc_test.jpg
+
+### Merged (production)
+
+**Parsed fields:** `{'vendor': 'ENOC RETAIL', 'expense_type': None, 'amount': 6.0, 'vat_amount': 0.29, 'total_amount': 6.0, 'currency': 'AED', 'date': '8/18/2026', 'confidence': 0.38, 'field_confidence': {'vendor': 0.24002333481155302, 'date': 0.2980496676041813, 'currency': 0.34114483732974665, 'amount': 0.67856630020137, 'vat_rate': 0.6456169843673706, 'vat_amount': 0.6745000050010368, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.9709393477117693, 'card_amount': 0.0, 'change': 0.9762751848886372, 'total_amount': 0.8385976517885118, 'invoice_number': 0.0, 'transaction_number': 0.3858145367109638, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'currency', 'discount', 'service_charge', 'tip', 'card_amount', 'invoice_number', 'expense_category'], 'reconciliation_mismatch': True, 'fields': {'vendor': {'value': 'ENOC RETAIL', 'confidence': 0.24002333481155302, 'evidence': 'ENOC RETAIL', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '8/18/2026', 'confidence': 0.2980496676041813, 'evidence': '8/18/2026 Shift:1', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': False}, 'currency': {'value': 'AED', 'confidence': 0.34114483732974665, 'evidence': 'AED6.00 L AED6.00 S', 'signals': ['currency_code_match', 'same_line', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'amount': {'value': 6.0, 'confidence': 0.67856630020137, 'evidence': 'AED6.00', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.6456169843673706, 'evidence': 'S 5', 'signals': ['vat_tax_rate_label', 'known_vat_rate', 'format_known_vat_rate'], 'low': False}, 'vat_amount': {'value': 0.29, 'confidence': 0.6745000050010368, 'evidence': 'AED0.29', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 10.0, 'confidence': 0.9709393477117693, 'evidence': 'AED10.00', 'signals': ['cash_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'tendered_change_total_arithmetic'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': 4.0, 'confidence': 0.9762751848886372, 'evidence': 'AED4.00', 'signals': ['change_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'tendered_change_total_arithmetic'], 'low': False}, 'total_amount': {'value': 6.0, 'confidence': 0.8385976517885118, 'evidence': 'AED6.00', 'signals': ['total_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch', 'tendered_change_total_arithmetic'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': '584439', 'confidence': 0.3858145367109638, 'evidence': 'POS: 2 2 CSR:Babbry, Wahid TRAN Wahid TRAN 584439', 'signals': ['transaction_number_label', 'fuzzy_label_match', 'position_prior_upper'], 'low': False}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
+
+### PaddleOCR (lang=en)
+
+**Parsed fields:** `{'vendor': 'NOC RETAIL', 'expense_type': None, 'amount': 6.0, 'vat_amount': 0.29, 'total_amount': 6.0, 'currency': 'AED', 'date': '8/18/2026', 'confidence': 0.38, 'field_confidence': {'vendor': 0.2635080797423727, 'date': 0.2980496676041813, 'currency': 0.3504688925724692, 'amount': 0.6796563769736574, 'vat_rate': 0.6456169843673706, 'vat_amount': 0.6796811556152165, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.9709393477117693, 'card_amount': 0.0, 'change': 0.9762751848886372, 'total_amount': 0.8385976517885118, 'invoice_number': 0.0, 'transaction_number': 0.3858145367109638, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'currency', 'discount', 'service_charge', 'tip', 'card_amount', 'invoice_number', 'expense_category'], 'reconciliation_mismatch': True, 'fields': {'vendor': {'value': 'NOC RETAIL', 'confidence': 0.2635080797423727, 'evidence': 'NOC RETAIL', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '8/18/2026', 'confidence': 0.2980496676041813, 'evidence': '8/18/2026 Shift:1', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': False}, 'currency': {'value': 'AED', 'confidence': 0.3504688925724692, 'evidence': 'AED6.00', 'signals': ['currency_code_match', 'same_line', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'amount': {'value': 6.0, 'confidence': 0.6796563769736574, 'evidence': 'AED6.00', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.6456169843673706, 'evidence': 'S 5', 'signals': ['vat_tax_rate_label', 'known_vat_rate', 'format_known_vat_rate'], 'low': False}, 'vat_amount': {'value': 0.29, 'confidence': 0.6796811556152165, 'evidence': 'AED0.29', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 10.0, 'confidence': 0.9709393477117693, 'evidence': 'AED10.00', 'signals': ['cash_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'tendered_change_total_arithmetic'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': 4.0, 'confidence': 0.9762751848886372, 'evidence': 'AED4.00', 'signals': ['change_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'tendered_change_total_arithmetic'], 'low': False}, 'total_amount': {'value': 6.0, 'confidence': 0.8385976517885118, 'evidence': 'AED6.00', 'signals': ['total_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch', 'tendered_change_total_arithmetic'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': '584439', 'confidence': 0.3858145367109638, 'evidence': 'POS: 2 CSR:Babbry, Wahid TRAN 584439', 'signals': ['transaction_number_label', 'fuzzy_label_match', 'position_prior_upper'], 'low': False}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
+
+**Low-confidence words (<0.5):** (none)
+
+**Raw text:**
+
+```
+MTO
+öJ
+NOC
+RETAIL
+P.0. Box -5589
+Dubai, U.A.E
+Site number:1635
+Welcome to ZOOM
+Description
+UnitPrc
+Qty
+Amount V
+ICE BAG
+AED6.00
+AED6.00 S
+TOTAL AED
+AED6.00
+Total savings:
+AED0.00
+Cash AED:
+AED10.00
+AED10.00
+Change AED
+AED4.00
+VAT %
+Sale Amt
+VAT Amt
+S 5
+AED6.00
+AEDO.29
+VAT Reg Number: 100221692500003
+8/18/2026
+Shift:1
+04:52:23
+POS: 2
+CSR:Babbry, Wahid TRAN:
+584439
+VAT Description
+S:Standard
+Z:Zero
+E:Tax Exempt
+Keep Bill for exchange within 7 Days
+Vaild only at Issued Store. T&C Apply
+THANK YOU
+HAVE A NICE DAY
+Customer care: 800-ENOC (3662)
+Customer care: 8U0-ENUC (3662)
+```
+
+### PaddleOCR (lang=ar)
+
+**Parsed fields:** `{'vendor': 'ENOC RETAIL', 'expense_type': None, 'amount': 6.0, 'vat_amount': 0.29, 'total_amount': 6.29, 'currency': 'AED', 'date': '8/18/2026', 'confidence': 0.34, 'field_confidence': {'vendor': 0.23937090973734393, 'date': 0.29791137424214925, 'currency': 0.3266329676948459, 'amount': 0.7983132943545529, 'vat_rate': 0.6240165024995803, 'vat_amount': 0.7935294176482786, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.8184283344902127, 'card_amount': 0.0, 'change': 0.8259970845172764, 'total_amount': 0.4, 'invoice_number': 0.0, 'transaction_number': 0.37824120266096933, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'currency', 'discount', 'service_charge', 'tip', 'card_amount', 'total_amount', 'invoice_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'ENOC RETAIL', 'confidence': 0.23937090973734393, 'evidence': 'ENOC RETAIL', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '8/18/2026', 'confidence': 0.29791137424214925, 'evidence': '8/18/2026 Shift:1', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': False}, 'currency': {'value': 'AED', 'confidence': 0.3266329676948459, 'evidence': 'AED10.00', 'signals': ['currency_code_match', 'same_line', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'amount': {'value': 6.0, 'confidence': 0.7983132943545529, 'evidence': 'AED6.00', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.6240165024995803, 'evidence': 'S 5', 'signals': ['vat_tax_rate_label', 'known_vat_rate', 'format_known_vat_rate'], 'low': False}, 'vat_amount': {'value': 0.29, 'confidence': 0.7935294176482786, 'evidence': 'AED0.29', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 10.0, 'confidence': 0.8184283344902127, 'evidence': 'AED10.00', 'signals': ['cash_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': 4.0, 'confidence': 0.8259970845172764, 'evidence': 'AED4.00', 'signals': ['change_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'total_amount': {'value': 6.29, 'confidence': 0.4, 'evidence': 'derived: AED6.00', 'signals': ['derived_arithmetic'], 'low': True, 'warning': 'derived_value'}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': '584439', 'confidence': 0.37824120266096933, 'evidence': 'POS 2 CSR: Babbry, Wahid TRAN 584439', 'signals': ['transaction_number_label', 'fuzzy_label_match', 'position_prior_upper'], 'low': False}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
+
+**Low-confidence words (<0.5):** S O09OES (0.46), كيردـ (0.41), HAIOL (0.35), AEA (0.31), 00 'NCEN (0.45)
+
+**Raw text:**
+
+```
+فريبية
+فاتورة
+TBK
+Inyo
+ENOC
+RETAIL
+P.0.
+Box - 5589
+Dubai,
+, U.A.E
+Site number: 1635
+Welcome to Zoom
+Description
+UnitPrc
+Qty
+Amount v
+ICE BAG
+AED6. 00
+L
+S O09OES
+كيردـ
+HAIOL
+AEA
+00 'NCEN
+Total savings:
+AEDO. 00
+Cash AED:
+AED10. 00
+AED10. 00
+Change AED
+AED4.00
+VAT %
+Sale Amt
+VAT Amt
+S 5
+AED6. 00
+AEDO. 29
+VAT Reg Number :
+100221692500003
+8/18/2026
+Shift:1
+04:52:23
+POS:
+2
+CSR: Babbry,
+Wahid TRAN:
+584439
+VAT Description
+S:Standard
+Z:Zero
+E:Tax
+Exempt
+Keep Bill
+for
+exchange within 7 Days
+Vaild only
+at
+Issued Store.
+T&C Apply
+THANK
+YOU
+HAVE
+A
+NICE DAY
+Customer
+care:
+800-EN0C (3662)
+Customer care: 8U0-ENUc (3662)
+```
 
 ## image (1).png
 
 ### Merged (production)
 
-**Parsed fields:** `{'vendor': 'HYPERMARKET LLC', 'expense_type': 'Food', 'amount': None, 'vat_amount': None, 'total_amount': None, 'currency': 'SAR', 'date': '03-Aug-2026', 'confidence': 0.36, 'field_confidence': {'vendor': 0.87, 'expense_type': 0.45, 'date': 0.87, 'amount': 0.0, 'vat_amount': 0.0, 'total_amount': 0.0}, 'low_confidence_fields': ['expense_type', 'amount', 'vat_amount', 'total_amount'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'HYPERMARKET LLC', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'date': {'value': '03-Aug-2026', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'vat_amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'total_amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'BlueR in', 'expense_type': None, 'amount': None, 'vat_amount': None, 'total_amount': None, 'currency': None, 'date': '03-Aug-2026', 'confidence': 0.08, 'field_confidence': {'vendor': 0.27222532767408036, 'date': 0.2946634314901688, 'currency': 0.0, 'amount': 0.0, 'vat_rate': 0.0, 'vat_amount': 0.0, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.7854301416453193, 'total_amount': 0.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'currency', 'amount', 'vat_rate', 'vat_amount', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'total_amount', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'BlueR in', 'confidence': 0.27222532767408036, 'evidence': 'BlueR in', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '03-Aug-2026', 'confidence': 0.2946634314901688, 'evidence': 'ate :03-Aug-2026 17:40 Bi11 No :236191 User ID :ARSHIN', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': False}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_rate': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': 11.0, 'confidence': 0.7854301416453193, 'evidence': 'pnp bi11for exchange. 29', 'signals': ['change_label', 'same_line', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money'], 'low': False}, 'total_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 ### PaddleOCR (lang=en)
 
-**Parsed fields:** `{'vendor': 'HYPERMARKET LLC', 'expense_type': 'Food', 'amount': None, 'vat_amount': None, 'total_amount': None, 'currency': None, 'date': '03-Aug-2026', 'confidence': 0.36, 'field_confidence': {'vendor': 0.87, 'expense_type': 0.45, 'amount': 0.0, 'vat_amount': 0.0, 'total_amount': 0.0, 'date': 0.87}, 'low_confidence_fields': ['expense_type', 'amount', 'vat_amount', 'total_amount'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'HYPERMARKET LLC', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'vat_amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'total_amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'date': {'value': '03-Aug-2026', 'confidence': 0.87, 'low': False, 'tier': 'label'}}}`
+**Parsed fields:** `{'vendor': 'BlueR in', 'expense_type': None, 'amount': None, 'vat_amount': 412.0, 'total_amount': None, 'currency': None, 'date': '03-Aug-2026', 'confidence': 0.13, 'field_confidence': {'vendor': 0.27222532767408036, 'date': 0.30824828558108386, 'currency': 0.0, 'amount': 0.0, 'vat_rate': 0.0, 'vat_amount': 0.7187708450555801, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.790006651836283, 'total_amount': 0.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'currency', 'amount', 'vat_rate', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'total_amount', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'BlueR in', 'confidence': 0.27222532767408036, 'evidence': 'BlueR in', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '03-Aug-2026', 'confidence': 0.30824828558108386, 'evidence': 'ate :03-Aug-2026 17:40 Bi11 No :236191', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': False}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_rate': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_amount': {'value': 412.0, 'confidence': 0.7187708450555801, 'evidence': '0: 412', 'signals': ['vat_tax_amount_label', 'same_row', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': 11.0, 'confidence': 0.790006651836283, 'evidence': 'p bi11 for exchange. 29', 'signals': ['change_label', 'same_line', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money'], 'low': False}, 'total_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 **Low-confidence words (<0.5):** (none)
 
@@ -41,7 +185,7 @@ DIP Phase 2 - Dubal, UAE
 Tel:04-8851961
 t :0-fu9-202% 17:40
 111 Nc:236191
-Tax Lcanee Namber : 18051005
+Tax Lcanee Namber : 1051005
 FIS Haw: P058
  0: 412
 180000
@@ -50,7 +194,7 @@ ate
 Bi11 No :236191
 OS Name: POS8
 User ID : ARSHINA
-1.No DescrIption
+1.No DesorIption
 Qty
 Amount
 CHCUMER
@@ -71,7 +215,7 @@ SHIPPING BAG
 1.00
 0.25
 1000000
-14 1.25
+18 1.25
 B111 Aaount: 29.00
 Total Qty: 6.05
 mank you visit again
@@ -85,15 +229,15 @@ Hold Ivmined 236191
 
 ### PaddleOCR (lang=ar)
 
-**Parsed fields:** `{'vendor': 'HYPERMARKET LLC', 'expense_type': 'Food', 'amount': None, 'vat_amount': None, 'total_amount': None, 'currency': 'SAR', 'date': '', 'confidence': 0.22, 'field_confidence': {'vendor': 0.87, 'expense_type': 0.45, 'amount': 0.0, 'vat_amount': 0.0, 'total_amount': 0.0, 'date': 0.0}, 'low_confidence_fields': ['expense_type', 'amount', 'vat_amount', 'total_amount', 'date'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'HYPERMARKET LLC', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'vat_amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'total_amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'FIDAALMADINA', 'expense_type': None, 'amount': None, 'vat_amount': None, 'total_amount': None, 'currency': 'SAR', 'date': '', 'confidence': 0.08, 'field_confidence': {'vendor': 0.22415970018330744, 'date': 0.0, 'currency': 0.2811333854899687, 'amount': 0.0, 'vat_rate': 0.0, 'vat_amount': 0.0, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.7856066122335545, 'total_amount': 0.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'amount', 'vat_rate', 'vat_amount', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'total_amount', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'FIDAALMADINA', 'confidence': 0.22415970018330744, 'evidence': 'FIDAALMADINA', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': 'SAR', 'confidence': 0.2811333854899687, 'evidence': 'sar :412', 'signals': ['currency_code_match', 'same_line', 'position_prior_upper'], 'low': False}, 'amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_rate': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': 11.0, 'confidence': 0.7856066122335545, 'evidence': 'pnp bi11for exchange. 29', 'signals': ['change_label', 'same_line', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money'], 'low': False}, 'total_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
-**Low-confidence words (<0.5):** n1 (0.40), 1 (0.50)
+**Low-confidence words (<0.5):** n1 (0.40)
 
 **Raw text:**
 
 ```
 5075
-.4-665
+1.t665
 FIDAALMADINA
 HYPERMARKET LLC
 DIP Phase 2 - Dubal, UAE
@@ -132,7 +276,7 @@ SHIPIHG BAe
 1.00
 0.25
 HICBIOO
-1
+11
 4.25
 Total Qty: 6.05
 wank yau vislt again
@@ -150,11 +294,11 @@ Hald Jnnices 236191
 
 ### Merged (production)
 
-**Parsed fields:** `{'vendor': 'TRADING L.L.C', 'expense_type': 'Other', 'amount': 20.0, 'vat_amount': 20.0, 'total_amount': 21.0, 'currency': 'AED', 'date': '', 'confidence': 0.29, 'field_confidence': {'vendor': 0.87, 'expense_type': 0.28, 'date': 0.0, 'amount': 0.2, 'vat_amount': 0.2, 'total_amount': 0.2}, 'low_confidence_fields': ['expense_type', 'date', 'amount', 'vat_amount', 'total_amount'], 'reconciliation_mismatch': True, 'fields': {'vendor': {'value': 'TRADING L.L.C', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Other', 'confidence': 0.28, 'low': True, 'tier': 'bare'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'amount': {'value': 20.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}, 'vat_amount': {'value': 20.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}, 'total_amount': {'value': 21.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}}}`
+**Parsed fields:** `{'vendor': 'TUFFCO BUILDING MATERIALS TRADING L.L.G TRADING L.L.C', 'expense_type': None, 'amount': 20.0, 'vat_amount': 1383.0, 'total_amount': 21.0, 'currency': None, 'date': '', 'confidence': 0.18, 'field_confidence': {'vendor': 0.27067635027443193, 'date': 0.0, 'currency': 0.1641695196564133, 'amount': 0.4542658520519818, 'vat_rate': 0.6499797314405441, 'vat_amount': 0.5829839285333583, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.6826320544377837, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'amount', 'vat_rate', 'vat_amount', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': True, 'fields': {'vendor': {'value': 'TUFFCO BUILDING MATERIALS TRADING L.L.G TRADING L.L.C', 'confidence': 0.27067635027443193, 'evidence': 'TUFFCO BUILDING MATERIALS TRADING L.L.G TRADING L.L.C', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.1641695196564133, 'evidence': 'AED', 'signals': ['currency_code_match', 'position_prior_upper'], 'low': True, 'warning': 'low_confidence_all_candidates'}, 'amount': {'value': 20.0, 'confidence': 0.4542658520519818, 'evidence': 'Shuttaff 20 20 1 21', 'signals': ['subtotal_label', 'previous_line_label', 'fuzzy_label_match', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money', 'reconciliation_mismatch'], 'low': True, 'warning': 'ambiguous_candidates'}, 'vat_rate': {'value': 5.0, 'confidence': 0.6499797314405441, 'evidence': 'VAT 5%', 'signals': ['vat_tax_rate_label', 'percent_marker', 'known_vat_rate', 'format_known_vat_rate'], 'low': True, 'warning': 'ambiguous_candidates'}, 'vat_amount': {'value': 1383.0, 'confidence': 0.5829839285333583, 'evidence': 'N0. 1383 TAXINVOICE Date YAuy26', 'signals': ['vat_tax_amount_label', 'same_line', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money', 'reconciliation_mismatch'], 'low': True, 'warning': 'ambiguous_candidates'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 21.0, 'confidence': 0.6826320544377837, 'evidence': 'Amount Total 21', 'signals': ['total_label', 'same_line', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money', 'reconciliation_mismatch'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 ### PaddleOCR (lang=en)
 
-**Parsed fields:** `{'vendor': 'TRADING L.L.C', 'expense_type': 'Other', 'amount': 20.0, 'vat_amount': 20.0, 'total_amount': 21.0, 'currency': 'AED', 'date': '', 'confidence': 0.29, 'field_confidence': {'vendor': 0.87, 'expense_type': 0.28, 'amount': 0.2, 'vat_amount': 0.2, 'total_amount': 0.2, 'date': 0.0}, 'low_confidence_fields': ['expense_type', 'amount', 'vat_amount', 'total_amount', 'date'], 'reconciliation_mismatch': True, 'fields': {'vendor': {'value': 'TRADING L.L.C', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Other', 'confidence': 0.28, 'low': True, 'tier': 'bare'}, 'amount': {'value': 20.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}, 'vat_amount': {'value': 20.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}, 'total_amount': {'value': 21.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'TUFFCO BUILDING MATERIALS TRADING L.L.C', 'expense_type': None, 'amount': 20.0, 'vat_amount': 1383.0, 'total_amount': 21.0, 'currency': None, 'date': '', 'confidence': 0.18, 'field_confidence': {'vendor': 0.29170123326640596, 'date': 0.0, 'currency': 0.16618751482122895, 'amount': 0.4551581339939481, 'vat_rate': 0.6499797314405441, 'vat_amount': 0.5835086306769379, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.6844310332157708, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'amount', 'vat_rate', 'vat_amount', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': True, 'fields': {'vendor': {'value': 'TUFFCO BUILDING MATERIALS TRADING L.L.C', 'confidence': 0.29170123326640596, 'evidence': 'TUFFCO BUILDING MATERIALS TRADING L.L.C', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.16618751482122895, 'evidence': 'Total AED', 'signals': ['currency_code_match', 'position_prior_upper'], 'low': True, 'warning': 'low_confidence_all_candidates'}, 'amount': {'value': 20.0, 'confidence': 0.4551581339939481, 'evidence': 'Shuttaff 20 20 1 21', 'signals': ['subtotal_label', 'previous_line_label', 'fuzzy_label_match', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money', 'reconciliation_mismatch'], 'low': True, 'warning': 'ambiguous_candidates'}, 'vat_rate': {'value': 5.0, 'confidence': 0.6499797314405441, 'evidence': 'VAT 5%', 'signals': ['vat_tax_rate_label', 'percent_marker', 'known_vat_rate', 'format_known_vat_rate'], 'low': True, 'warning': 'ambiguous_candidates'}, 'vat_amount': {'value': 1383.0, 'confidence': 0.5835086306769379, 'evidence': 'N0. 1383 TAXINVOICE Date YAuy26', 'signals': ['vat_tax_amount_label', 'same_line', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money', 'reconciliation_mismatch'], 'low': True, 'warning': 'ambiguous_candidates'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 21.0, 'confidence': 0.6844310332157708, 'evidence': 'Amount Total 21', 'signals': ['total_label', 'same_line', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money', 'reconciliation_mismatch'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 **Low-confidence words (<0.5):** (none)
 
@@ -170,7 +314,7 @@ E-mail : buildmtr@gmail.com
 TR:10525230500
 No. 1383 TAXINVOICE
 Date YAuy26
-Mr.ms Blue Rbybe
+Mr.Ms Blue Rbybe
 Cust. TRN
 Description
 21051
@@ -199,9 +343,9 @@ Signature
 
 ### PaddleOCR (lang=ar)
 
-**Parsed fields:** `{'vendor': 'سجازف 90اد / TUFFCO BUILDING MATERIALS TRADING L.L.G', 'expense_type': 'Other', 'amount': 20.0, 'vat_amount': 20.0, 'total_amount': 21.0, 'currency': 'AED', 'date': '', 'confidence': 0.22, 'field_confidence': {'vendor': 0.45, 'expense_type': 0.28, 'amount': 0.2, 'vat_amount': 0.2, 'total_amount': 0.2, 'date': 0.0}, 'low_confidence_fields': ['vendor', 'expense_type', 'amount', 'vat_amount', 'total_amount', 'date'], 'reconciliation_mismatch': True, 'fields': {'vendor': {'value': 'سجازف 90اد / TUFFCO BUILDING MATERIALS TRADING L.L.G', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'expense_type': {'value': 'Other', 'confidence': 0.28, 'low': True, 'tier': 'bare'}, 'amount': {'value': 20.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}, 'vat_amount': {'value': 20.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}, 'total_amount': {'value': 21.0, 'confidence': 0.2, 'low': True, 'tier': 'mismatch'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'TUFFCO BUILDING MATERIALS TRADING L.L.G', 'expense_type': None, 'amount': 1.0, 'vat_amount': 20.0, 'total_amount': 21.0, 'currency': None, 'date': '', 'confidence': 0.18, 'field_confidence': {'vendor': 0.27067635027443193, 'date': 0.0, 'currency': 0.1628026914800044, 'amount': 0.4, 'vat_rate': 0.6494691371917725, 'vat_amount': 0.5737478596601598, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.7696110489705887, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'amount', 'vat_rate', 'vat_amount', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'TUFFCO BUILDING MATERIALS TRADING L.L.G', 'confidence': 0.27067635027443193, 'evidence': 'TUFFCO BUILDING MATERIALS TRADING L.L.G', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.1628026914800044, 'evidence': 'Total AED.', 'signals': ['currency_code_match', 'position_prior_upper'], 'low': True, 'warning': 'low_confidence_all_candidates'}, 'amount': {'value': 1.0, 'confidence': 0.4, 'evidence': 'derived: Amount Total 21', 'signals': ['derived_arithmetic'], 'low': True, 'warning': 'derived_value'}, 'vat_rate': {'value': 5.0, 'confidence': 0.6494691371917725, 'evidence': 'VAT 5%', 'signals': ['vat_tax_rate_label', 'percent_marker', 'known_vat_rate', 'format_known_vat_rate'], 'low': True, 'warning': 'ambiguous_candidates'}, 'vat_amount': {'value': 20.0, 'confidence': 0.5737478596601598, 'evidence': 'Shuttayy 20 20 2/', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money'], 'low': True, 'warning': 'ambiguous_candidates'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 21.0, 'confidence': 0.7696110489705887, 'evidence': 'Amount Total 21', 'signals': ['total_label', 'same_line', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
-**Low-confidence words (<0.5):** | (0.18)
+**Low-confidence words (<0.5):** سجازف 90اد (0.49), | (0.18)
 
 **Raw text:**
 
@@ -251,11 +395,11 @@ Signature
 
 ### Merged (production)
 
-**Parsed fields:** `{'vendor': 'SUPERMARKETL.L.C', 'expense_type': 'Food', 'amount': 46.84, 'vat_amount': 2.24, 'total_amount': 49.18, 'currency': None, 'date': '', 'confidence': 0.66, 'field_confidence': {'vendor': 0.86, 'expense_type': 0.45, 'date': 0.0, 'amount': 0.84, 'vat_amount': 0.89, 'total_amount': 0.89}, 'low_confidence_fields': ['expense_type', 'date'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'SUPERMARKETL.L.C', 'confidence': 0.86, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'amount': {'value': 46.84, 'confidence': 0.84, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.24, 'confidence': 0.89, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 49.18, 'confidence': 0.89, 'low': False, 'tier': 'table'}}}`
+**Parsed fields:** `{'vendor': 'OAMAR AL MADINA', 'expense_type': None, 'amount': 46.84, 'vat_amount': 2.34, 'total_amount': 49.18, 'currency': None, 'date': '', 'confidence': 0.31, 'field_confidence': {'vendor': 0.284427407654849, 'date': 0.0, 'currency': 0.0, 'amount': 1.0, 'vat_rate': 0.7818251550197601, 'vat_amount': 1.0, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.8607880633587788, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 1.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'discount', 'service_charge', 'tip', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'OAMAR AL MADINA', 'confidence': 0.284427407654849, 'evidence': 'OAMAR AL MADINA', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 46.84, 'confidence': 1.0, 'evidence': '5% 46.84 2.34 49.18', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'near_percent_marker', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.7818251550197601, 'evidence': '5% 46.84 2.34 49.18', 'signals': ['vat_tax_amount_label', 'percent_marker', 'known_vat_rate', 'format_known_vat_rate', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_amount': {'value': 2.34, 'confidence': 1.0, 'evidence': '5% 46.84 2.34 49.18', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 49.25, 'confidence': 0.8607880633587788, 'evidence': 'CASH 49.25', 'signals': ['cash_label', 'same_line', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 49.18, 'confidence': 1.0, 'evidence': '5% 46.84 2.34 49.18', 'signals': ['total_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 ### PaddleOCR (lang=en)
 
-**Parsed fields:** `{'vendor': 'SUPERMARKETL.L.C', 'expense_type': 'Food', 'amount': 46.84, 'vat_amount': 2.24, 'total_amount': 49.18, 'currency': None, 'date': '', 'confidence': 0.66, 'field_confidence': {'vendor': 0.86, 'expense_type': 0.45, 'amount': 0.84, 'vat_amount': 0.89, 'total_amount': 0.89, 'date': 0.0}, 'low_confidence_fields': ['expense_type', 'date'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'SUPERMARKETL.L.C', 'confidence': 0.86, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': 46.84, 'confidence': 0.84, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.24, 'confidence': 0.89, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 49.18, 'confidence': 0.89, 'low': False, 'tier': 'table'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'OAMAR AL MADINA', 'expense_type': None, 'amount': 46.84, 'vat_amount': 2.24, 'total_amount': 49.18, 'currency': None, 'date': '', 'confidence': 0.31, 'field_confidence': {'vendor': 0.2878962081189107, 'date': 0.0, 'currency': 0.0, 'amount': 0.9756663399152081, 'vat_rate': 0.7991089075803757, 'vat_amount': 0.9894453041120009, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.8649621617312382, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.9894453041120009, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'discount', 'service_charge', 'tip', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'OAMAR AL MADINA', 'confidence': 0.2878962081189107, 'evidence': 'OAMAR AL MADINA', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 46.84, 'confidence': 0.9756663399152081, 'evidence': '46.84', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.7991089075803757, 'evidence': '5%', 'signals': ['vat_tax_amount_label', 'percent_marker', 'known_vat_rate', 'format_known_vat_rate', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_amount': {'value': 2.24, 'confidence': 0.9894453041120009, 'evidence': '2.24 49.18', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_inclusive'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 49.25, 'confidence': 0.8649621617312382, 'evidence': 'CASH 49.25', 'signals': ['cash_label', 'same_line', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 49.18, 'confidence': 0.9894453041120009, 'evidence': '2.24 49.18', 'signals': ['total_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_inclusive'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 **Low-confidence words (<0.5):** hea zu for shopving an pts core aanto (0.46)
 
@@ -264,14 +408,14 @@ Signature
 ```
 OAMAR AL MADINA
 SUPERMARKETL.L.C
-Nw ( yu Uma Al (Ju 
+Nw ( yu Uma Al (Ju
 0585405699
 TAX INVDICE
 RN: 104645729500013
 21:29 3a1-2026 09.4
 3:11 No:104
 Pús Neve:
-PO57
+PI57
 Uter 10: 99
 Dascription
 Qty
@@ -322,7 +466,7 @@ ino Lasn hafund
 
 ### PaddleOCR (lang=ar)
 
-**Parsed fields:** `{'vendor': 'GUPERMARKETL.L.C', 'expense_type': 'Food', 'amount': 49.25, 'vat_amount': None, 'total_amount': None, 'currency': None, 'date': '', 'confidence': 0.36, 'field_confidence': {'vendor': 0.84, 'expense_type': 0.45, 'amount': 0.87, 'vat_amount': 0.0, 'total_amount': 0.0, 'date': 0.0}, 'low_confidence_fields': ['expense_type', 'vat_amount', 'total_amount', 'date'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'GUPERMARKETL.L.C', 'confidence': 0.84, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': 49.25, 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'vat_amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'total_amount': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'OAMAR AL MADINA', 'expense_type': None, 'amount': 2.34, 'vat_amount': None, 'total_amount': 2.34, 'currency': None, 'date': '', 'confidence': 0.18, 'field_confidence': {'vendor': 0.284427407654849, 'date': 0.0, 'currency': 0.0, 'amount': 0.7902979156224414, 'vat_rate': 0.0, 'vat_amount': 0.0, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.8607880633587788, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.9402979156224415, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'vat_rate', 'vat_amount', 'discount', 'service_charge', 'tip', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'OAMAR AL MADINA', 'confidence': 0.284427407654849, 'evidence': 'OAMAR AL MADINA', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 2.34, 'confidence': 0.7902979156224414, 'evidence': '5X 4t.84 2.34 49.18', 'signals': ['subtotal_label', 'previous_line_label', 'fuzzy_label_match', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive'], 'low': False}, 'vat_rate': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 49.25, 'confidence': 0.8607880633587788, 'evidence': 'CASH 49.25', 'signals': ['cash_label', 'same_line', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 2.34, 'confidence': 0.9402979156224415, 'evidence': '5X 4t.84 2.34 49.18', 'signals': ['total_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 **Low-confidence words (<0.5):** (none)
 
@@ -331,14 +475,14 @@ ino Lasn hafund
 ```
 OAMAR AL MADINA
 GUPERMARKETL.L.C
-Nrw Hy  A 
+Nrw Hy  A
 ( 0585405699
 TaX InVdICE
 RN: 104645729500013
-snle :29 4l-2026 69.4t
+s0le :29 41-2026 69.4t
 31٦1 N0:104
 PU'S Neve: PHa
-Uter 10: 99
+Uter i0: 99
 Description
 Qty
 Amount
@@ -373,7 +517,7 @@ CASH :
 49.25
 Aedunt to reten :
 0.00
-VETX
+JATX
 Taxabie Amcunt
 yaI
 Total
@@ -389,11 +533,11 @@ ing Lasn hefund
 
 ### Merged (production)
 
-**Parsed fields:** `{'vendor': 'SUPERMARKETLL.C', 'expense_type': 'Food', 'amount': 45.21, 'vat_amount': 2.28, 'total_amount': 47.49, 'currency': None, 'date': '05-Aug-202', 'confidence': 0.81, 'field_confidence': {'vendor': 0.86, 'expense_type': 0.45, 'date': 0.82, 'amount': 0.9, 'vat_amount': 0.9, 'total_amount': 0.9}, 'low_confidence_fields': ['expense_type'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'SUPERMARKETLL.C', 'confidence': 0.86, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'date': {'value': '05-Aug-202', 'confidence': 0.82, 'low': False, 'tier': 'label'}, 'amount': {'value': 45.21, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.28, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 47.49, 'confidence': 0.9, 'low': False, 'tier': 'table'}}}`
+**Parsed fields:** `{'vendor': 'M.S', 'expense_type': None, 'amount': 0.0, 'vat_amount': 45.21, 'total_amount': 45.21, 'currency': None, 'date': '05-Aug-202', 'confidence': 0.22, 'field_confidence': {'vendor': 0.29549382047228406, 'date': 0.34334922861995515, 'currency': 0.0, 'amount': 0.4, 'vat_rate': 0.0, 'vat_amount': 0.8338705804700071, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.8580885103579317, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.8338705804700071, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'currency', 'amount', 'vat_rate', 'discount', 'service_charge', 'tip', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'M.S', 'confidence': 0.29549382047228406, 'evidence': 'M.S', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '05-Aug-202', 'confidence': 0.34334922861995515, 'evidence': 'Dete :05-Aug-202% 10:59', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': False}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 0.0, 'confidence': 0.4, 'evidence': 'derived: 45.21 2.28 47.49', 'signals': ['derived_arithmetic'], 'low': True, 'warning': 'derived_value'}, 'vat_rate': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_amount': {'value': 45.21, 'confidence': 0.8338705804700071, 'evidence': '45.21 2.28 47.49', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 6.0, 'confidence': 0.8580885103579317, 'evidence': 'Amount to return 6.00 47.5', 'signals': ['cash_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 45.21, 'confidence': 0.8338705804700071, 'evidence': '45.21 2.28 47.49', 'signals': ['total_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 ### PaddleOCR (lang=en)
 
-**Parsed fields:** `{'vendor': 'SUPERMARKETLL.', 'expense_type': 'Food', 'amount': 45.21, 'vat_amount': 2.28, 'total_amount': 47.49, 'currency': None, 'date': '05-Aug-202', 'confidence': 0.8, 'field_confidence': {'vendor': 0.82, 'expense_type': 0.45, 'amount': 0.9, 'vat_amount': 0.9, 'total_amount': 0.9, 'date': 0.82}, 'low_confidence_fields': ['expense_type'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'SUPERMARKETLL.', 'confidence': 0.82, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': 45.21, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.28, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 47.49, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'date': {'value': '05-Aug-202', 'confidence': 0.82, 'low': False, 'tier': 'label'}}}`
+**Parsed fields:** `{'vendor': 'M.S', 'expense_type': None, 'amount': 45.21, 'vat_amount': 2.28, 'total_amount': 47.49, 'currency': None, 'date': '05-Aug-202', 'confidence': 0.35, 'field_confidence': {'vendor': 0.29549382047228406, 'date': 0.69148897486552, 'currency': 0.0, 'amount': 1.0, 'vat_rate': 0.7989461243152618, 'vat_amount': 1.0, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.8580885103579317, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 1.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'currency', 'discount', 'service_charge', 'tip', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'M.S', 'confidence': 0.29549382047228406, 'evidence': 'M.S', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '05-Aug-202', 'confidence': 0.69148897486552, 'evidence': 'Date :05-Aug-202% 10:59', 'signals': ['date_format_match', 'date_label', 'position_prior_upper', 'format_date_shape'], 'low': False}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 45.21, 'confidence': 1.0, 'evidence': '45.21 2.28 47.49', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.7989461243152618, 'evidence': '5', 'signals': ['vat_tax_amount_label', 'known_vat_rate', 'format_known_vat_rate', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_amount': {'value': 2.28, 'confidence': 1.0, 'evidence': '45.21 2.28 47.49', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 47.5, 'confidence': 0.8580885103579317, 'evidence': 'Amount to return 0.00 47.5', 'signals': ['cash_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 47.49, 'confidence': 1.0, 'evidence': '45.21 2.28 47.49', 'signals': ['total_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 **Low-confidence words (<0.5):** (none)
 
@@ -439,7 +583,7 @@ CORTANDER LEA
 SAFA VOGHURI 10KG
 1.00
 38.00
-UAQ-5000-BLUE RINE
+UAQ-500D-BLUE RINE
 Qty: 6.16
 Rouncing:
 0.01
@@ -465,7 +609,7 @@ No Lasn r cnd
 
 ### PaddleOCR (lang=ar)
 
-**Parsed fields:** `{'vendor': 'SUPERMARKETLL.C', 'expense_type': 'Food', 'amount': 45.21, 'vat_amount': 2.28, 'total_amount': 47.49, 'currency': None, 'date': '', 'confidence': 0.66, 'field_confidence': {'vendor': 0.86, 'expense_type': 0.45, 'amount': 0.86, 'vat_amount': 0.89, 'total_amount': 0.89, 'date': 0.0}, 'low_confidence_fields': ['expense_type', 'date'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'SUPERMARKETLL.C', 'confidence': 0.86, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': 45.21, 'confidence': 0.86, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.28, 'confidence': 0.89, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 47.49, 'confidence': 0.89, 'low': False, 'tier': 'table'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'M.S', 'expense_type': None, 'amount': None, 'vat_amount': 45.21, 'total_amount': None, 'currency': None, 'date': '', 'confidence': 0.07, 'field_confidence': {'vendor': 0.27882716464519497, 'date': 0.0, 'currency': 0.0, 'amount': 0.0, 'vat_rate': 0.0, 'vat_amount': 0.8334371936321259, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'amount', 'vat_rate', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'change', 'total_amount', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'M.S', 'confidence': 0.27882716464519497, 'evidence': 'M.S', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_rate': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_amount': {'value': 45.21, 'confidence': 0.8334371936321259, 'evidence': '45.21 2.28 47.49', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 **Low-confidence words (<0.5):** (none)
 
@@ -475,7 +619,8 @@ No Lasn r cnd
 M.S
 OAMAR AL MADINA
 SUPERMARKETLL.C
-New Hannyya Uguo Al Qurwin-UAE
+New Hanyya Uguo Al Quwin-UAE
+L
 0585405699
 TAX TNVOICE
 RN: 104645729500003
@@ -487,7 +632,7 @@ POS Hene: PUS2
 Bascript lon
 Qty
 Anont
-9398948000000
+9998943000000
 CIHRRY L EAF
 1.0)
 1.00
@@ -503,15 +648,15 @@ ONJON (INDLA)
 CHILLY SMAL
 0.16
 2.111
-9695000000
+996950000000
 COREANDER IEAI
 1.00
 0.99)
-6291044111:19
+0291044111:19
 SAFA VOGKURT TUKG
 1.0)
 38.00
-UA0-500D- BLUE RINE
+UA0 - 5000-BLUE RINE
 Qty: 6.16
 Rouncing:
 0.01
@@ -529,8 +674,8 @@ T:ta
 51
 45.21
 2.28 47.49
-*EEr D T1 "Or NLsaNge
-Thenk you for grustny ao2 pis core Rga1
+*EET D T1 "Or NLsaNge
+Thenk you for grutoy ao2 pis core Rga1
 No Leun -ctod
 ```
 
@@ -538,13 +683,13 @@ No Leun -ctod
 
 ### Merged (production)
 
-**Parsed fields:** `{'vendor': 'QAMAR ALHUDA ALJADEED GENERAL TRADING L.L.U', 'expense_type': 'Food', 'amount': 45.0, 'vat_amount': 2.25, 'total_amount': 47.25, 'currency': None, 'date': '', 'confidence': 0.67, 'field_confidence': {'vendor': 0.86, 'expense_type': 0.45, 'date': 0.0, 'amount': 0.9, 'vat_amount': 0.9, 'total_amount': 0.9}, 'low_confidence_fields': ['expense_type', 'date'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'QAMAR ALHUDA ALJADEED GENERAL TRADING L.L.U', 'confidence': 0.86, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}, 'amount': {'value': 45.0, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.25, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 47.25, 'confidence': 0.9, 'low': False, 'tier': 'table'}}}`
+**Parsed fields:** `{'vendor': 'amar Alhuda حارة العامةذمم', 'expense_type': None, 'amount': 45.0, 'vat_amount': 2.25, 'total_amount': 47.25, 'currency': None, 'date': '', 'confidence': 0.26, 'field_confidence': {'vendor': 0.2749283127101934, 'date': 0.0, 'currency': 0.0, 'amount': 1.0, 'vat_rate': 0.9333542823791504, 'vat_amount': 1.0, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 1.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'amar Alhuda حارة العامةذمم', 'confidence': 0.2749283127101934, 'evidence': 'amar Alhuda حارة العامةذمم', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 45.0, 'confidence': 1.0, 'evidence': '1.00 PCS 45.00 45.00 5% 2.25 47.25', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.9333542823791504, 'evidence': '1.00 PCS 45.00 45.00 5% 2.25 47.25', 'signals': ['vat_tax_amount_label', 'vat_tax_rate_label', 'percent_marker', 'known_vat_rate', 'format_known_vat_rate', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_amount': {'value': 2.25, 'confidence': 1.0, 'evidence': '1.00 PCS 45.00 45.00 5% 2.25 47.25', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'near_percent_marker', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 47.25, 'confidence': 1.0, 'evidence': '1.00 PCS 45.00 45.00 5% 2.25 47.25', 'signals': ['total_label', 'previous_line_label', 'fuzzy_label_match', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 ### PaddleOCR (lang=en)
 
-**Parsed fields:** `{'vendor': 'QAMAR ALHUDA ALJADEED GENERAL TRADING L.L.U', 'expense_type': 'Food', 'amount': 45.0, 'vat_amount': 2.25, 'total_amount': 47.25, 'currency': None, 'date': '', 'confidence': 0.67, 'field_confidence': {'vendor': 0.86, 'expense_type': 0.45, 'amount': 0.9, 'vat_amount': 0.9, 'total_amount': 0.9, 'date': 0.0}, 'low_confidence_fields': ['expense_type', 'date'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'QAMAR ALHUDA ALJADEED GENERAL TRADING L.L.U', 'confidence': 0.86, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': 45.0, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.25, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 47.25, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'amar Alhuda', 'expense_type': None, 'amount': 45.0, 'vat_amount': 2.25, 'total_amount': 47.25, 'currency': None, 'date': '', 'confidence': 0.26, 'field_confidence': {'vendor': 0.29332553069916134, 'date': 0.0, 'currency': 0.0, 'amount': 1.0, 'vat_rate': 0.9333542823791504, 'vat_amount': 1.0, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 1.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'amar Alhuda', 'confidence': 0.29332553069916134, 'evidence': 'amar Alhuda', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 45.0, 'confidence': 1.0, 'evidence': '1.00 PCS 45.00 45.00 5% 2.25 47.25', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.9333542823791504, 'evidence': '1.00 PCS 45.00 45.00 5% 2.25 47.25', 'signals': ['vat_tax_amount_label', 'vat_tax_rate_label', 'percent_marker', 'known_vat_rate', 'format_known_vat_rate', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_amount': {'value': 2.25, 'confidence': 1.0, 'evidence': '1.00 PCS 45.00 45.00 5% 2.25 47.25', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'near_percent_marker', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 47.25, 'confidence': 1.0, 'evidence': '1.00 PCS 45.00 45.00 5% 2.25 47.25', 'signals': ['total_label', 'previous_line_label', 'fuzzy_label_match', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
-**Low-confidence words (<0.5):** 1 (0.14), dangi (0.44), d l   (0.49), Apa (0.41), Aa uat  (0.40), d uil da g (0.48), das uchll o ilas (0.47)
+**Low-confidence words (<0.5):** 1 (0.14), dangi (0.44), d l   (0.49), Apa (0.42), A uat  (0.42), d uil da g (0.48), das uchll o ilas (0.47)
 
 **Raw text:**
 
@@ -559,7 +704,7 @@ qomoouda.k@gmoil.com
 Worehouse No. 75,76, 77, Opp. AIKO Hypermarket, Dubai Inves
 all kinds of Building Materials
 100340280500003
-ment Pork 1, Tel.: + 971 4 884 8200, +971 4 889 5541
+ent Pork 1, Tel.: + 971 4 884 8200, + 971 4 889 5541
 TAXINVOICE
 Invoice No.
 Date
@@ -579,9 +724,9 @@ Dated
 1
 dangi
 1
-d l  
+d l
 Apa
-Aa uat 
+A uat
 Amount Incl. VAT
 Description
 Quantity
@@ -599,9 +744,9 @@ PCS
 2.25
 47.25
 USPRO
-e l 
+e l
 TOTAL EXCL VAT
-UAE Dirhams Forty Seven and Twenty Five fiis Only
+UAE Dirhams Forty Seven and Twenty Five fis Only
 d uil da g
 TOTAL VAT
 das uchll o ilas
@@ -611,9 +756,9 @@ TOTAL INCL VAT
 
 ### PaddleOCR (lang=ar)
 
-**Parsed fields:** `{'vendor': 'حارة العامةذمم / QAMAR ALHUDA ALJADEED GENERAL TRADING LL.L', 'expense_type': 'IT Equipment', 'amount': 45.0, 'vat_amount': 2.25, 'total_amount': 47.25, 'currency': None, 'date': '', 'confidence': 0.59, 'field_confidence': {'vendor': 0.45, 'expense_type': 0.45, 'amount': 0.9, 'vat_amount': 0.85, 'total_amount': 0.89, 'date': 0.0}, 'low_confidence_fields': ['vendor', 'expense_type', 'date'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'حارة العامةذمم / QAMAR ALHUDA ALJADEED GENERAL TRADING LL.L', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'expense_type': {'value': 'IT Equipment', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': 45.0, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.25, 'confidence': 0.85, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 47.25, 'confidence': 0.89, 'low': False, 'tier': 'table'}, 'date': {'value': None, 'confidence': 0.0, 'low': True, 'tier': 'missing'}}}`
+**Parsed fields:** `{'vendor': 'amar Alhuda حارة العامةذمم', 'expense_type': None, 'amount': 0.0, 'vat_amount': 1.0, 'total_amount': 1.0, 'currency': 'USD', 'date': '', 'confidence': 0.14, 'field_confidence': {'vendor': 0.2749283127101934, 'date': 0.0, 'currency': 0.30434381441331243, 'amount': 0.4, 'vat_rate': 0.0, 'vat_amount': 0.7448842702980891, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.0, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.5948842702980892, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'amount', 'vat_rate', 'vat_amount', 'discount', 'service_charge', 'tip', 'cash_tendered', 'card_amount', 'change', 'total_amount', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'amar Alhuda حارة العامةذمم', 'confidence': 0.2749283127101934, 'evidence': 'amar Alhuda حارة العامةذمم', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'currency': {'value': 'USD', 'confidence': 0.30434381441331243, 'evidence': "BOX 114001 Pv- USD ER-BR1/65 Suppler's Ref.", 'signals': ['currency_code_match', 'same_line', 'position_prior_upper'], 'low': False}, 'amount': {'value': 0.0, 'confidence': 0.4, 'evidence': 'derived: 1.00 PCS 45.00 45.00 54 2.25 47.25', 'signals': ['derived_arithmetic'], 'low': True, 'warning': 'derived_value'}, 'vat_rate': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_amount': {'value': 1.0, 'confidence': 0.7448842702980891, 'evidence': '1.00 PCS 45.00 45.00 54 2.25 47.25', 'signals': ['vat_tax_amount_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': True, 'warning': 'ambiguous_candidates'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 1.0, 'confidence': 0.5948842702980892, 'evidence': '1.00 PCS 45.00 45.00 54 2.25 47.25', 'signals': ['total_label', 'previous_line_label', 'fuzzy_label_match', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': True, 'warning': 'ambiguous_candidates'}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
-**Low-confidence words (<0.5):** nد (0.48)
+**Low-confidence words (<0.5):** s (0.15)
 
 **Raw text:**
 
@@ -621,7 +766,6 @@ TOTAL INCL VAT
 amar Alhuda
 حارة العامةذمم
 QAMAR ALHUDA ALJADEED GENERAL TRADING LL.L
-nد
  0528194512
 (JOTUN MULTI COLOUR CENTRE)
 0528194629
@@ -669,10 +813,11 @@ PCS
 2.25
 47.25
 USPRO
+s
 AIW
 TOTAL EXCL VAT
 مبلغ دون الضرية
-UAE Dirhams Forty Seven and Twenty Five fis Only
+UAE Dirhams Forty Seven and Twenty Five fils Only
 مجموعة الضريية
 TOTAL VAT
 TOTAL INCL VAT
@@ -683,21 +828,21 @@ TOTAL INCL VAT
 
 ### Merged (production)
 
-**Parsed fields:** `{'vendor': 'Pasons S/M&Dept.Store', 'expense_type': 'Food', 'amount': 49.52, 'vat_amount': 2.48, 'total_amount': 52.0, 'currency': None, 'date': '04/08/2026', 'confidence': 0.81, 'field_confidence': {'vendor': 0.87, 'expense_type': 0.45, 'date': 0.87, 'amount': 0.9, 'vat_amount': 0.9, 'total_amount': 0.9}, 'low_confidence_fields': ['expense_type'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'Pasons S/M&Dept.Store', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'date': {'value': '04/08/2026', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'amount': {'value': 49.52, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.48, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 52.0, 'confidence': 0.9, 'low': False, 'tier': 'table'}}}`
+**Parsed fields:** `{'vendor': 'Slue Rhme', 'expense_type': None, 'amount': 1.0, 'vat_amount': 2.48, 'total_amount': 52.0, 'currency': None, 'date': '04/08/2026', 'confidence': 0.29, 'field_confidence': {'vendor': 0.24191052004299332, 'date': 0.29496763217765676, 'currency': 0.0, 'amount': 0.9503392124017783, 'vat_rate': 0.9451915413141251, 'vat_amount': 0.4, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.817909536889169, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 1.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'vat_amount', 'discount', 'service_charge', 'tip', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'Slue Rhme', 'confidence': 0.24191052004299332, 'evidence': 'Slue Rhme', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '04/08/2026', 'confidence': 0.29496763217765676, 'evidence': '04/08/2026 09:19 09', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': True, 'warning': 'ambiguous_candidates'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 1.0, 'confidence': 0.9503392124017783, 'evidence': 'الذوح الرغر الكبية 1 السجع', 'signals': ['subtotal_label', 'previous_line_label', 'fuzzy_label_match', 'currency_value', 'no_decimal_point', 'position_prior_lower', 'format_integer_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 0.9451915413141251, 'evidence': '5 83.37 87.54 4.17', 'signals': ['vat_tax_rate_label', 'known_vat_rate', 'format_known_vat_rate', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_amount': {'value': 2.48, 'confidence': 0.4, 'evidence': 'derived: TOTAL AMOUNT 52.00 at 5.0%', 'signals': ['derived_arithmetic', 'derived_inclusive'], 'low': True, 'warning': 'derived_value'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 52.0, 'confidence': 0.817909536889169, 'evidence': 'Paid Amounl(MAS) 52 52.00', 'signals': ['tendered_label', 'same_line', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 52.0, 'confidence': 1.0, 'evidence': 'TOTAL AMOUNT 52.00', 'signals': ['total_label', 'same_line', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_inclusive', 'arithmetic_reconciled_exclusive'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
 ### PaddleOCR (lang=en)
 
-**Parsed fields:** `{'vendor': 'Pasons S/M&Dept.Store', 'expense_type': 'Food', 'amount': 49.52, 'vat_amount': 2.48, 'total_amount': 52.0, 'currency': None, 'date': '04/08/2026', 'confidence': 0.82, 'field_confidence': {'vendor': 0.87, 'expense_type': 0.45, 'amount': 0.9, 'vat_amount': 0.9, 'total_amount': 0.9, 'date': 0.87}, 'low_confidence_fields': ['expense_type'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'Pasons S/M&Dept.Store', 'confidence': 0.87, 'low': False, 'tier': 'label'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': 49.52, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 2.48, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 52.0, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'date': {'value': '04/08/2026', 'confidence': 0.87, 'low': False, 'tier': 'label'}}}`
+**Parsed fields:** `{'vendor': 'BlueRhme', 'expense_type': None, 'amount': 49.52, 'vat_amount': 10.1, 'total_amount': 87.54, 'currency': None, 'date': '04/08/2026', 'confidence': 0.22, 'field_confidence': {'vendor': 0.255195600480105, 'date': 0.2957321511538683, 'currency': 0.0, 'amount': 0.6768432315134368, 'vat_rate': 0.0, 'vat_amount': 0.7066488301210698, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.826209099044842, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 0.7243133113967105, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'amount', 'vat_rate', 'vat_amount', 'discount', 'service_charge', 'tip', 'card_amount', 'change', 'total_amount', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': True, 'fields': {'vendor': {'value': 'BlueRhme', 'confidence': 0.255195600480105, 'evidence': 'BlueRhme', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '04/08/2026', 'confidence': 0.2957321511538683, 'evidence': '04/08/2026 09:19 09', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': True, 'warning': 'ambiguous_candidates'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 49.52, 'confidence': 0.6768432315134368, 'evidence': '49.52 52.00 2.48', 'signals': ['subtotal_label', 'previous_line_label', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch'], 'low': True, 'warning': 'ambiguous_candidates'}, 'vat_rate': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'vat_amount': {'value': 10.1, 'confidence': 0.7066488301210698, 'evidence': '9901129005055 0.505 KGS 10.10', 'signals': ['vat_tax_amount_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch'], 'low': True, 'warning': 'ambiguous_candidates'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 52.0, 'confidence': 0.826209099044842, 'evidence': 'Paid Amounl(MAS) 52.00', 'signals': ['tendered_label', 'same_line', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 87.54, 'confidence': 0.7243133113967105, 'evidence': 'Paid Amount(MAS) 87.54', 'signals': ['total_label', 'same_line', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'reconciliation_mismatch'], 'low': True, 'warning': 'ambiguous_candidates'}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
-**Low-confidence words (<0.5):** 99 (0.32), GLE (0.48), y  & j g (0.40), AEN (0.44), 2 (0.31), 2s2 (0.31)
+**Low-confidence words (<0.5):** 6 (0.19), GLE (0.48), y  & j g (0.40), AEN (0.45), 2 (0.31), 2s2 (0.32)
 
 **Raw text:**
 
 ```
-BlueRhn
+BlueRhme
 BlueRhi
-99
-65t8
+6
+65-t8
 PASONS
 305
 PASONS
@@ -705,7 +850,7 @@ Pasons S/M&Dept.Store
 Dubai Investment Park-2, Dubai, U AE
 GLE
 Tel: 04-8640966 . Mob:0557692020
-Pasons S/M&Depl Store
+Pasons S/M&DepI Store
 www.pasonsme.com
 Dubal Investment Park-2, Dubai, U AE
 TRN 100453349100003
@@ -734,7 +879,7 @@ Marmum Yoghurt 1Kg Full Cresm
 52.00
 A21 e213
 2s2
-7
+1
 t
 2 9901125020304
 6291031020837
@@ -793,7 +938,7 @@ Bill
 137
 Paid Amount(MAS)
 Tax Inclusive
-Keep Receipt For Exchange, T&C Apply
+Keep Recaipt For Exchange, T&C Apply
 VAT%
 Excd.VAT
 Incl VAT
@@ -823,22 +968,22 @@ No Cash Refund, Thank You, Visit Again
 
 ### PaddleOCR (lang=ar)
 
-**Parsed fields:** `{'vendor': 'T5ن', 'expense_type': 'Food', 'amount': 83.37, 'vat_amount': 4.17, 'total_amount': 87.54, 'currency': None, 'date': '04/08/2026', 'confidence': 0.73, 'field_confidence': {'vendor': 0.39, 'expense_type': 0.45, 'amount': 0.9, 'vat_amount': 0.89, 'total_amount': 0.9, 'date': 0.87}, 'low_confidence_fields': ['vendor', 'expense_type'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'T5ن', 'confidence': 0.39, 'low': True, 'tier': 'heuristic'}, 'expense_type': {'value': 'Food', 'confidence': 0.45, 'low': True, 'tier': 'heuristic'}, 'amount': {'value': 83.37, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'vat_amount': {'value': 4.17, 'confidence': 0.89, 'low': False, 'tier': 'table'}, 'total_amount': {'value': 87.54, 'confidence': 0.9, 'low': False, 'tier': 'table'}, 'date': {'value': '04/08/2026', 'confidence': 0.87, 'low': False, 'tier': 'label'}}}`
+**Parsed fields:** `{'vendor': 'Slue Rhme', 'expense_type': None, 'amount': 1.0, 'vat_amount': 0.05, 'total_amount': 1.0, 'currency': None, 'date': '04/08/2026', 'confidence': 0.3, 'field_confidence': {'vendor': 0.2418820414137333, 'date': 0.2947882874214903, 'currency': 0.0, 'amount': 1.0, 'vat_rate': 1.0, 'vat_amount': 0.4, 'discount': 0.0, 'service_charge': 0.0, 'tip': 0.0, 'cash_tendered': 0.816697639100095, 'card_amount': 0.0, 'change': 0.0, 'total_amount': 1.0, 'invoice_number': 0.0, 'transaction_number': 0.0, 'expense_category': 0.0}, 'low_confidence_fields': ['vendor', 'date', 'currency', 'vat_amount', 'discount', 'service_charge', 'tip', 'card_amount', 'change', 'invoice_number', 'transaction_number', 'expense_category'], 'reconciliation_mismatch': False, 'fields': {'vendor': {'value': 'Slue Rhme', 'confidence': 0.2418820414137333, 'evidence': 'Slue Rhme', 'signals': ['top_of_receipt', 'position_prior_upper'], 'low': True, 'warning': 'ambiguous_candidates'}, 'date': {'value': '04/08/2026', 'confidence': 0.2947882874214903, 'evidence': '04/08/2026 09:19 09', 'signals': ['date_format_match', 'position_prior_upper', 'format_date_shape'], 'low': True, 'warning': 'ambiguous_candidates'}, 'currency': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'amount': {'value': 1.0, 'confidence': 1.0, 'evidence': 'Mamum Yoghurt 1Kg Full Cresm', 'signals': ['no_label_bare_number', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_rate': {'value': 5.0, 'confidence': 1.0, 'evidence': '5 83.37 87.54 4.17', 'signals': ['vat_tax_rate_label', 'known_vat_rate', 'format_known_vat_rate', 'arithmetic_reconciled_inclusive'], 'low': False}, 'vat_amount': {'value': 0.05, 'confidence': 0.4, 'evidence': 'derived: Mamum Yoghurt 1Kg Full Cresm at 5.0%', 'signals': ['derived_arithmetic', 'derived_inclusive'], 'low': True, 'warning': 'derived_value'}, 'discount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'service_charge': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'tip': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'cash_tendered': {'value': 4.0, 'confidence': 0.816697639100095, 'evidence': '3 87158069 1.000 PCS 4.00', 'signals': ['tendered_label', 'same_row', 'currency_value', 'position_prior_lower', 'format_decimal_money'], 'low': False}, 'card_amount': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'change': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'total_amount': {'value': 1.0, 'confidence': 1.0, 'evidence': 'Mamum Yoghurt 1Kg Full Cresm', 'signals': ['no_label_bare_number', 'currency_value', 'position_prior_lower', 'format_decimal_money', 'arithmetic_reconciled_exclusive', 'arithmetic_reconciled_inclusive'], 'low': False}, 'invoice_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'transaction_number': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}, 'expense_category': {'value': None, 'confidence': 0.0, 'evidence': '', 'signals': [], 'low': True, 'warning': 'no_evidence'}}}`
 
-**Low-confidence words (<0.5):** T5ن (0.34), CHV (0.41), لسع (0.50), لح (0.43), g (0.41), BO (0.49)
+**Low-confidence words (<0.5):** T5ن (0.34), CHV (0.41), لسع (0.50), لح (0.42), g (0.41), BO (0.49)
 
 **Raw text:**
 
 ```
-Shte Rhrnis
-B(ueRhonm
+Slue Rhme
+BlueRhom
 6sts
 SNOSAd
 T5ن
 PASONS
 CHV
 Dubai Investment Park-2, Dubai , U AE
-Pasons S/M&Depl Slore
+Pasons S/M&Dept, Slore
 SLENC
 Tet(4-0640966Mob:0557692020
 PasonsS/M&Depl Slore
@@ -848,7 +993,7 @@ TRN 100453349100003
 Tel 04-8840966Mob 0557692020
 Tax Invoice
 نتورة ضرية
-'anew pasansime.com
+'anew pasansime.con
 Sn.""bem
 TRN 100453349100003
 الذوح الرغر
@@ -870,11 +1015,10 @@ Mamum Yoghurt 1Kg Full Cresm
 8.000
 52.00
 تنوع الرقم
-الخوة
+الخبوة
 لح
 الجحع
 2 9901125020304
-1
 6291031029837
 a.000
 PCS

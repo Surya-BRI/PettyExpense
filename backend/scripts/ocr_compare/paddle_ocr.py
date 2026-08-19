@@ -25,9 +25,21 @@ def _get_engine(lang: str):
     return _engines[lang]
 
 
+def _poly_to_bbox(poly: Any):
+    try:
+        xs = [float(p[0]) for p in poly]
+        ys = [float(p[1]) for p in poly]
+        return (min(xs), min(ys), max(xs), max(ys))
+    except (TypeError, IndexError, ValueError):
+        return None
+
+
 def extract_text_paddle(image_path: str, lang: str = "en") -> dict[str, Any]:
     """lang: 'en' for Latin-script bills, 'ar' for Arabic-script bills.
-    Returns {engine, raw_text, words: [{text, confidence}], error?}."""
+    Returns {engine, raw_text, words: [{text, confidence, bounding_box}], error?}.
+    Mirrors services/ocr_service.py's production wrapper (including bounding-box
+    capture) so this comparison harness exercises the same geometry-aware
+    candidate generation real uploads get, not a text-only degraded path."""
     try:
         engine = _get_engine(lang)
         results = engine.predict(image_path)
@@ -38,9 +50,11 @@ def extract_text_paddle(image_path: str, lang: str = "en") -> dict[str, Any]:
     for r in results:
         texts = r.get("rec_texts", [])
         scores = r.get("rec_scores", [])
-        for text, score in zip(texts, scores):
+        polys = r.get("rec_polys") or r.get("dt_polys") or []
+        for idx, (text, score) in enumerate(zip(texts, scores)):
             if text.strip():
-                words.append({"text": text, "confidence": float(score)})
+                bbox = _poly_to_bbox(polys[idx]) if idx < len(polys) else None
+                words.append({"text": text, "confidence": float(score), "bounding_box": bbox})
 
     raw_text = "\n".join(w["text"] for w in words)
     return {"engine": f"paddleocr[{lang}]", "raw_text": raw_text, "words": words, "error": None}

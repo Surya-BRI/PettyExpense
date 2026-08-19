@@ -1,0 +1,156 @@
+# Generic, language-level synonyms for universal receipt/invoice concepts.
+#
+# Rules for editing this file:
+#   - OK to add: a word or phrase that names a concept in ANY natural language
+#     (e.g. a new language's word for "total"). This is linguistic vocabulary,
+#     not vendor/layout knowledge, and is additive by design.
+#   - NOT OK to add: a brand name, company name, store type, or any string
+#     specific to one vendor's receipt layout. That belongs in reference data
+#     (known_vendors / categories), never here.
+total:
+  - total
+  - grand total
+  - amount due
+  - bill amount
+  - net amount
+  - paid amount
+  - amount incl vat
+  - amount (incl. vat)
+  - total incl
+  - total incl vat
+  - الإجمالي
+  - المجموع
+  - الاجمالى
+  - اجمالي المبلغ
+subtotal:
+  - subtotal
+  - sub total
+  - sub-total
+  - amount excl vat
+  - amount (excl. vat)
+  - excl vat
+  - net
+  - net amount
+  - sale amount
+  - sale amt
+  - taxable amount
+  - taxable amt
+  - المجموع الفرعي
+  - قبل الضريبة
+tax_registration_number:
+  - vat reg
+  - vat registration
+  - vat registration number
+  - vat reg number
+  - tax registration number
+  - vat number
+  - trn
+  - الرقم الضريبي
+  - رقم التسجيل الضريبي
+vat_tax_amount:
+  - vat amount
+  - vat amt
+  - tax amount
+  - tax amt
+  - vat
+  - tax
+  - gst
+  - ضريبة القيمة المضافة
+  - ضريبة
+  - قيمة الضريبة
+vat_tax_rate:
+  - vat rate
+  - tax rate
+  - vat%
+  - vat %
+  - tax%
+  - tax %
+  - نسبة الضريبة
+  - نسبة ضريبة القيمة المضافة
+discount:
+  - discount
+  - disc
+  - "off"
+  - promo
+  - خصم
+service_charge:
+  - service charge
+  - svc chg
+  - service fee
+  - رسوم الخدمة
+tip:
+  - tip
+  - gratuity
+  - بقشيش
+cash:
+  - cash
+  - cash paid
+  - نقدا
+  - نقدًا
+  - كاش
+card:
+  - card
+  - credit card
+  - debit card
+  - visa
+  - mastercard
+  - بطاقة
+change:
+  - change
+  - change due
+  - balance returned
+  - الباقي
+  - المتبقي
+tendered:
+  - tendered
+  - amount tendered
+  - paid
+  - amount paid
+  - مدفوع
+date:
+  - date
+  - bill date
+  - invoice date
+  - transaction date
+  - receipt date
+  - sale date
+  - تاريخ
+  - تاريخ الفاتورة
+invoice_number:
+  - invoice no
+  - invoice number
+  - invoice #
+  - bill no
+  - receipt no
+  - receipt number
+  - رقم الفاتورة
+transaction_number:
+  - transaction no
+  - transaction number
+  - txn no
+  - trans #
+  - ref no
+  - reference number
+  - رقم المعاملة
+document_type_header:
+  # A universal "what kind of document is this" label almost every receipt
+  # prints near the top — recognized only so it doesn't get mistaken for the
+  # vendor name; never mapped to any extracted field itself.
+  - tax invoice
+  - cash invoice
+  - sales receipt
+  - cash receipt
+  - customer receipt
+  - invoice
+  - receipt
+  - فاتورة ضريبية
+  - فاتورة
+  - إيصال
+item_table_header:
+  - qty
+  - quantity
+  - description
+  - line item
+  - unit price
+  - الكمية
+  - الوصف
