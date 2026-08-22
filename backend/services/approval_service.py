@@ -72,6 +72,14 @@ def _apply_delegation(db: Session, approver: Optional[ErpAuthExpenseUsers]) -> O
     return db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == delegation.backup_id).first() or approver
 
 
+def resolve_current_approver(db: Session, txn: ErpExpenseTransaction) -> Optional[ErpAuthExpenseUsers]:
+    # Single entry point for "who should be notified about this transaction right now" — used by submit and resubmit.
+    _ensure_stage(db, txn)
+    if not txn.current_stage:
+        return None
+    return resolve_stage_approver(db, txn, txn.current_stage)
+
+
 def resolve_stage_approver(db: Session, txn: ErpExpenseTransaction, stage: str) -> Optional[ErpAuthExpenseUsers]:
     employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
     category = db.query(ErpExpenseCategory).filter(ErpExpenseCategory.category_id == txn.category_id).first()
@@ -164,6 +172,7 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
 
 
 def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, comment: Optional[str]) -> dict[str, Any]:
+    from services import notification_service
     from services.transaction_service import transaction_to_dict
 
     if action not in ("approve", "dispute", "reject"):
@@ -212,10 +221,47 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
 
     db.commit()
     txn = _load_txn(db, transaction_id)
+
+    vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
+    if action == "approve":
+        if txn.status == "approved":
+            employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
+            notification_service.send(
+                db, employee, "approval", txn.transaction_id,
+                f"Expense claim approved ({vendor_name})", f"تمت الموافقة على مطالبة النفقات ({vendor_name})",
+                f"Your claim {txn.transaction_id} for {txn.currency} {txn.amount} was approved.",
+                f"تمت الموافقة على مطالبتك رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount}.",
+            )
+        else:
+            next_approver = resolve_stage_approver(db, txn, txn.current_stage)
+            notification_service.send(
+                db, next_approver, "approval", txn.transaction_id,
+                f"Claim awaiting your approval ({vendor_name})", f"مطالبة نفقات في انتظار موافقتك ({vendor_name})",
+                f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is now at your stage ({txn.current_stage}).",
+                f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} وصلت إلى مرحلتك ({txn.current_stage}).",
+            )
+    else:
+        employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
+        if action == "reject":
+            notification_service.send(
+                db, employee, "rejection", txn.transaction_id,
+                f"Expense claim rejected ({vendor_name})", f"تم رفض مطالبة النفقات ({vendor_name})",
+                f"Your claim {txn.transaction_id} was rejected. Reason: {comment}",
+                f"تم رفض مطالبتك رقم {txn.transaction_id}. السبب: {comment}",
+            )
+        else:  # dispute
+            notification_service.send(
+                db, employee, "dispute", txn.transaction_id,
+                f"Expense claim needs correction ({vendor_name})", f"مطالبة النفقات تحتاج إلى تصحيح ({vendor_name})",
+                f"Your claim {txn.transaction_id} was sent back for correction. Reason: {comment}",
+                f"تم إرجاع مطالبتك رقم {txn.transaction_id} للتصحيح. السبب: {comment}",
+            )
+
     return transaction_to_dict(txn, include_history=True, db=db)
 
 
 def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) -> dict[str, Any]:
+    from services import notification_service
     from services.transaction_service import transaction_to_dict
 
     txn = _load_txn(db, transaction_id)
@@ -229,6 +275,15 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
     txn.dispute_returned = 0
     db.commit()
     txn = _load_txn(db, transaction_id)
+
+    approver = resolve_current_approver(db, txn)
+    vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
+    notification_service.send(
+        db, approver, "submission", txn.transaction_id,
+        f"Corrected claim resubmitted ({vendor_name})", f"تم إعادة تقديم المطالبة المصححة ({vendor_name})",
+        f"Claim {txn.transaction_id} was corrected and resubmitted for your review.",
+        f"تم تصحيح المطالبة رقم {txn.transaction_id} وإعادة تقديمها لمراجعتك.",
+    )
     return transaction_to_dict(txn, include_history=True, db=db)
 
 

@@ -1,8 +1,4 @@
-"""Injected reference data: known vendors, categories, currencies, VAT-rate
-priors, and the label-synonym vocabulary. Nothing in this module hard-codes a
-vendor name, brand, or country — callers (an admin-config/DB adapter, or a
-test) build a ReferenceData instance and pass it in.
-"""
+"""Injected reference data (vendors, categories, currencies, VAT rates, label vocabulary) — callers build a ReferenceData and pass it in; nothing here is hard-coded."""
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -39,8 +35,7 @@ def _load_tax_rules() -> dict:
 
 
 def default_tax_rules_for_region(region_code: Optional[str] = None) -> tuple[tuple[str, ...], tuple[float, ...]]:
-    """Returns (valid_currency_codes, plausible_vat_rates) for a region code,
-    falling back to the shipped 'default' entry for unknown/missing codes."""
+    # Returns (valid_currency_codes, plausible_vat_rates) for a region code, falling back to the shipped 'default' entry.
     rules = _load_tax_rules()
     base = rules.get("default", {})
     currencies = tuple(base.get("valid_currency_codes", ()))

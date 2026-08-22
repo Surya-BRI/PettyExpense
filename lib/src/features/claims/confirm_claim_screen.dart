@@ -16,10 +16,7 @@ final _arabic = RegExp(r'[\u0600-\u06FF]');
 
 const _maxOcrAttempts = 2;
 
-// keyboardType only hints which on-screen keyboard to show \u2014 it doesn't stop
-// a pasted value, a different IME, or a physical keyboard from typing letters
-// into the field. This is the actual enforcement: at most one decimal point,
-// digits only otherwise.
+// keyboardType only hints the on-screen keyboard, so this is the actual enforcement: at most one decimal point, digits only otherwise.
 final _decimalInputFormatters = <TextInputFormatter>[
   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
 ];
@@ -51,7 +48,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   int? _categoryId;
   int? _projectId;
   String _type = 'reimbursement';
-  late String _currency;
+  String _ocrMode = 'auto';
+  String? _currency;
   bool _busy = false;
   String? _error;
   List<CategoryRef> _categories = const [];
@@ -81,9 +79,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
 
   String _money(double? value) => value == null ? '' : value.toStringAsFixed(2);
 
-  // OCR only ever recognizes AED/SAR off the printed bill text (or misreads noise into
-  // one) — never trusted outright, always shown as an editable, tappable default.
-  String _normalizeCurrency(String? value) => value == 'SAR' ? 'SAR' : 'AED';
+  // Anything not recognized as AED/SAR is left unselected, never silently defaulted to AED — the employee must actively pick a currency.
+  String? _normalizeCurrency(String? value) => (value == 'AED' || value == 'SAR') ? value : null;
 
   Future<void> _loadReferenceData() async {
     try {
@@ -134,7 +131,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         setState(() => _progress = 20);
       }
       try {
-        final result = await ref.read(apiClientProvider).analyzeReceipt(_ocr.receiptId);
+        final result = await ref.read(apiClientProvider).analyzeReceipt(_ocr.receiptId, ocrMode: _ocrMode);
         if (!mounted) return;
         _applyOcr(result);
         _ticker?.cancel();
@@ -197,13 +194,18 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       if (amount == null) {
         throw Exception('Enter a valid amount');
       }
-      final vat = double.tryParse(_vat.text.trim());
+      // A blank VAT field means "no VAT" (the backend reports a confident 0, not blank) — only a non-empty but unparseable value is an error.
+      final vatText = _vat.text.trim();
+      final vat = vatText.isEmpty ? 0.0 : double.tryParse(vatText);
       if (vat == null) {
         throw Exception('Enter a valid VAT amount');
       }
       final total = double.tryParse(_total.text.trim());
       if (total == null) {
         throw Exception('Enter a valid total amount');
+      }
+      if (_currency == null) {
+        throw Exception('Select a currency (AED or SAR)');
       }
       if (_categoryId == null) {
         throw Exception('Select a category / expense type');
@@ -278,6 +280,15 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                 ),
               ),
             ),
+          const SizedBox(height: 12),
+          _OcrModeSelector(
+            value: _ocrMode,
+            enabled: !_analyzing,
+            onChanged: (mode) {
+              setState(() => _ocrMode = mode);
+              _analyzeWithRetries();
+            },
+          ),
           if (_analyzing) ...[
             const SizedBox(height: 12),
             _OcrProgress(progress: _progress),
@@ -292,7 +303,11 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             const SizedBox(height: 12),
             _notice(_ocr.duplicateWarning!.message),
           ],
-          if (_ocr.reconciliationMismatch) ...[
+          // Only shown once amount, VAT, and total are ALL present — a field that wasn't extracted isn't a real mismatch, it's missing data.
+          if (_ocr.reconciliationMismatch &&
+              _ocr.amount != null &&
+              _ocr.vatAmount != null &&
+              _ocr.totalAmount != null) ...[
             const SizedBox(height: 12),
             _notice("Amount + VAT doesn't match the total on this bill — please double-check these figures before submitting."),
           ],
@@ -323,7 +338,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                   const SizedBox(height: 12),
                   _OcrTextField(
                     controller: _amount,
-                    label: currency.isEmpty ? 'Amount (excl. VAT) *' : 'Amount excl. VAT ($currency) *',
+                    label: currency == null ? 'Amount (excl. VAT) *' : 'Amount excl. VAT ($currency) *',
                     lowConfidence: !_ocrFailed && _ocr.isLow('amount'),
                     confidence: _ocrFailed ? null : _ocr.confidenceFor('amount'),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -332,7 +347,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                   const SizedBox(height: 12),
                   _OcrTextField(
                     controller: _vat,
-                    label: 'VAT amount *',
+                    label: 'VAT amount (leave blank if none)',
                     lowConfidence: !_ocrFailed && _ocr.isLow('vat_amount'),
                     confidence: _ocrFailed ? null : _ocr.confidenceFor('vat_amount'),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -341,7 +356,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                   const SizedBox(height: 12),
                   _OcrTextField(
                     controller: _total,
-                    label: currency.isEmpty ? 'Total amount *' : 'Total amount ($currency) *',
+                    label: currency == null ? 'Total amount *' : 'Total amount ($currency) *',
                     lowConfidence: !_ocrFailed && _ocr.isLow('total_amount'),
                     confidence: _ocrFailed ? null : _ocr.confidenceFor('total_amount'),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -592,23 +607,71 @@ class _OcrTextFieldState extends State<_OcrTextField> {
   }
 }
 
-class _CurrencyToggle extends StatelessWidget {
-  const _CurrencyToggle({required this.value, required this.onChanged});
+class _OcrModeSelector extends StatelessWidget {
+  const _OcrModeSelector({required this.value, required this.enabled, required this.onChanged});
 
-  final String value;
+  final String value; // 'auto' | 'en' | 'ar'
+  final bool enabled;
   final ValueChanged<String> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerLeft,
-      child: SegmentedButton<String>(
-        segments: const [
-          ButtonSegment(value: 'AED', label: Text('AED')),
-          ButtonSegment(value: 'SAR', label: Text('SAR')),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 4),
+            child: Text('Bill language', style: TextStyle(fontSize: 12, color: AppColors.darkBlue)),
+          ),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'auto', label: Text('Auto')),
+              ButtonSegment(value: 'en', label: Text('English')),
+              ButtonSegment(value: 'ar', label: Text('Arabic')),
+            ],
+            selected: {value},
+            onSelectionChanged: enabled ? (selection) => onChanged(selection.first) : null,
+          ),
         ],
-        selected: {value},
-        onSelectionChanged: (selection) => onChanged(selection.first),
+      ),
+    );
+  }
+}
+
+class _CurrencyToggle extends StatelessWidget {
+  const _CurrencyToggle({required this.value, required this.onChanged});
+
+  // null = no currency selected yet — the employee must tap AED or SAR before submitting (see the required-field check in _submit()).
+  final String? value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'AED', label: Text('AED')),
+              ButtonSegment(value: 'SAR', label: Text('SAR')),
+            ],
+            selected: value == null ? const <String>{} : {value!},
+            emptySelectionAllowed: true,
+            onSelectionChanged: (selection) => onChanged(selection.first),
+          ),
+          if (value == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Currency not detected — select AED or SAR *',
+                style: TextStyle(color: AppColors.orange, fontSize: 12),
+              ),
+            ),
+        ],
       ),
     );
   }

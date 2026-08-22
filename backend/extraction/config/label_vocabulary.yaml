@@ -20,8 +20,12 @@ total:
   - total incl vat
   - الإجمالي
   - المجموع
+  - المجموع فقط
   - الاجمالى
   - اجمالي المبلغ
+  - المبلغ الإجمالي
+  - الاجمالي
+  - الإجمالي شامل القيمة المضافة
 subtotal:
   - subtotal
   - sub total
@@ -37,6 +41,9 @@ subtotal:
   - taxable amt
   - المجموع الفرعي
   - قبل الضريبة
+  - الأجرة
+  - السعر
+  - المبلغ
 tax_registration_number:
   - vat reg
   - vat registration
@@ -116,6 +123,8 @@ date:
   - sale date
   - تاريخ
   - تاريخ الفاتورة
+  - التاريخ
+  - الموافق
 invoice_number:
   - invoice no
   - invoice number
@@ -141,11 +150,27 @@ document_type_header:
   - sales receipt
   - cash receipt
   - customer receipt
+  - customer invoice
   - invoice
   - receipt
   - فاتورة ضريبية
+  - فاتورة راكب
   - فاتورة
   - إيصال
+generic_business_entity_word:
+  # A bare legal-entity-type word ("Company", "شركة") is not a vendor name by
+  # itself — it's recognized only so a vendor candidate that is JUST this
+  # word (nothing else) gets excluded, the same way a document-type header
+  # is excluded from the vendor field above. A real name that merely
+  # CONTAINS one of these words (e.g. "Qamar Alhuda General Trading L.L.C")
+  # is unaffected — exclusion only fires when the match covers most of the
+  # line, per _vendor_candidates' existing coverage-ratio check.
+  - company
+  - corporation
+  - establishment
+  - شركة
+  - مؤسسة
+  - المحدودة
 item_table_header:
   - qty
   - quantity
@@ -154,3 +179,15 @@ item_table_header:
   - unit price
   - الكمية
   - الوصف
+from_location:
+  # Recognized only so a "from <place>" line isn't mistaken for a vendor name
+  # or a money value — never mapped to an extracted field itself, the same
+  # way document_type_header is recognized-but-unmapped above. English "from"/
+  # "to" are deliberately excluded here: as bare 2-4 letter substrings they
+  # collide too easily with unrelated words (e.g. "to" inside "Total"), unlike
+  # the longer Arabic terms which are safe under the same substring matching.
+  - من
+to_location:
+  - إلى
+notes:
+  - ملاحظات

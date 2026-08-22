@@ -1,8 +1,4 @@
-"""Stage 3: dedup overlapping OCR results (e.g. an English pass and an Arabic
-pass reading the same glyph region, or a noisy engine emitting the same line
-twice) using normalized-text similarity plus spatial (bounding-box) overlap
-when available — degrading gracefully to text+reading-order when it isn't.
-"""
+"""Stage 3: dedup overlapping OCR results (e.g. an English+Arabic re-read of the same region) via text similarity and/or bbox overlap."""
 import difflib
 from typing import Optional
 
@@ -53,10 +49,12 @@ def _pass_key(line: OcrLine) -> str:
     return "unknown"
 
 
+def _dominant_lang(line: OcrLine) -> str:
+    return line.words[0].lang if line.words else "en"
+
+
 def _local_reading_ranks(lines: list[OcrLine]) -> dict[int, int]:
-    """Ranks each line within its own OCR pass (0..N-1), independent of any
-    other pass's absolute reading_order numbering, so cross-pass position
-    proximity can be compared fairly."""
+    # Ranks each line within its own OCR pass (0..N-1) so cross-pass position proximity can be compared fairly.
     by_pass: dict[str, list[OcrLine]] = {}
     for ln in lines:
         by_pass.setdefault(_pass_key(ln), []).append(ln)
@@ -71,9 +69,13 @@ def _should_merge(a: OcrLine, b: OcrLine, order_span: int) -> bool:
     iou = _bbox_iou(a.bounding_box, b.bounding_box)
     text_sim = _text_similarity(a.text, b.text)
     if iou is not None:
-        if iou >= _BBOX_IOU_MERGE:
+        # Shared detection means same-bbox, different-language pairs are expected (two real readings), not noise — only merge on geometry when same language.
+        same_lang = _dominant_lang(a) == _dominant_lang(b)
+        if same_lang and iou >= _BBOX_IOU_MERGE:
             return True
-        return iou >= _BBOX_IOU_WITH_TEXT_MERGE and text_sim >= _BBOX_IOU_WITH_TEXT_MIN_SIM
+        if same_lang and iou >= _BBOX_IOU_WITH_TEXT_MERGE and text_sim >= _BBOX_IOU_WITH_TEXT_MIN_SIM:
+            return True
+        return text_sim >= _TEXT_ONLY_MIN_SIM and order_span <= _TEXT_ONLY_MAX_ORDER_SPAN
     return text_sim >= _TEXT_ONLY_MIN_SIM and order_span <= _TEXT_ONLY_MAX_ORDER_SPAN
 
 

@@ -12,6 +12,7 @@ from api.routes_approvals import router as approvals_router
 from api.routes_auth import router as auth_router
 from api.routes_claims import categories_router, router as claims_router
 from api.routes_config import router as config_router
+from api.routes_notifications import router as notifications_router
 from api.routes_projects import router as projects_router
 from auth.security import seed_users
 from config import get_settings
@@ -37,6 +38,7 @@ app.include_router(admin_router)
 app.include_router(approvals_router)
 app.include_router(config_router)
 app.include_router(projects_router)
+app.include_router(notifications_router)
 
 
 @app.on_event("startup")

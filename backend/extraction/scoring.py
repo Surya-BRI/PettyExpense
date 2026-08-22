@@ -1,8 +1,4 @@
-"""Stage 6: score candidates using generic signals — label proximity, position
-on the receipt, OCR confidence, format plausibility, and reference-data
-matches. Every contributing signal is recorded on the candidate so the final
-selection can explain itself.
-"""
+"""Stage 6: score candidates using generic signals (label, position, OCR confidence, format, reference-data match); every signal is recorded for explainability."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -81,7 +77,8 @@ def _format_plausibility(candidate: FieldCandidate) -> tuple[float, Optional[str
 
 def _label_and_location_weight(candidate: FieldCandidate) -> tuple[float, list[str]]:
     signals = candidate.signals
-    has_label = any(s.endswith("_label") for s in signals)
+    # A currency CODE match ("SAR", "AED") is direct evidence on its own, so it earns the same weight a real "_label" signal would.
+    has_label = any(s.endswith("_label") for s in signals) or "currency_code_match" in signals
     has_fuzzy = "fuzzy_label_match" in signals
     added: list[str] = []
     weight = 0.0

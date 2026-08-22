@@ -1,7 +1,4 @@
-"""Stage 7: cross-field validation, run after scoring and before selection.
-Rules are generic arithmetic/shape checks driven by injected reference data —
-never a hard-coded vendor, layout, or literal tax rate.
-"""
+"""Stage 7: cross-field validation — generic arithmetic/shape checks driven by injected reference data, never a hard-coded vendor/rate."""
 from extraction.reference_data import ReferenceData
 from extraction.types import FieldCandidate
 
@@ -17,11 +14,7 @@ def _group_by_field(candidates: list[FieldCandidate]) -> dict[str, list[FieldCan
 
 
 def _demote_rate_like_vat_amounts(by_field: dict[str, list[FieldCandidate]], reference_data: ReferenceData) -> None:
-    """A vat_amount candidate that is a bare integer matching a plausible VAT
-    rate is almost certainly the rate misread as an amount (e.g. a receipt
-    printing 'VAT 5' with no '%' glyph for the OCR to anchor on) — demote it
-    and make sure a corresponding vat_rate candidate exists to carry that
-    evidence instead."""
+    # A bare-integer vat_amount matching a plausible VAT rate is probably the rate misread as an amount — demote it, add a vat_rate candidate.
     vat_amounts = by_field.get("vat_amount", [])
     vat_rates = by_field.setdefault("vat_rate", [])
     for c in vat_amounts:
@@ -50,10 +43,7 @@ def _demote_rate_like_vat_amounts(by_field: dict[str, list[FieldCandidate]], ref
 
 
 def _cross_check_arithmetic(by_field: dict[str, list[FieldCandidate]]) -> bool:
-    """Checks both tax-exclusive (amount - discount + service + vat = total)
-    and tax-inclusive (vat = total - total/(1+rate)) conventions; whichever
-    reconciles boosts its participants. Neither reconciling (with both a
-    subtotal-ish and a total present) sets reconciliation_mismatch."""
+    # Checks tax-exclusive and tax-inclusive conventions; whichever reconciles boosts its candidates, neither reconciling flags a mismatch.
     amounts = by_field.get("amount", [])
     totals = by_field.get("total_amount", [])
     vats = by_field.get("vat_amount", [])
@@ -75,8 +65,9 @@ def _cross_check_arithmetic(by_field: dict[str, list[FieldCandidate]]) -> bool:
                         expected = a.value - disc_val + svc_val + vat_val
                         if abs(expected - tot.value) <= RECONCILE_TOLERANCE:
                             for cand in filter(None, (a, tot, v, d, s)):
-                                cand.confidence = min(1.0, cand.confidence + 0.15)
+                                # Guard the boost itself (not just the signal) so a duplicate pairing can't reward the same candidate twice.
                                 if "arithmetic_reconciled_exclusive" not in cand.signals:
+                                    cand.confidence = min(1.0, cand.confidence + 0.15)
                                     cand.signals.append("arithmetic_reconciled_exclusive")
                             reconciled = True
                 for r in rates:
@@ -89,8 +80,8 @@ def _cross_check_arithmetic(by_field: dict[str, list[FieldCandidate]]) -> bool:
                     amount_ok = abs(implied_amount - a.value) <= ARITH_TOLERANCE
                     if vat_ok and amount_ok:
                         for cand in filter(None, (a, tot, v, r)):
-                            cand.confidence = min(1.0, cand.confidence + 0.15)
                             if "arithmetic_reconciled_inclusive" not in cand.signals:
+                                cand.confidence = min(1.0, cand.confidence + 0.15)
                                 cand.signals.append("arithmetic_reconciled_inclusive")
                         reconciled = True
 
@@ -116,8 +107,8 @@ def _cash_change_vs_total(by_field: dict[str, list[FieldCandidate]]) -> None:
                 if abs((tendered.value - change.value) - total.value) > RECONCILE_TOLERANCE:
                     continue
                 for cand in (tendered, change, total):
-                    cand.confidence = min(1.0, cand.confidence + 0.15)
                     if "tendered_change_total_arithmetic" not in cand.signals:
+                        cand.confidence = min(1.0, cand.confidence + 0.15)
                         cand.signals.append("tendered_change_total_arithmetic")
                 for other in total_list:
                     if other is total:

@@ -17,9 +17,7 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(
     baseUrl: resolveApiBase(),
     accessToken: auth.accessToken,
-    // Called on any 401 — refreshes the session and hands back a new token to
-    // retry with. `ref.read` (not watch): this fires well after this provider
-    // was built, not during it.
+    // Called on any 401 to refresh the session; `ref.read` (not watch) since this fires well after the provider was built.
     onUnauthorized: () => ref.read(authControllerProvider.notifier).refreshOnUnauthorized(),
   );
 });
@@ -44,10 +42,7 @@ class ApiClient {
     return uri;
   }
 
-  /// Runs an authenticated request; on a 401, refreshes the access token once
-  /// via [onUnauthorized] and retries exactly once with the new token before
-  /// giving up. `request` is re-invoked (not just re-headered) so multipart
-  /// bodies get rebuilt fresh — `http.MultipartRequest` can't be resent as-is.
+  /// On a 401, refreshes the token via [onUnauthorized] and retries once by re-invoking `request` (multipart bodies can't just be re-headered).
   Future<http.Response> _authorized(
     Future<http.Response> Function() request,
   ) async {
@@ -98,13 +93,13 @@ class ApiClient {
     return OcrResult.fromJson(_decodeMap(res));
   }
 
-  Future<OcrResult> analyzeReceipt(int receiptId) async {
+  Future<OcrResult> analyzeReceipt(int receiptId, {String ocrMode = 'auto'}) async {
     final res = await _authorized(() {
       final headers = <String, String>{
         if (_accessToken != null && _accessToken!.isNotEmpty) 'Authorization': 'Bearer $_accessToken',
       };
       return http
-          .post(_uri('/api/claims/receipts/$receiptId/ocr'), headers: headers)
+          .post(_uri('/api/claims/receipts/$receiptId/ocr', {'mode': ocrMode}), headers: headers)
           .timeout(const Duration(seconds: 120));
     });
     return OcrResult.fromJson(_decodeMap(res));
@@ -137,8 +132,7 @@ class ApiClient {
     return ExpenseClaim.fromJson(_decodeMap(res));
   }
 
-  /// After a dispute: employee corrects the bill and resubmits. Returns to the exact
-  /// stage that disputed it (backend keeps current_stage untouched on resubmit).
+  /// After a dispute: employee corrects the bill and resubmits, returning to the exact stage that disputed it (backend keeps current_stage untouched).
   Future<ExpenseClaim> resubmitClaim(int id) async {
     final res = await _authorized(() => http.post(_uri('/api/claims/$id/resubmit'), headers: _headers));
     return ExpenseClaim.fromJson(_decodeMap(res));
@@ -243,18 +237,36 @@ class ApiClient {
     return list.map((e) => ProjectRef.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  // -- Notifications (email handled server-side; this is just the in-app feed) --
+
+  Future<List<Map<String, dynamic>>> notifications({int limit = 20, int offset = 0}) async {
+    final res = await _authorized(() => http.get(
+          _uri('/api/notifications', {'limit': '$limit', 'offset': '$offset'}),
+          headers: _headers,
+        ));
+    return _decodeList(res).cast<Map<String, dynamic>>();
+  }
+
+  Future<int> unreadNotificationCount() async {
+    final res = await _authorized(() => http.get(_uri('/api/notifications/unread-count'), headers: _headers));
+    return (_decodeMap(res)['unread'] as num).toInt();
+  }
+
+  Future<void> markNotificationRead(int id) async {
+    await _authorized(() => http.post(_uri('/api/notifications/$id/read'), headers: _headers));
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _authorized(() => http.post(_uri('/api/notifications/read-all'), headers: _headers));
+  }
+
   String imageUrl(String? path) {
     if (path == null || path.isEmpty) return '';
     if (path.startsWith('http')) return path;
     return '$baseUrl$path';
   }
 
-  /// Fetches receipt image bytes. A presigned S3 URL (what `image_url` usually
-  /// is when S3 storage is configured) is already fully authorized via its own
-  /// signature — attaching our own bearer token on top makes S3 reject the
-  /// request outright (400 "Only one auth mechanism allowed"), so those go out
-  /// with no extra headers at all. Only our own backend proxy path needs (and
-  /// gets) the 401-retry treatment every other call goes through.
+  /// Fetches receipt image bytes. A presigned S3 URL is already self-authorized, so adding our bearer token would make S3 reject it — only our own backend proxy path gets the 401-retry treatment.
   Future<Uint8List> fetchImageBytes(String path) async {
     final url = imageUrl(path);
     final res = url.startsWith('http')

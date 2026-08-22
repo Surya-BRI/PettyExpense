@@ -1,7 +1,4 @@
-"""Stage 2: generic normalization — whitespace, punctuation, common OCR digit
-errors, currency symbols, decimal formats. Nothing here is vendor/layout
-specific; every transform applies uniformly to any receipt in any language.
-"""
+"""Stage 2: generic normalization (whitespace, punctuation, OCR digit errors, currency, decimals) — never vendor/layout specific."""
 import re
 import unicodedata
 from typing import Optional
@@ -13,10 +10,7 @@ _DIGIT_TRANSLATION = str.maketrans(
     "01234567890123456789",
 )
 
-# Single-character currency symbols are unambiguous and safe to normalize
-# in free text. Multi-character abbreviations (SR, AED, SAR, ...) are
-# ambiguous with ordinary words, so they're only matched as whole tokens by
-# the candidate generator, not blindly substituted here.
+# Single-char currency symbols are safe to substitute in free text; multi-char abbreviations are ambiguous with ordinary words, so those are matched as whole tokens elsewhere instead.
 CURRENCY_SYMBOL_MAP: dict[str, str] = {
     "$": "USD",
     "€": "EUR",
@@ -41,16 +35,13 @@ CURRENCY_SYMBOL_MAP: dict[str, str] = {
 
 _SINGLE_CHAR_CURRENCY_RE = re.compile("|".join(re.escape(sym) for sym in "$€£₹﷼"))
 
-# Multi-character abbreviations that are unambiguous once whitespace-delimited
-# (unlike bare "SR"/"AED" glued to a following digit, which is left alone —
-# candidate generation still finds the ISO code text itself in that case).
-_MULTI_CHAR_CURRENCY_MAP = {"SR": "SAR", "ر.س": "SAR", "د.إ": "AED"}
+# Multi-char abbreviations, unambiguous once whitespace-delimited. "ريال" is ambiguous across the Gulf generally, but within this app's UAE/KSA scope it always means Saudi Riyal (AED's Arabic name is "درهم").
+_MULTI_CHAR_CURRENCY_MAP = {"SR": "SAR", "ر.س": "SAR", "ريال": "SAR", "د.إ": "AED"}
 _MULTI_CHAR_CURRENCY_RE = re.compile(
     "|".join(r"(?<!\S)" + re.escape(k) + r"(?!\S)" for k in _MULTI_CHAR_CURRENCY_MAP)
 )
 
-# OCR digit/letter confusions — only ever applied to a token already believed
-# to be numeric (see repair_numeric_ocr_errors), never to arbitrary text.
+# OCR digit/letter confusions — only applied to a token already believed numeric (see repair_numeric_ocr_errors), never to arbitrary text.
 _DIGIT_CONFUSION = {
     "O": "0", "o": "0", "D": "0", "Q": "0",
     "l": "1", "I": "1", "i": "1",
@@ -69,16 +60,12 @@ def normalize_text(s: str) -> str:
     s = unicodedata.normalize("NFKC", s)
     s = s.translate(_DIGIT_TRANSLATION)
     s = _normalize_percent_signs(s)
-    # A '0' misread as the letter 'O'/'o' is a common thermal-print OCR
-    # confusion, especially right after a currency code in a decimal amount
-    # ("AED0.29" read as "AEDO.29"). Repaired only where an O sits between a
-    # letter and a decimal point followed by digits — a position no real word
-    # occupies — never a blanket O->0 swap that could corrupt actual text.
+    # A '0' misread as 'O' right after a currency code ("AED0.29" -> "AEDO.29") — repaired only in that specific letter-then-decimal position.
     s = re.sub(r"(?<=[A-Za-z])[Oo](?=\.\s*\d)", "0", s)
-    # OCR sometimes inserts a stray space around the decimal point itself
-    # ("0. 29" instead of "0.29") — collapse it generically wherever a short
-    # (1-2 digit) trailing group follows a lone decimal point.
+    # Stray space around a decimal point ("0. 29" -> "0.29").
     s = re.sub(r"(\d)\.\s+(\d{1,2})(?!\d)", r"\1.\2", s)
+    # Stray space around a date separator ("25 / 06 / 26" -> "25/06/26") so the date regexes still match.
+    s = re.sub(r"(\d)\s*([/\-.])\s*(?=\d)", r"\1\2", s)
     s = _SINGLE_CHAR_CURRENCY_RE.sub(lambda m: f" {CURRENCY_SYMBOL_MAP[m.group(0)]} ", s)
     s = _MULTI_CHAR_CURRENCY_RE.sub(lambda m: f" {_MULTI_CHAR_CURRENCY_MAP[m.group(0)]} ", s)
     s = re.sub(r"\s+", " ", s).strip()
@@ -88,16 +75,14 @@ def normalize_text(s: str) -> str:
 
 
 def _normalize_percent_signs(s: str) -> str:
-    # Arabic percent sign, and a "°" glued to a 1-2 digit number (a common OCR
-    # misread of "%"), both become a canonical "%".
+    # Arabic percent sign, and a "°" glued to a number (a common OCR misread of "%"), both become a canonical "%".
     s = s.replace("٪", "%")
     s = re.sub(r"(?<=\d)\s*°(?=\s|$|[^\d])", "%", s)
     return s
 
 
 def repair_numeric_ocr_errors(token: str) -> Optional[str]:
-    """Bounded (<=1 substitution) digit-confusion repair for a token that
-    otherwise fails to parse as a number, e.g. 'l5.00' -> '15.00'."""
+    # Bounded (<=1 substitution) digit-confusion repair, e.g. 'l5.00' -> '15.00'.
     if not token or re.fullmatch(r"[\d.,]+", token):
         return token
     repaired = []
@@ -116,11 +101,7 @@ def repair_numeric_ocr_errors(token: str) -> Optional[str]:
 
 
 def parse_amount(token: str) -> Optional[float]:
-    """Parses a numeric token that may use either '.' or ',' as the decimal
-    marker and/or thousands grouping, without assuming a fixed locale: the
-    last separator followed by exactly 1-2 digits is treated as the decimal
-    point; a last separator followed by 3+ digits is treated as a thousands
-    grouping (no fractional part)."""
+    # Locale-agnostic: the last separator followed by 1-2 digits is the decimal point; followed by 3+ digits, it's thousands grouping.
     if token is None:
         return None
     cleaned = re.sub(r"[^\d,.\s]", "", token).replace(" ", "")
@@ -210,22 +191,14 @@ _WORD_DEDUP_CONFIDENCE_MARGIN = 0.1
 
 
 def _better_of_overlapping_words(a: OcrWord, b: OcrWord) -> OcrWord:
-    """Confidence is the primary signal — a low-confidence 'longer' reading is
-    usually just noise (garbled glyphs, stray punctuation), not a more
-    complete one. Only when both readings are close in confidence does the
-    longer text win, since a *confident* partial misread that drops a leading
-    glyph is a real, common failure mode pure confidence wouldn't catch."""
+    # Confidence is the primary signal (a low-confidence "longer" reading is usually just noise); only when confidences are close does longer text win.
     if abs(a.confidence - b.confidence) < _WORD_DEDUP_CONFIDENCE_MARGIN:
         return a if len(a.text) >= len(b.text) else b
     return a if a.confidence >= b.confidence else b
 
 
 def _dedup_overlapping_words(words: list[OcrWord]) -> list[OcrWord]:
-    """Separate EN/AR OCR passes often both detect the same glyph region
-    (a logo, a stylized header) with different bounding boxes and different
-    text — without this, both readings survive into the same line's text
-    (e.g. one pass drops a leading glyph the other pass caught, producing a
-    line with both the full and the truncated reading glued together)."""
+    # EN/AR passes can both detect the same glyph region with different boxes/text — without this, both readings survive glued into one line.
     boxed = [w for w in words if w.bounding_box is not None]
     unboxed = [w for w in words if w.bounding_box is None]
     used = [False] * len(boxed)
@@ -247,10 +220,7 @@ def _dedup_overlapping_words(words: list[OcrWord]) -> list[OcrWord]:
 
 
 def group_into_lines(words: list[OcrWord]) -> list[OcrLine]:
-    """Groups words into lines using bounding-box vertical proximity. When no
-    word carries geometry (today's PaddleOCR wrapper output, or text-only
-    input), each word is already a full OCR-emitted line, so it degrades to a
-    1:1 wrap — no line-grouping heuristic is needed or safe to guess at."""
+    # Groups words into lines by bounding-box vertical proximity; with no geometry (text-only input), each word is already a line, so it's a 1:1 wrap.
     if not words:
         return []
 
@@ -295,12 +265,7 @@ def group_into_lines(words: list[OcrWord]) -> list[OcrLine]:
                     used[j] = True
         y_bands.append(band)
 
-    # A PaddleOCR "word" is typically already a full detected text region (a
-    # label, a table cell, a short phrase) — several unrelated regions can sit
-    # in the same y-band on a wide page (a multi-column table row, or two
-    # receipts scanned side by side). Sharing a row isn't enough evidence they
-    # belong to the same line; also require them not to be separated by a gap
-    # far larger than normal word-spacing, or split them into distinct lines.
+    # A detected "word" region is often a whole label/cell/phrase — sharing a y-band isn't enough evidence of one line, so also split on large gaps.
     groups: list[list[OcrWord]] = []
     for band in y_bands:
         groups.extend(_split_by_horizontal_gap(band, median_height))
@@ -332,9 +297,7 @@ def group_into_lines(words: list[OcrWord]) -> list[OcrLine]:
 
 
 def words_from_text(text: str) -> list[OcrWord]:
-    """Builds geometry-less, uniform-confidence OcrWords from a plain text
-    blob (one word per newline) — used when the caller has raw OCR text but
-    no per-line confidence/geometry at all."""
+    # Builds geometry-less, uniform-confidence OcrWords from a plain text blob (one word per newline) — used when there's no geometry at all.
     words = []
     for i, raw_line in enumerate(text.splitlines()):
         stripped = raw_line.strip()
@@ -345,7 +308,5 @@ def words_from_text(text: str) -> list[OcrWord]:
 
 
 def lines_from_text(text: str) -> list[OcrLine]:
-    """Builds geometry-less OcrLines from a plain text blob (one line per
-    newline) — used by OcrService.extract_from_text for callers that only
-    have raw OCR text, not word/box geometry."""
+    # Builds geometry-less OcrLines from a plain text blob — used by OcrService.extract_from_text when callers only have raw text.
     return group_into_lines(words_from_text(text))

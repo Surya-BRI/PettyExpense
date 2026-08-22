@@ -54,12 +54,15 @@ def test_tax_inclusive_total_derives_vat_and_subtotal(default_reference_data):
     assert result.fields["amount"].value == pytest.approx(100.00)
 
 
-def test_no_vat_receipt_leaves_vat_fields_empty(default_reference_data):
+def test_no_vat_receipt_reports_zero_vat_and_amount_equals_total(default_reference_data):
+    # No VAT label/rate anywhere -> a confident 0, not a null/no-evidence guess, and amount is allowed to equal total.
     lines = receipt(line("SuperMart", order=0), line("Total AED 45.00", order=1))
     result = extract(lines, default_reference_data)
-    assert result.fields["vat_amount"].value is None
-    assert result.fields["vat_amount"].warning == "no_evidence"
+    assert result.fields["vat_amount"].value == pytest.approx(0.0)
+    assert result.fields["vat_amount"].low_confidence is False
+    assert "no_vat_evidence_assumed_zero" in result.fields["vat_amount"].signals
     assert result.fields["total_amount"].value == pytest.approx(45.00)
+    assert result.fields["amount"].value == pytest.approx(45.00)
 
 
 @pytest.mark.parametrize(

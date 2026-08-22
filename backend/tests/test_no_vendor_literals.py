@@ -1,10 +1,4 @@
-"""Structural guardrail: the extraction engine must never special-case a
-vendor/brand/company-type name. If this test ever needs to be updated to
-allow a new literal, that is very likely a regression, not a legitimate
-change — see extraction/config/label_vocabulary.yaml's own comment for the
-line between generic linguistic vocabulary (fine) and vendor/layout
-knowledge (never fine).
-"""
+"""Structural guardrail: the extraction engine must never special-case a vendor/brand/company-type name — needing to allow a new literal here is very likely a regression."""
 import re
 from pathlib import Path
 

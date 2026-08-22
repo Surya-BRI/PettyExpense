@@ -1,12 +1,4 @@
-"""Stage 5: generic semantic-label detection.
-
-A LabelConcept names a universal receipt/invoice concept (total, VAT amount,
-date, ...). Its synonyms live in reference_data.label_vocabulary — a plain
-data table (extraction/config/label_vocabulary.yaml) — never as per-vendor
-conditionals here. Matching is substring-first, then a bounded fuzzy match so
-common OCR garbling ("Aaount", "T:ta1") is still recognized, for every
-concept uniformly rather than via one-off regexes per field.
-"""
+"""Stage 5: generic semantic-label detection — LabelConcept synonyms live in label_vocabulary.yaml, matched by substring then bounded fuzzy match."""
 import difflib
 import re
 from dataclasses import dataclass
@@ -17,10 +9,7 @@ from extraction.reference_data import LabelVocabulary
 
 FUZZY_THRESHOLD = 0.85
 
-# "No cash refund", "No exchange", "not applicable" etc. are boilerplate
-# policy/footer text — the negated word must not be treated as an affirmative
-# label (e.g. "No Cash Refund" is not a "cash paid" label). Generic negation
-# vocabulary, not tied to any vendor/layout.
+# "No Cash Refund" etc. is boilerplate footer text — a negated word must not be treated as an affirmative label.
 _NEGATION_WORDS = frozenset({"no", "not", "without", "لا", "بدون", "دون"})
 
 
@@ -30,10 +19,7 @@ def _is_negated(lowered: str, match_start: int) -> bool:
 
 
 def _is_excluded_followup(lowered: str, match_end: int, exclusion_words: tuple[str, ...]) -> bool:
-    """'Total Savings'/'Total Qty' contain a concept's synonym as a substring
-    but mean something else entirely — a data-driven per-concept list of
-    words that, immediately following the match, invalidate it (see
-    extraction/config/label_exclusions.yaml)."""
+    # "Total Savings"/"Total Qty" contain a synonym as a substring but mean something else — checks label_exclusions.yaml's per-concept followup list.
     if not exclusion_words:
         return False
     followup_words = lowered[match_end : match_end + 20].split()
@@ -58,6 +44,10 @@ class LabelConcept(str, Enum):
     ITEM_TABLE_HEADER = "item_table_header"
     TAX_REGISTRATION_NUMBER = "tax_registration_number"
     DOCUMENT_TYPE_HEADER = "document_type_header"
+    GENERIC_BUSINESS_ENTITY_WORD = "generic_business_entity_word"
+    FROM_LOCATION = "from_location"
+    TO_LOCATION = "to_location"
+    NOTES = "notes"
 
 
 @dataclass(frozen=True)
@@ -101,10 +91,7 @@ def match_label_concepts(
             if best is not None and not best.fuzzy:
                 continue
             if len(syn_lower) < 5:
-                # Short synonyms (e.g. "vat%", "tax") are too easily fuzzy-matched
-                # by an unrelated short word — require an exact substring for them;
-                # fuzzy matching exists to catch OCR garbling of longer words.
-                continue
+                continue  # short synonyms ("vat%") fuzzy-match unrelated words too easily — require an exact substring for them
             syn_word_count = max(len(syn_lower.split()), 1)
             best_ratio, best_span = 0.0, None
             for i in range(max(len(tokens) - syn_word_count + 1, 0)):
@@ -125,10 +112,7 @@ def match_label_concepts(
 
 
 def _suppress_shorter_overlapping_matches(matches: list[LabelMatch]) -> list[LabelMatch]:
-    """When two different concepts match overlapping text (e.g. bare 'vat' for
-    VAT_TAX_AMOUNT inside the longer, more specific 'VAT Reg Number'), the
-    longer/more specific match wins and the shorter fragment is dropped —
-    a generic 'most specific phrase wins' rule, not a per-vendor exception."""
+    # When two concepts match overlapping text, the longer/more specific match wins and the shorter fragment is dropped.
     kept = []
     for m in matches:
         m_len = m.span[1] - m.span[0]

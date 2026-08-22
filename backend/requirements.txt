@@ -12,8 +12,15 @@ python-dotenv>=1.0.0
 httpx>=0.27.0
 pillow>=10.0.0
 # OCR (default backend; falls back to stub if not installed)
-paddlepaddle>=3.0.0
-paddleocr>=3.0.0
+# Single-engine RapidOCR (ONNXRuntime backend) pipeline: one shared text-
+# detection pass (PP-OCRv6 small) + sequential English and Arabic
+# recognition passes against the same detected regions. PaddleOCR/
+# PaddlePaddle are no longer used anywhere — rapidocr ships its own Arabic
+# recognizer (an ONNX port of the same arabic_PP-OCRv5_mobile_rec model
+# lineage), which is what makes a single shared detection pass possible
+# without also loading the much heavier PaddlePaddle framework.
+rapidocr>=3.9.0
+onnxruntime>=1.29.0
 pyyaml>=6.0.0
 
 # Test-only (not needed to run the app; no separate dev-requirements file

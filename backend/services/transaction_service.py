@@ -14,7 +14,6 @@ from database.models import (
     ErpExpenseTransaction,
     ErpExpenseVendor,
 )
-from services.email_service import email_service
 from services.ocr_service import ocr_service, refresh_reference_data
 from services.storage import storage_service
 
@@ -105,8 +104,7 @@ def transaction_to_dict(
         "stage_sequence": [],
     }
     if db is not None:
-        # Lazy import mirrors the existing reverse-direction lazy import in
-        # approval_service.py, avoiding a circular import between the two modules.
+        # Lazy import avoids a circular import with approval_service.py.
         from services.approval_service import resolve_stage_sequence
 
         try:
@@ -166,13 +164,13 @@ class TransactionService:
         db.refresh(document)
         return self._receipt_payload(document, ocr=None, duplicate=None, ocr_status="pending")
 
-    def analyze_receipt(self, db: Session, receipt_id: int) -> dict[str, Any]:
+    def analyze_receipt(self, db: Session, receipt_id: int, mode: str = "auto") -> dict[str, Any]:
         document = self.get_receipt(db, receipt_id)
         image_bytes = storage_service.read_bytes(document.s3_key)
         if not image_bytes:
             raise LookupError("Receipt image not found in storage")
         refresh_reference_data(db)
-        ocr = ocr_service.run(image_bytes, "receipt.jpg")
+        ocr = ocr_service.run(image_bytes, "receipt.jpg", mode=mode)
         document.ocr_raw_json = (
             ocr.get("raw_json") if isinstance(ocr.get("raw_json"), str) else json.dumps(ocr.get("raw_json"))
         )
@@ -235,11 +233,7 @@ class TransactionService:
         bill_date: Optional[str],
         exclude_transaction_id: Optional[int] = None,
     ) -> Optional[dict[str, Any]]:
-        # Same-image-hash matching was dropped: it's common and legitimate for a
-        # near-identical or even byte-identical photo to be uploaded more than once
-        # (retake, re-crop, re-scan the same physical bill for a different claim) —
-        # that alone isn't evidence of a duplicate claim. Same vendor+amount+date
-        # together is a much stronger signal, so that's the one duplicate check kept.
+        # Same-image-hash matching was dropped — re-uploading an identical photo isn't evidence of duplication on its own; same vendor+amount+date is.
         if vendor_name and amount is not None and bill_date:
             vendor = db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_name == vendor_name).first()
             if vendor:
@@ -373,9 +367,7 @@ class TransactionService:
             raise ValueError("Only draft claims can be submitted")
         txn.status = "submitted"
         txn.submitted_on = datetime.utcnow()
-        # Re-check for duplicates at submission time — draft edits (update_draft) can change
-        # vendor/amount/date after the initial creation-time check, so that first check alone
-        # can go stale.
+        # Re-check for duplicates at submission time — draft edits can change vendor/amount/date after the initial check, making it stale.
         duplicate = self._find_duplicate(
             db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id
         )
@@ -482,30 +474,29 @@ class TransactionService:
         return txn
 
     def _notify_finance_on_submit(self, db: Session, txn: ErpExpenseTransaction) -> None:
-        approvers = (
-            db.query(ErpAuthExpenseUsers)
-            .join(ErpAuthExpenseUsers.role)
-            .filter(ErpAuthExpenseUsers.is_active == 1)
-            .all()
-        )
+        # Notify only the CURRENT stage's approver, not every approver-capable user — the chain is sequential.
+        from services import approval_service, notification_service
+
+        approver = approval_service.resolve_current_approver(db, txn)
         vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
-        for u in approvers:
-            if u.role.role_code == "employee":
-                continue
-            email_service.notify(
-                u.email,
-                f"New expense claim submitted ({vendor_name})",
-                f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} by employee #{txn.employee_id} is awaiting review.",
-            )
+        notification_service.send(
+            db, approver, "submission", txn.transaction_id,
+            f"New expense claim submitted ({vendor_name})", f"تم تقديم مطالبة نفقات جديدة ({vendor_name})",
+            f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is awaiting your review.",
+            f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} في انتظار مراجعتك.",
+        )
 
     def _notify_employee(self, db: Session, txn: ErpExpenseTransaction, action: str, remarks: Optional[str]) -> None:
+        from services import notification_service
+
         employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
-        email = employee.email if employee else None
         vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
-        email_service.notify(
-            email,
-            f"Expense claim {action}: {vendor_name}",
+        action_ar = {"paid": "دفع"}.get(action, action)  # only "paid" is used via this path today
+        notification_service.send(
+            db, employee, action, txn.transaction_id,
+            f"Expense claim {action}: {vendor_name}", f"مطالبة النفقات: {action_ar} ({vendor_name})",
             f"Your claim {txn.transaction_id} was {action}. Remarks: {remarks or '-'}",
+            f"تم {action_ar} مطالبتك رقم {txn.transaction_id}. ملاحظات: {remarks or '-'}",
         )
 
 

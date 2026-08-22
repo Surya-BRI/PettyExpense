@@ -1,7 +1,4 @@
-"""Orchestrates the full extraction pipeline and adapts its output to the
-legacy result-dict shape existing callers (services/ocr_service.py's public
-surface) already depend on.
-"""
+"""Orchestrates the full extraction pipeline and adapts its output to the legacy result-dict shape services/ocr_service.py depends on."""
 from typing import Any
 
 from extraction.candidates import generate_candidates
@@ -22,10 +19,7 @@ def _group_by_field(candidates: list[FieldCandidate]) -> dict[str, list[FieldCan
 
 
 def _normalize_line_text(lines: list[OcrLine]) -> list[OcrLine]:
-    """Normalization (stage 2) is idempotent, so re-applying it here makes
-    `extract()` robust regardless of whether `lines` already went through
-    normalize.group_into_lines (real OCR input) or were built directly
-    (tests, or callers assembling lines from some other source)."""
+    # Normalization is idempotent, so re-applying it here works whether lines already went through group_into_lines or were built directly (tests).
     return [
         OcrLine(
             text=normalize_text(ln.text), words=ln.words, confidence=ln.confidence,
@@ -42,6 +36,12 @@ def extract(lines: list[OcrLine], reference_data: ReferenceData) -> ExtractionRe
     candidates = score_candidates(candidates, context)
     candidates, reconciliation_mismatch = validate_and_adjust(candidates, reference_data)
     fields = select_fields(candidates)
+
+    # A mismatch flagged from candidates (pre-selection) is only meaningful once amount/vat_amount/total_amount are all actually populated.
+    if reconciliation_mismatch and any(
+        fields[name].value is None for name in ("amount", "vat_amount", "total_amount")
+    ):
+        reconciliation_mismatch = False
 
     confidences = [f.confidence for f in fields.values()]
     overall = round(sum(confidences) / len(confidences), 2) if confidences else 0.0

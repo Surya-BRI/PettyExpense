@@ -5,10 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../../api/api_client.dart';
 import '../../api/enums.dart';
-import '../../api/models.dart';
 import '../../routing/role_routes.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/money.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../authentication/auth_controller.dart';
 
@@ -19,102 +17,81 @@ class AppNotification {
     required this.body,
     required this.createdAt,
     required this.kind,
+    required this.unread,
     this.route,
   });
 
-  final String id;
+  final int id;
   final String title;
   final String body;
   final DateTime? createdAt;
   final String kind; // submitted | approved | rejected | paid | info
+  final bool unread;
   final String? route;
+}
+
+const _titleByType = {
+  'submission': 'New claim to review',
+  'approval': 'Claim approved',
+  'rejection': 'Claim rejected',
+  'dispute': 'Claim disputed — correction needed',
+  'paid': 'Claim paid',
+  'test': 'Test notification',
+};
+
+const _kindByType = {
+  'submission': 'submitted',
+  'approval': 'approved',
+  'rejection': 'rejected',
+  'dispute': 'rejected',
+  'paid': 'paid',
+};
+
+// Backend stores "subject\n\nbody" as one message column; split it back apart for display.
+String _bodyOf(String message) {
+  final parts = message.split('\n\n');
+  return parts.length > 1 ? parts.sublist(1).join('\n\n') : message;
+}
+
+String? _routeFor(Map<String, dynamic> row, UserRole role) {
+  final txnId = row['transaction_id'];
+  if (txnId == null) return null;
+  final type = row['type'] as String?;
+  final claimStatus = row['claim_status'] as String?;
+  final isFinalApproval = type == 'approval' && claimStatus == 'approved';
+  final approverFacing = type == 'submission' || (type == 'approval' && !isFinalApproval);
+  if (approverFacing) {
+    final stage = (row['current_stage'] as String?) ?? defaultStageFor(role);
+    return '/approvals/$stage/$txnId';
+  }
+  if (type == 'test') return null;
+  return '/claim/$txnId';
 }
 
 final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>((ref) async {
   final auth = ref.watch(authControllerProvider);
   final api = ref.watch(apiClientProvider);
   final role = UserRoleX.fromJson(auth.user?.role);
-  final approver = role.isApprover;
 
-  final List<ExpenseClaim> claims;
-  if (approver) {
-    claims = await api.approvalsQueue(defaultStageFor(role));
-  } else {
-    claims = await api.myClaims();
-  }
+  final rows = await api.notifications(limit: 50);
+  return rows.map((row) {
+    final type = row['type'] as String? ?? 'test';
+    final message = row['message'] as String? ?? '';
+    return AppNotification(
+      id: row['id'] as int,
+      title: _titleByType[type] ?? 'Notification',
+      body: _bodyOf(message),
+      createdAt: _parseDate(row['sent_at'] as String?),
+      kind: _kindByType[type] ?? 'info',
+      unread: row['status'] != 'read',
+      route: _routeFor(row, role),
+    );
+  }).toList();
+});
 
-  final items = <AppNotification>[];
-  for (final c in claims) {
-    final when = _parseDate(c.updatedAt) ??
-        _parseDate(c.decidedAt) ??
-        _parseDate(c.submittedAt) ??
-        _parseDate(c.createdAt);
-
-    if (approver) {
-      items.add(
-        AppNotification(
-          id: 'sub-${c.id}',
-          title: c.status == 'disputed' ? 'Disputed claim resubmitted' : 'New claim to review',
-          body: '${c.vendor} · ${formatMoney(c.currency, c.amount)} · ${c.category}',
-          createdAt: when,
-          kind: 'submitted',
-          route: '/approvals/${c.currentStage ?? defaultStageFor(role)}/${c.id}',
-        ),
-      );
-    } else {
-      final notification = switch (c.status) {
-        'submitted' => AppNotification(
-            id: 'mine-sub-${c.id}',
-            title: 'Claim submitted',
-            body: '${c.vendor} is waiting for approval (${c.currentStage ?? '-'})',
-            createdAt: when,
-            kind: 'submitted',
-            route: '/claim/${c.id}',
-          ),
-        'disputed' => AppNotification(
-            id: 'mine-disp-${c.id}',
-            title: 'Claim disputed — correction needed',
-            body: c.remarks?.isNotEmpty == true ? c.remarks! : '${c.vendor} was sent back for correction',
-            createdAt: when,
-            kind: 'rejected',
-            route: '/claim/${c.id}',
-          ),
-        'approved' => AppNotification(
-            id: 'mine-ap-${c.id}',
-            title: 'Claim approved',
-            body: '${c.vendor} was approved',
-            createdAt: when,
-            kind: 'approved',
-            route: '/claim/${c.id}',
-          ),
-        'rejected' => AppNotification(
-            id: 'mine-re-${c.id}',
-            title: 'Claim rejected',
-            body: c.remarks?.isNotEmpty == true ? c.remarks! : '${c.vendor} was rejected',
-            createdAt: when,
-            kind: 'rejected',
-            route: '/claim/${c.id}',
-          ),
-        'paid' => AppNotification(
-            id: 'mine-pd-${c.id}',
-            title: 'Claim paid',
-            body: '${c.vendor} · ${formatMoney(c.currency, c.amount)} marked as paid',
-            createdAt: when,
-            kind: 'paid',
-            route: '/claim/${c.id}',
-          ),
-        _ => null,
-      };
-      if (notification != null) items.add(notification);
-    }
-  }
-
-  items.sort((a, b) {
-    final ad = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final bd = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-    return bd.compareTo(ad);
-  });
-  return items;
+final unreadNotificationCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  final api = ref.watch(apiClientProvider);
+  return api.unreadNotificationCount();
 });
 
 DateTime? _parseDate(String? raw) {
@@ -137,6 +114,15 @@ class NotificationsScreen extends ConsumerWidget {
         automaticallyImplyLeading: true,
         showNotificationAction: false,
         actions: [
+          IconButton(
+            tooltip: 'Mark all read',
+            onPressed: () async {
+              await ref.read(apiClientProvider).markAllNotificationsRead();
+              ref.invalidate(notificationsProvider);
+              ref.invalidate(unreadNotificationCountProvider);
+            },
+            icon: const Icon(Icons.done_all),
+          ),
           IconButton(
             tooltip: 'Refresh',
             onPressed: () => ref.invalidate(notificationsProvider),
@@ -207,12 +193,18 @@ class NotificationsScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(14),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
-                  onTap: n.route == null ? null : () => context.push(n.route!),
+                  onTap: () async {
+                    if (n.unread) {
+                      await ref.read(apiClientProvider).markNotificationRead(n.id);
+                      ref.invalidate(unreadNotificationCountProvider);
+                    }
+                    if (n.route != null) context.push(n.route!);
+                  },
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.divider),
+                      border: Border.all(color: n.unread ? AppColors.darkBlue : AppColors.divider),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,

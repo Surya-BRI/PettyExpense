@@ -8,6 +8,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
@@ -66,6 +67,8 @@ class ErpAuthExpenseUsers(Base, AuditColumns):
     )
     email: Mapped[Optional[str]] = mapped_column("email", String(256), nullable=True)
     is_deleted: Mapped[int] = mapped_column("isDeleted", Integer, default=0)
+    # New column on an existing table — create_all() will not add it, run the ALTER script separately.
+    language_preference: Mapped[str] = mapped_column("languagePreference", String(8), default="en")
 
     role: Mapped[ErpMasterExpenseRole] = relationship()
     department: Mapped[Optional[ErpExpenseDepartment]] = relationship()
@@ -262,6 +265,39 @@ class ErpExpenseApproverDelegation(Base):
     start_date: Mapped[str] = mapped_column("startDate", String(32))  # ISO date string
     end_date: Mapped[str] = mapped_column("endDate", String(32))
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
+
+
+class ErpExpenseNotification(Base):
+    """One row per (event, recipient, channel) delivery attempt — the audit log the spec asks for."""
+
+    __tablename__ = "ErpExpenseNotification"
+    __table_args__ = (
+        UniqueConstraint("transactionId", "type", "userId", "channel", name="uqNotificationDedup"),
+    )
+
+    notification_id: Mapped[int] = mapped_column("notificationId", Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column("userId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), index=True)
+    transaction_id: Mapped[Optional[int]] = mapped_column(
+        "transactionId", Integer, ForeignKey("ErpExpenseTransaction.transactionId"), nullable=True, index=True
+    )
+    type: Mapped[str] = mapped_column("type", String(32))  # submission | dispute | rejection | approval | paid | test
+    channel: Mapped[str] = mapped_column("channel", String(16))  # email | in_app
+    status: Mapped[str] = mapped_column("status", String(16), default="sent")  # sent | read | failed
+    message: Mapped[Optional[str]] = mapped_column("message", Text, nullable=True)
+    sent_at: Mapped[datetime] = mapped_column("sentAt", DateTime, default=datetime.utcnow)
+
+
+class ErpExpenseNotificationPreference(Base):
+    __tablename__ = "ErpExpenseNotificationPreference"
+    __table_args__ = (
+        UniqueConstraint("userId", "channel", "category", name="uqNotificationPreference"),
+    )
+
+    preference_id: Mapped[int] = mapped_column("preferenceId", Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column("userId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), index=True)
+    channel: Mapped[str] = mapped_column("channel", String(16))
+    category: Mapped[str] = mapped_column("category", String(32))  # matches ErpExpenseNotification.type
+    is_enabled: Mapped[int] = mapped_column("isEnabled", Integer, default=1)
 
 
 settings = get_settings()

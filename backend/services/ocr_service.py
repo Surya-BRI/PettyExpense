@@ -1,8 +1,10 @@
 import json
-import os
+import logging
 import random
 from datetime import date
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session
 
@@ -20,12 +22,8 @@ from extraction import (
     words_from_text,
 )
 
-# PaddleOCR 3.x's oneDNN CPU backend crashes on some Windows setups with
-# `NotImplementedError: ConvertPirAttribute2RuntimeAttribute ...` before any real
-# OCR runs. Must be set before paddleocr/paddlepaddle is imported.
-os.environ.setdefault("FLAGS_use_mkldnn", "0")
-
-_paddle_engines: dict[str, Any] = {}
+_OCR_MODES = ("auto", "en", "ar")
+_DEFAULT_OCR_MODE = "auto"
 
 SAMPLE_VENDORS = [
     "Indian Oil Petrol Pump",
@@ -36,18 +34,12 @@ SAMPLE_VENDORS = [
     "Local Dhaba",
 ]
 
-# Reference data (known vendors, categories, currency/VAT-rate priors) is
-# injected from the DB/config rather than hard-coded — see refresh_reference_data().
-# A safe, fully-functional default is used until the first refresh (e.g. in tests
-# or before any request has run one), so this module never hard-fails on import.
+# Reference data is injected from the DB/config, not hard-coded (see refresh_reference_data()); a safe default is used until the first refresh.
 _reference_data: ReferenceData = ReferenceData()
 
 
 def refresh_reference_data(db: Session, region_code: Optional[str] = None) -> None:
-    """Rebuilds the cached ReferenceData from the DB (vendors/categories) and
-    the shipped tax-rules config (currency/VAT-rate priors). Called once per
-    OCR request by transaction_service — adding a vendor or category via the
-    existing admin UI flows into extraction with zero engine code changes."""
+    # Rebuilds the cached ReferenceData from the DB and tax-rules config; called once per request so admin-added vendors/categories flow in automatically.
     global _reference_data
     from database.models import ErpExpenseCategory, ErpExpenseVendor
 
@@ -69,12 +61,58 @@ def refresh_reference_data(db: Session, region_code: Optional[str] = None) -> No
     )
 
 
-def _get_paddle_engine(lang: str):
-    if lang not in _paddle_engines:
-        from paddleocr import PaddleOCR  # type: ignore  # imported lazily — heavy dependency
+# Single-engine RapidOCR/ONNXRuntime pipeline: ONE shared detection pass, then up to two SEQUENTIAL recognizers (English, then Arabic) reuse the same crops.
+_TEXT_DETECTION_LANG = "ch"  # any PP-OCRv6-supported value; detection itself is language-agnostic
+_REC_ENGINE_CONFIG = {
+    "en": {"lang_type": "EN", "model_type": "SMALL", "ocr_version": "PPOCRV6"},
+    "ar": {"lang_type": "ARABIC", "model_type": "MOBILE", "ocr_version": "PPOCRV5"},
+}
+# Resize the OCR *input* copy only — the caller's original image_bytes is never touched; extraction's geometry reasoning is scale-relative so this is safe.
+_OCR_MAX_SIDE_PX = 1600
 
-        _paddle_engines[lang] = PaddleOCR(lang=lang, enable_mkldnn=False)
-    return _paddle_engines[lang]
+_rapid_engines: dict[str, Any] = {}
+
+
+def _get_rapid_engine(rec_lang: str):
+    # One RapidOCR instance per recognizer ("en"/"ar"), cached for the process lifetime; only the "en" instance's detector is ever invoked.
+    if rec_lang not in _rapid_engines:
+        from rapidocr import RapidOCR  # type: ignore  # imported lazily — heavy dependency
+        from rapidocr.utils.typings import LangDet, LangRec, ModelType, OCRVersion  # type: ignore
+
+        rec_cfg = _REC_ENGINE_CONFIG[rec_lang]
+        _rapid_engines[rec_lang] = RapidOCR(
+            params={
+                "Det.lang_type": LangDet(_TEXT_DETECTION_LANG),
+                "Det.model_type": ModelType.SMALL,
+                "Det.ocr_version": OCRVersion.PPOCRV6,
+                "Rec.lang_type": LangRec[rec_cfg["lang_type"]],
+                "Rec.model_type": ModelType[rec_cfg["model_type"]],
+                "Rec.ocr_version": OCRVersion[rec_cfg["ocr_version"]],
+                "Global.use_cls": False,
+            }
+        )
+    return _rapid_engines[rec_lang]
+
+
+def _resize_for_ocr(image_bytes: bytes, max_side: int) -> bytes:
+    # Returns a downscaled JPEG copy for OCR input only; never mutates the caller's original bytes, and only downscales, preserving aspect ratio.
+    from io import BytesIO
+
+    from PIL import Image
+
+    with Image.open(BytesIO(image_bytes)) as img:
+        img = img.convert("RGB")
+        width, height = img.size
+        longest = max(width, height)
+        if longest <= max_side:
+            resized = img
+        else:
+            scale = max_side / float(longest)
+            new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
+            resized = img.resize(new_size, Image.LANCZOS)
+        buf = BytesIO()
+        resized.save(buf, format="JPEG", quality=92)
+        return buf.getvalue()
 
 
 def _poly_to_bbox(poly: Any) -> Optional[tuple[float, float, float, float]]:
@@ -86,50 +124,110 @@ def _poly_to_bbox(poly: Any) -> Optional[tuple[float, float, float, float]]:
         return None
 
 
-def _paddle_ocr_pass(image_path: str, lang: str) -> list[OcrWord]:
-    """Paddle has no mixed-script model, so bilingual bills need both 'en' and 'ar' passes."""
-    engine = _get_paddle_engine(lang)
-    results = engine.predict(image_path)
+def _words_from_recognition(
+    rec_res: Any, boxes: Any, lang: str, source_pass: str, region_indices: Optional[list[int]] = None
+) -> list[OcrWord]:
+    # boxes/region_indices are in rec_res's own index space; region_indices maps back to the ORIGINAL region index after filtering (the auto-mode Arabic retry), keeping bbox/reading_order correct without mutating a frozen OcrWord. Omitted => recognition ran on every region, so reading_order == j already.
     words: list[OcrWord] = []
-    order = 0
-    for r in results:
-        texts = r.get("rec_texts", [])
-        scores = r.get("rec_scores", [])
-        polys = r.get("rec_polys") or r.get("dt_polys") or []
-        for idx, (text, score) in enumerate(zip(texts, scores)):
-            if not text.strip():
-                continue
-            bbox = _poly_to_bbox(polys[idx]) if idx < len(polys) else None
-            words.append(
-                OcrWord(text=text, confidence=float(score), lang=lang, bounding_box=bbox, page=1, reading_order=order, source_pass="paddle")
-            )
-            order += 1
+    if rec_res is None or rec_res.txts is None:
+        return words
+    for j, (text, score) in enumerate(zip(rec_res.txts, rec_res.scores)):
+        if not text or not text.strip():
+            continue
+        bbox = _poly_to_bbox(boxes[j]) if boxes is not None and j < len(boxes) else None
+        reading_order = region_indices[j] if region_indices is not None else j
+        words.append(
+            OcrWord(text=text, confidence=float(score), lang=lang, bounding_box=bbox, page=1, reading_order=reading_order, source_pass=source_pass)
+        )
     return words
 
 
-def _paddle_ocr(image_bytes: bytes) -> dict[str, Any] | None:
-    try:
-        import tempfile
-        from pathlib import Path
+# Below this English-recognizer confidence, "auto" mode retries the region in Arabic. Calibrated on real receipts: clean printed English scores 0.93+, genuinely-Arabic regions score 0.43-0.47. Retry decision only — never used to compare the two engines' scores to pick a winner.
+_ARABIC_RETRY_CONFIDENCE_THRESHOLD = 0.90
+# The English model's other failure signature on non-Latin script: its output is dominated by non-ASCII characters even when it emits something.
+_ARABIC_RETRY_NON_ASCII_FRACTION = 0.30
 
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp.write(image_bytes)
-            tmp_path = tmp.name
-        try:
-            en_words = _paddle_ocr_pass(tmp_path, "en")
-            ar_words = _paddle_ocr_pass(tmp_path, "ar")
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
+
+def _needs_arabic_retry(text: str, score: float) -> bool:
+    stripped = (text or "").strip()
+    if not stripped:
+        return True  # the English pass found nothing at all on this region
+    if score < _ARABIC_RETRY_CONFIDENCE_THRESHOLD:
+        return True
+    non_ascii = sum(1 for c in stripped if ord(c) > 127)
+    return (non_ascii / len(stripped)) > _ARABIC_RETRY_NON_ASCII_FRACTION
+
+
+def _normalize_mode(mode: Optional[str]) -> str:
+    mode = (mode or _DEFAULT_OCR_MODE).strip().lower()
+    return mode if mode in _OCR_MODES else _DEFAULT_OCR_MODE
+
+
+def _run_shared_detection_ocr(image_bytes: bytes, mode: str) -> tuple[list[OcrWord], list[OcrWord]]:
+    # Detection runs once; recognizers run SEQUENTIALLY per `mode` (en-only, ar-primary+en-fallback, or auto-retry — see _needs_arabic_retry), returning (en_words, ar_words) for dedup to arbitrate.
+    engine_en = _get_rapid_engine("en")
+    ori_img = engine_en.load_img(image_bytes)
+    img, op_record = engine_en.preprocess_img(ori_img)
+    crops, det_res = engine_en.detect_and_crop(img, op_record)  # detection runs exactly once
+    if det_res.boxes is None or not crops:
+        return [], []
+
+    ori_h, ori_w = ori_img.shape[:2]
+    from rapidocr.utils.process_img import map_boxes_to_original  # type: ignore
+
+    boxes = map_boxes_to_original(det_res.boxes, op_record, ori_h, ori_w)
+
+    # English recognition always runs — primary for "en"/"auto", documented fallback for "ar". Only the Arabic recognizer is mode-conditional.
+    en_rec = engine_en.recognize_txt(crops)
+    en_words = _words_from_recognition(en_rec, boxes, "en", "rapidocr_en")
+
+    ar_words: list[OcrWord] = []
+    if mode == "ar":
+        # Arabic is primary in this mode — every region, unconditionally, no retry filter.
+        engine_ar = _get_rapid_engine("ar")
+        ar_rec = engine_ar.recognize_txt(crops)  # sequential — reuses the SAME crops, no second detection
+        ar_words = _words_from_recognition(ar_rec, boxes, "ar", "rapidocr_ar")
+    elif mode == "auto":
+        retry_indices = [
+            i for i, (text, score) in enumerate(zip(en_rec.txts or (), en_rec.scores or ()))
+            if _needs_arabic_retry(text, score)
+        ]
+        logger.info(
+            "Arabic retry (auto mode): %d/%d regions selected for a second reading",
+            len(retry_indices), len(crops),
+        )
+        if retry_indices:
+            engine_ar = _get_rapid_engine("ar")
+            retry_crops = [crops[i] for i in retry_indices]
+            retry_boxes = [boxes[i] for i in retry_indices]
+            ar_rec = engine_ar.recognize_txt(retry_crops)  # sequential, on the FILTERED subset only
+            ar_words = _words_from_recognition(ar_rec, retry_boxes, "ar", "rapidocr_ar", region_indices=retry_indices)
+    # mode == "en": ar_words stays empty — the Arabic model is never loaded or invoked.
+    return en_words, ar_words
+
+
+def _run_ocr(image_bytes: bytes, mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any] | None:
+    mode = _normalize_mode(mode)
+    try:
+        ocr_input_bytes = _resize_for_ocr(image_bytes, _OCR_MAX_SIDE_PX)
+        en_words, ar_words = _run_shared_detection_ocr(ocr_input_bytes, mode)
     except Exception:
+        # Logged loudly (with traceback) — OcrService.run treats a None here as a real failure, not license to hand back fake financial data.
+        logger.exception("Real OCR pipeline failed (mode=%s)", mode)
         return None
 
-    words = en_words + ar_words
-    result = extract(dedupe_lines(group_into_lines(words)), _reference_data)
+    # Each language is line-grouped independently, then combined — dedupe_lines only collapses genuinely redundant lines, so two differing readings of one region survive as separate candidates.
+    lines = dedupe_lines(group_into_lines(en_words) + group_into_lines(ar_words))
+    result = extract(lines, _reference_data)
     parsed = to_legacy_dict(result)
     parsed["raw_text"] = result.raw_text
     parsed["raw_json"] = {
-        "engine": "paddle",
-        "words": [{"text": w.text, "confidence": w.confidence, "lang": w.lang, "bounding_box": w.bounding_box} for w in words],
+        "engine": "rapidocr",
+        "mode": mode,
+        "words": [
+            {"text": w.text, "confidence": w.confidence, "lang": w.lang, "bounding_box": w.bounding_box}
+            for w in en_words + ar_words
+        ],
         "field_confidence": parsed["field_confidence"],
         "low_confidence_fields": parsed["low_confidence_fields"],
         "expense_type": parsed["expense_type"],
@@ -154,13 +252,19 @@ def _stub_ocr(filename_hint: str = "") -> dict[str, Any]:
 
 
 class OcrService:
-    def run(self, image_bytes: bytes, filename: str = "receipt.jpg") -> dict[str, Any]:
+    def run(self, image_bytes: bytes, filename: str = "receipt.jpg", mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any]:
         settings = get_settings()
+        # "paddle" predates this engine rewrite; it now just means "run the real OCR pipeline" (RapidOCR-only today).
         if settings.ocr_backend == "paddle":
-            paddle = _paddle_ocr(image_bytes)
-            if paddle:
-                return paddle
+            real = _run_ocr(image_bytes, mode)
+            if real:
+                return real
+            # Real engine failed (already logged) — must NOT fall through to fake stub data; raise so the app's "enter manually" UX takes over.
+            raise RuntimeError(
+                "OCR pipeline failed to process this receipt — see server logs for the underlying exception."
+            )
 
+        # Only reached when ocr_backend is explicitly NOT "paddle" — never as a silent fallback from a real OCR failure.
         stub = _stub_ocr(filename)
         stub["raw_json"] = json.dumps(stub["raw_json"])
         return stub
@@ -188,10 +292,7 @@ class OcrService:
         en_words: Optional[list[dict[str, Any]]] = None,
         ar_words: Optional[list[dict[str, Any]]] = None,
     ) -> dict[str, Any]:
-        """Combines the English- and Arabic-pass OCR output into one word
-        list and extracts once — dedup (stage 3) and per-candidate scoring
-        (stage 6) let the better-recognized language win per field, rather
-        than parsing each language separately and merging afterward."""
+        # Combines the English- and Arabic-pass output into one word list and extracts once — dedup + scoring let the better-recognized language win.
         en_ocr_words = (
             [
                 OcrWord(

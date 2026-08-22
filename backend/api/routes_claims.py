@@ -85,12 +85,13 @@ async def upload_receipt(
 @router.post("/receipts/{receipt_id}/ocr")
 def analyze_receipt(
     receipt_id: int,
+    mode: str = "auto",  # auto | en | ar — optional; existing clients that omit it keep today's bilingual behavior
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Run PaddleOCR on an already-stored receipt."""
+    """Run OCR on an already-stored receipt."""
     try:
-        return transaction_service.analyze_receipt(db, receipt_id)
+        return transaction_service.analyze_receipt(db, receipt_id, mode=mode)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -200,8 +201,7 @@ def resubmit_claim(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """After a dispute: employee corrects the bill and resubmits. Returns to the exact
-    stage that disputed it, per Phase 2's dispute-return design (approval_service.resubmit_after_dispute)."""
+    """After a dispute: employee corrects the bill and resubmits, returning to the exact stage that disputed it (approval_service.resubmit_after_dispute)."""
     try:
         return approval_service.resubmit_after_dispute(db, user, claim_id)
     except LookupError as exc:

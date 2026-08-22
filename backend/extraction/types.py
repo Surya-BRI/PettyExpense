@@ -1,9 +1,4 @@
-"""Core data structures for the extraction pipeline.
-
-Zero third-party/framework imports — this module (and the rest of the
-`extraction` package) must be importable and testable without FastAPI,
-SQLAlchemy, or a database connection.
-"""
+"""Core data structures for the extraction pipeline — no third-party/framework imports, must be importable without FastAPI/SQLAlchemy/a DB."""
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 
@@ -63,6 +58,8 @@ class FieldCandidate:
     signals: list[str] = field(default_factory=list)
     raw_score_breakdown: dict[str, float] = field(default_factory=dict)
     reading_order: int = 0
+    # Raw OCR recognizer confidence, untouched by scoring.py's weighted `confidence` — lets selection ask "was this actually read well?"
+    ocr_confidence: float = 1.0
 
 
 @dataclass

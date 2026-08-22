@@ -43,9 +43,7 @@ def test_arabic_synonym_matches():
 
 
 def test_negated_label_is_not_matched():
-    # Boilerplate policy text ("No Cash Refund") must not be read as a "cash
-    # paid" label — the same footer-vs-content distinction the ENOC fixture
-    # exercises for VAT, applied generically via negation words.
+    # Boilerplate policy text ("No Cash Refund") must not be read as a "cash paid" label — the same footer-vs-content distinction, via negation words.
     matches = match_label_concepts("No Cash Refund, Thank You, Visit Again", _vocab())
     assert LabelConcept.CASH not in {m.concept for m in matches}
 
