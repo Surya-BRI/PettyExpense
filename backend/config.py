@@ -41,6 +41,7 @@ class Settings(BaseSettings):
 
     auth_mode: str = "mock"  # mock | erp
     cors_origins: str = "*"
+    public_base_url: str = "http://localhost:8000"  # used to build the "View this claim" link in HTML emails
 
     graph_tenant_id: str = ""
     graph_client_id: str = ""
@@ -115,3 +116,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+

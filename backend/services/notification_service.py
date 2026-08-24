@@ -72,6 +72,7 @@ def _send_channel(
     subject_ar: str,
     body_en: str,
     body_ar: str,
+    html_body_en: Optional[str] = None,
 ) -> None:
     if not _is_enabled(db, user.user_id, channel, type_):
         return
@@ -79,8 +80,11 @@ def _send_channel(
         return
     subject = _pick_language(user, subject_en, subject_ar)
     body = _pick_language(user, body_en, body_ar)
+    # The HTML templates are English-only today -- an Arabic-preferring user still gets the
+    # plain-text Arabic body rather than an English HTML email.
+    html = html_body_en if (channel == "email" and user.language_preference != "ar") else None
     if channel == "email":
-        sent = email_service.notify(user.email, subject, body)
+        sent = email_service.notify(user.email, subject, body, html_body=html)
         _record(db, user.user_id, transaction_id, type_, channel, "sent" if sent else "failed", f"{subject}\n\n{body}")
     else:
         _record(db, user.user_id, transaction_id, type_, channel, "sent", f"{subject}\n\n{body}")
@@ -95,13 +99,14 @@ def send(
     subject_ar: str,
     body_en: str,
     body_ar: str,
+    html_body_en: Optional[str] = None,
 ) -> None:
     # No approver could be resolved for this stage — nothing to notify, not an error.
     if user is None:
         return
     for channel in CHANNELS:
         try:
-            _send_channel(db, user, type_, transaction_id, channel, subject_en, subject_ar, body_en, body_ar)
+            _send_channel(db, user, type_, transaction_id, channel, subject_en, subject_ar, body_en, body_ar, html_body_en=html_body_en)
         except Exception:
             # A notification failure must never surface to the caller or affect the already-committed state change.
             logger.exception(

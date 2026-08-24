@@ -475,28 +475,34 @@ class TransactionService:
 
     def _notify_finance_on_submit(self, db: Session, txn: ErpExpenseTransaction) -> None:
         # Notify only the CURRENT stage's approver, not every approver-capable user — the chain is sequential.
-        from services import approval_service, notification_service
+        from services import approval_service, email_templates, notification_service
 
         approver = approval_service.resolve_current_approver(db, txn)
         vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
+        content = email_templates.submission_email(email_templates.build_context(txn))
         notification_service.send(
             db, approver, "submission", txn.transaction_id,
             f"New expense claim submitted ({vendor_name})", f"تم تقديم مطالبة نفقات جديدة ({vendor_name})",
             f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is awaiting your review.",
             f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} في انتظار مراجعتك.",
+            html_body_en=content.html,
         )
 
     def _notify_employee(self, db: Session, txn: ErpExpenseTransaction, action: str, remarks: Optional[str]) -> None:
-        from services import notification_service
+        from services import email_templates, notification_service
 
         employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
         vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
         action_ar = {"paid": "دفع"}.get(action, action)  # only "paid" is used via this path today
+        html = None
+        if action == "paid":
+            html = email_templates.paid_email(email_templates.build_context(txn, comment=remarks)).html
         notification_service.send(
             db, employee, action, txn.transaction_id,
             f"Expense claim {action}: {vendor_name}", f"مطالبة النفقات: {action_ar} ({vendor_name})",
             f"Your claim {txn.transaction_id} was {action}. Remarks: {remarks or '-'}",
             f"تم {action_ar} مطالبتك رقم {txn.transaction_id}. ملاحظات: {remarks or '-'}",
+            html_body_en=html,
         )
 
 

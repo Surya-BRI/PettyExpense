@@ -223,38 +223,48 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
     txn = _load_txn(db, transaction_id)
 
     vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
+    from services import email_templates
+
     if action == "approve":
         if txn.status == "approved":
             employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
+            content = email_templates.approval_final_email(email_templates.build_context(txn))
             notification_service.send(
                 db, employee, "approval", txn.transaction_id,
                 f"Expense claim approved ({vendor_name})", f"تمت الموافقة على مطالبة النفقات ({vendor_name})",
                 f"Your claim {txn.transaction_id} for {txn.currency} {txn.amount} was approved.",
                 f"تمت الموافقة على مطالبتك رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount}.",
+                html_body_en=content.html,
             )
         else:
             next_approver = resolve_stage_approver(db, txn, txn.current_stage)
+            content = email_templates.approval_pending_email(email_templates.build_context(txn))
             notification_service.send(
                 db, next_approver, "approval", txn.transaction_id,
                 f"Claim awaiting your approval ({vendor_name})", f"مطالبة نفقات في انتظار موافقتك ({vendor_name})",
                 f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is now at your stage ({txn.current_stage}).",
                 f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} وصلت إلى مرحلتك ({txn.current_stage}).",
+                html_body_en=content.html,
             )
     else:
         employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
         if action == "reject":
+            content = email_templates.rejection_email(email_templates.build_context(txn, comment=comment))
             notification_service.send(
                 db, employee, "rejection", txn.transaction_id,
                 f"Expense claim rejected ({vendor_name})", f"تم رفض مطالبة النفقات ({vendor_name})",
                 f"Your claim {txn.transaction_id} was rejected. Reason: {comment}",
                 f"تم رفض مطالبتك رقم {txn.transaction_id}. السبب: {comment}",
+                html_body_en=content.html,
             )
         else:  # dispute
+            content = email_templates.dispute_email(email_templates.build_context(txn, comment=comment))
             notification_service.send(
                 db, employee, "dispute", txn.transaction_id,
                 f"Expense claim needs correction ({vendor_name})", f"مطالبة النفقات تحتاج إلى تصحيح ({vendor_name})",
                 f"Your claim {txn.transaction_id} was sent back for correction. Reason: {comment}",
                 f"تم إرجاع مطالبتك رقم {txn.transaction_id} للتصحيح. السبب: {comment}",
+                html_body_en=content.html,
             )
 
     return transaction_to_dict(txn, include_history=True, db=db)
@@ -278,11 +288,20 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
 
     approver = resolve_current_approver(db, txn)
     vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
+    # "resubmit" is a distinct type from "submission" -- reusing "submission" collided with the
+    # (transactionId, type, userId, channel) idempotency key whenever the resubmit lands on the
+    # same approver who received the original submission notification (e.g. a dispute at the
+    # first stage), silently swallowing the resubmit notification.
+    from services import email_templates
+
+    ctx = email_templates.build_context(txn)
+    content = email_templates.resubmit_email(ctx)
     notification_service.send(
-        db, approver, "submission", txn.transaction_id,
+        db, approver, "resubmit", txn.transaction_id,
         f"Corrected claim resubmitted ({vendor_name})", f"تم إعادة تقديم المطالبة المصححة ({vendor_name})",
         f"Claim {txn.transaction_id} was corrected and resubmitted for your review.",
         f"تم تصحيح المطالبة رقم {txn.transaction_id} وإعادة تقديمها لمراجعتك.",
+        html_body_en=content.html,
     )
     return transaction_to_dict(txn, include_history=True, db=db)
 

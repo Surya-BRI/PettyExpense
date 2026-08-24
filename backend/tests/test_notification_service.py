@@ -103,7 +103,7 @@ def scenario(db):
 def fake_email(monkeypatch):
     sent = []
 
-    def fake_notify(to_email, subject, body):
+    def fake_notify(to_email, subject, body, html_body=None):
         sent.append((to_email, subject, body))
         return True
 
