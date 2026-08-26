@@ -2,9 +2,9 @@
 
 Flutter (Android/iOS) + FastAPI for salesman expense reimbursement from bill photos.
 
-Stack: Flutter · Riverpod · go_router · FastAPI · SQLAlchemy + **ERP-Dev SQL Server only** (no local SQLite) · JWT · local or S3 storage · stub/Paddle OCR.
+Stack: Flutter · Riverpod · go_router · FastAPI · SQLAlchemy + **ERP-Dev SQL Server only** (no local SQLite) · JWT · local or S3 storage · stub/RapidOCR.
 
-**Scope: UAE and KSA only** — bills are captured in **AED** or **SAR** (currency is chosen at capture time, not auto-defaulted from a single locale). No India/INR support; OCR (bilingual Arabic/English via PaddleOCR) and sample data are built around Dubai (AED) and KSA (SAR) receipts only.
+**Scope: UAE and KSA only** — bills are captured in **AED** or **SAR** (currency is chosen at capture time — OCR never silently defaults it, the employee must confirm AED or SAR before submitting). No India/INR support; OCR (bilingual Arabic/English via RapidOCR/ONNXRuntime) and sample data are built around Dubai (AED) and KSA (SAR) receipts only.
 
 ---
 
@@ -71,7 +71,7 @@ Real rows in `ErpAuthExpenseUsers` on ERP-Dev, matching the dropdown in `lib/src
 | `rajesh` | `rajesh123` | Finance Manager |
 | `teja` | `teja123` | Admin |
 
-With `AUTH_MODE=mock`, the API also accepts requests **without** a Bearer token as `salesman-001`. The Flutter app can "Continue as mock salesman" the same way. **Production uses `AUTH_MODE=erp`** — every request needs a real login.
+With `AUTH_MODE=mock`, the API still accepts requests **without** a Bearer token as `salesman-001` (useful for `curl`/Swagger testing). The Flutter app itself no longer has a "Continue as mock salesman" bypass button — every user, including local dev, signs in with one of the demo users above and lands on `/login` when logged out. **Production uses `AUTH_MODE=erp`** — every request needs a real login.
 
 ---
 
@@ -133,7 +133,7 @@ Camera / gallery need an emulator camera or a real device; gallery works with sa
 1. Start **backend** → confirm `/health` returns `"status":"ok"`.
 2. Start **emulator / device**.
 3. Start **Flutter** with the correct `API_BASE_URL`.
-4. In the app: **Continue as mock salesman**, or sign in with `surya` / `surya123`.
+4. In the app: sign in with `surya` / `surya123`.
 5. **New claim** → camera or gallery → confirm OCR fields → submit.
 6. For approvals: Profile → sign in as `denny` / `denny123` (HOD) or `sandeep` / `sandeep123` (Finance Manager) → **Approvals queue**.
 
@@ -149,10 +149,12 @@ expense_app/
 │   ├── routing/
 │   └── theme/
 ├── backend/
-│   ├── api/        # routes_auth, routes_claims, routes_admin, ...
-│   ├── services/   # claims, OCR, S3/local storage, email
+│   ├── api/          # routes_auth, routes_claims, routes_admin, routes_notifications, ...
+│   ├── services/     # claims, OCR, notifications, S3/local storage, email
+│   ├── extraction/   # OCR-line → structured-field pipeline (candidates, scoring, validation, select)
 │   ├── auth/
 │   ├── database/
+│   ├── tests/        # pytest — see "Backend tests" below
 │   ├── main.py
 │   ├── .env.example
 │   └── requirements.txt
@@ -174,9 +176,10 @@ Copy from `.env.example`. Important keys:
 | `READER_DB_*` | **Required** ERP-Dev SQL Server (`SERVER`, `NAME`, `USER`, `PASSWORD`, `DRIVER`) — auth + claims live here |
 | `STORAGE_BACKEND` | `s3` (default) — receipts in AWS |
 | `AWS_*` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_BUCKET`, `AWS_FOLDER` (keys under `{folder}/expense-receipts/`) |
-| `OCR_BACKEND` | `paddle` (default) — install PaddleOCR; `stub` is a fallback if Paddle fails to load |
+| `OCR_BACKEND` | `paddle` (default; **name is stale** — this literal value now runs RapidOCR, not PaddleOCR, see below) — single shared PP-OCRv6 text-detection pass, then sequential English + Arabic RapidOCR/ONNXRuntime recognizer passes over the same detected regions; `stub` is a fallback if RapidOCR fails to load. PaddleOCR/PaddlePaddle are no longer used anywhere in this repo — only the config value's name wasn't updated when the engine switched (`config.py`'s `ocr_backend: str = "paddle"` and the `if settings.ocr_backend == "paddle":` check in `ocr_service.py`), so `/health` still reports `"ocr_backend":"paddle"` |
 | `AUTH_MODE` | `mock` (no token → salesman) or `erp` (JWT required) |
 | `CORS_ORIGINS` | `*` for local dev |
+| `PUBLIC_BASE_URL` | Default `http://localhost:8000` — used to build the "View this claim" link in HTML notification emails (points at the new unauthenticated `GET /claims/{id}` fallback page below) |
 | Graph email + `NOTIFY_EMAIL_ENABLED` | **Deferred** — not in current target (photo → S3 → tables) |
 
 Tables are created on ERP-Dev at backend startup (`create_all`, additive only — it does not backfill columns onto existing tables; see `backend/scripts/add_ocr_document_columns.py` for one-off column migrations). [`assets/docs/schema.sql`](assets/docs/schema.sql) documents only the original MVP tables (`expense_app_users`, `expense_claims`, `expense_receipts`, `expense_claim_history`) and is kept for historical reference — the tables actually in use today are the `Erp*` SQLAlchemy models in `backend/database/models.py` (`ErpExpenseTransaction`, `ErpExpenseDocument`, `ErpExpenseApprovalHistory`, `ErpExpenseRegionConfig`, `ErpExpenseCategory`, `ErpExpenseVendor`, and related config/cache tables) — see [`assets/docs/PETTY_CASH_PHASED_PLAN.md`](assets/docs/PETTY_CASH_PHASED_PLAN.md) for the full model.
@@ -187,11 +190,26 @@ Tables are created on ERP-Dev at backend startup (`create_all`, additive only �
 
 - Auth: `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me`, `POST /api/auth/logout`
 - Claims (salesman): `POST /api/claims/ocr` (upload + OCR in one call), `POST /api/claims/ocr/upload` (store only), `POST /api/claims/receipts/{id}/ocr` (analyze a stored receipt), `POST /api/claims`, `GET /api/claims/mine`, `GET /api/claims/{id}`, `PATCH /api/claims/{id}`, `POST /api/claims/{id}/submit`, `POST /api/claims/{id}/resubmit`
-- Approvals (HOD / dept-HOD / Accountant / Finance Manager): `GET /api/approvals/queue`, `GET /api/approvals/{id}`, `POST /api/approvals/{id}/approve`, `POST /api/approvals/{id}/dispute`, `POST /api/approvals/{id}/reject`, `POST /api/approvals/bulk-approve`
+- Approvals (HOD / dept-HOD / Accountant / Finance Manager): `GET /api/approvals/queue`, `GET /api/approvals/{id}`, `POST /api/approvals/{id}/approve`, `POST /api/approvals/{id}/dispute`, `POST /api/approvals/{id}/reject`, `POST /api/approvals/{id}/resolve-vendor` (Accountant/Admin only — links or confirms-new an unmatched vendor), `POST /api/approvals/bulk-approve` (backend-complete; **no Flutter UI calls this today** — every approval in the app goes through the individual endpoints above)
 - Admin: `GET /api/admin/claims`, `GET /api/admin/claims/{id}`, `POST /api/admin/claims/{id}/mark-paid`
 - Admin config: `GET/POST /api/admin/config/{departments,regions,categories,vendors,hod-assignments,delegations}`
-- Reference: `GET /api/projects`
+- Reference (any authenticated user, read-only): `GET /api/projects`, `GET /api/categories`, `GET /api/vendors` (separate from the `require_admin`-gated vendor CRUD above — this one just backs pickers like the Accountant's unmatched-vendor resolve action)
 - Receipt image: `GET /api/claims/receipts/{id}/image`
+- Notifications: `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all` — backed by an `ErpExpenseNotification` table (email + in-app, per-user language for plain-text bodies, HTML email bodies are English-only, dedup'd per event); see [`assets/docs/PETTY_CASH_PHASED_PLAN.md`](assets/docs/PETTY_CASH_PHASED_PLAN.md) Phase 5 for what's still missing (push/FCM, preference UI)
+- Public (no auth): `GET /claims/{id}` — plain HTML fallback page the "View this claim" button in notification emails links to; shows no claim data, just confirms the id, since the link isn't scoped to the recipient
+
+---
+
+## Backend tests
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt   # pulls in pytest (test-only, listed in requirements.txt)
+python -m pytest
+```
+
+Covers the `extraction/` pipeline (normalization, candidate scoring, validation, field selection), duplicate detection, notification service, and known regression cases (e.g. ENOC receipts) — no DB or live OCR engine required, all pure-function/unit level.
 
 ---
 

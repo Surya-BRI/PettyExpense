@@ -50,7 +50,7 @@ def build_context(txn, comment: Optional[str] = None, approver=None) -> ClaimEma
         transaction_id=txn.transaction_id,
         employee_name=employee.display_name if employee else "-",
         employee_department=employee.department.department_name if employee and employee.department else None,
-        vendor_name=txn.vendor.vendor_name if txn.vendor else "Unknown vendor",
+        vendor_name=txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "Unknown vendor"),
         amount=txn.amount,
         vat_amount=txn.vat_amount,
         total_amount=txn.total_amount,

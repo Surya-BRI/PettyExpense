@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from auth.security import CurrentUser, get_current_user
-from database.models import ErpExpenseCategory, get_db
+from database.models import ErpExpenseCategory, ErpExpenseVendor, get_db
 from services import approval_service
 from services.storage import storage_service
 from services.transaction_service import transaction_service
@@ -21,6 +21,15 @@ def list_active_categories(user: CurrentUser = Depends(get_current_user), db: Se
     """Read-only category picker for the bill-capture form (any authenticated user)."""
     categories = db.query(ErpExpenseCategory).filter(ErpExpenseCategory.is_active == 1).all()
     return [{"id": c.category_id, "name": c.category_name, "name_ar": c.category_name_ar} for c in categories]
+
+
+@categories_router.get("/vendors")
+def list_active_vendors(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Read-only vendor list (any authenticated user) — used by the Accountant's unmatched-vendor
+    resolve action to pick an existing vendor to link to. Admin-only vendor CRUD stays in
+    routes_config.py; this is deliberately just a lookup, no create/edit/delete."""
+    vendors = db.query(ErpExpenseVendor).filter(ErpExpenseVendor.is_active == 1).order_by(ErpExpenseVendor.vendor_name).all()
+    return [{"id": v.vendor_id, "name": v.vendor_name} for v in vendors]
 
 
 class CreateClaimRequest(BaseModel):
@@ -65,7 +74,7 @@ async def ocr_receipt(
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     content_type = file.content_type or "image/jpeg"
-    return transaction_service.run_ocr(db, data, content_type, file.filename or "receipt.jpg")
+    return transaction_service.run_ocr(db, data, content_type, file.filename or "receipt.jpg", employee_id=user.id)
 
 
 @router.post("/ocr/upload")
@@ -91,7 +100,7 @@ def analyze_receipt(
 ):
     """Run OCR on an already-stored receipt."""
     try:
-        return transaction_service.analyze_receipt(db, receipt_id, mode=mode)
+        return transaction_service.analyze_receipt(db, receipt_id, mode=mode, employee_id=user.id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

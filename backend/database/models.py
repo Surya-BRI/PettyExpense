@@ -182,6 +182,10 @@ class ErpExpenseTransaction(Base):
     stage_due_at: Mapped[Optional[datetime]] = mapped_column("stageDueAt", DateTime, nullable=True)
     remarks: Mapped[Optional[str]] = mapped_column("remarks", UnicodeText, nullable=True)
     duplicate_flag: Mapped[int] = mapped_column("duplicateFlag", Integer, default=0)
+    # Set only when the vendor text (typed or OCR'd) didn't match any known ErpExpenseVendor —
+    # vendor_id stays null in that case rather than silently auto-creating a new vendor row.
+    # New column on an existing table -- create_all() won't add it, see scripts/add_vendor_raw_text_column.py.
+    vendor_raw_text: Mapped[Optional[str]] = mapped_column("vendorRawText", Unicode(256), nullable=True)
     ocr_confidence_json: Mapped[Optional[str]] = mapped_column("ocrConfidenceJson", Text, nullable=True)
     op_number: Mapped[Optional[str]] = mapped_column("opNumber", String(128), nullable=True)
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)

@@ -43,17 +43,15 @@ def _history(db: Session, transaction_id: int, actor_id: int, stage: str, action
     )
 
 
-def _resolve_vendor(db: Session, vendor_name: Optional[str], source: str = "manual") -> Optional[ErpExpenseVendor]:
+def _resolve_vendor(db: Session, vendor_name: Optional[str]) -> Optional[ErpExpenseVendor]:
+    # Exact-match lookup only -- no auto-create on a miss. A miss (new vendor, or OCR/typo
+    # variance on a known one) is left unmatched and surfaced to the Accountant via
+    # vendor_raw_text / vendor_unmatched instead of silently fragmenting the vendor table
+    # with near-duplicate rows ("Uber" / "uber" / "Ubar").
     if not vendor_name or not vendor_name.strip():
         return None
     vendor_name = vendor_name.strip()
-    vendor = db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_name == vendor_name).first()
-    if vendor:
-        return vendor
-    vendor = ErpExpenseVendor(vendor_name=vendor_name, source=source, is_active=1)
-    db.add(vendor)
-    db.flush()
-    return vendor
+    return db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_name == vendor_name).first()
 
 
 def _resolve_region(db: Session, region_code: str) -> ErpExpenseRegionConfig:
@@ -80,7 +78,8 @@ def transaction_to_dict(
         "category_id": txn.category_id,
         "category_name": txn.category.category_name if txn.category else None,
         "vendor_id": txn.vendor_id,
-        "vendor_name": txn.vendor.vendor_name if txn.vendor else None,
+        "vendor_name": txn.vendor.vendor_name if txn.vendor else txn.vendor_raw_text,
+        "vendor_unmatched": bool(txn.vendor_raw_text) and not txn.vendor_id,
         "bill_date": txn.bill_date,
         "currency": txn.currency,
         "exchange_rate": txn.exchange_rate,
@@ -164,7 +163,7 @@ class TransactionService:
         db.refresh(document)
         return self._receipt_payload(document, ocr=None, duplicate=None, ocr_status="pending")
 
-    def analyze_receipt(self, db: Session, receipt_id: int, mode: str = "auto") -> dict[str, Any]:
+    def analyze_receipt(self, db: Session, receipt_id: int, mode: str = "auto", employee_id: Optional[int] = None) -> dict[str, Any]:
         document = self.get_receipt(db, receipt_id)
         image_bytes = storage_service.read_bytes(document.s3_key)
         if not image_bytes:
@@ -184,13 +183,13 @@ class TransactionService:
         db.commit()
         db.refresh(document)
         duplicate = self._find_duplicate(
-            db, ocr.get("vendor"), ocr.get("amount"), ocr.get("date")
+            db, ocr.get("vendor"), ocr.get("amount"), ocr.get("date"), employee_id=employee_id
         )
         return self._receipt_payload(document, ocr=ocr, duplicate=duplicate, ocr_status="done")
 
-    def run_ocr(self, db: Session, image_bytes: bytes, content_type: str, filename: str) -> dict[str, Any]:
+    def run_ocr(self, db: Session, image_bytes: bytes, content_type: str, filename: str, employee_id: Optional[int] = None) -> dict[str, Any]:
         stored = self.store_receipt(db, image_bytes, content_type, filename)
-        return self.analyze_receipt(db, stored["receipt_id"])
+        return self.analyze_receipt(db, stored["receipt_id"], employee_id=employee_id)
 
     def _receipt_payload(
         self,
@@ -232,15 +231,20 @@ class TransactionService:
         amount: Optional[float],
         bill_date: Optional[str],
         exclude_transaction_id: Optional[int] = None,
+        employee_id: Optional[int] = None,
     ) -> Optional[dict[str, Any]]:
         # Same-image-hash matching was dropped — re-uploading an identical photo isn't evidence of duplication on its own; same vendor+amount+date is.
-        if vendor_name and amount is not None and bill_date:
+        # Scoped to the same employee: two different employees legitimately spending the same
+        # amount at the same vendor on the same day (e.g. a common fixed-fare taxi route) is a
+        # coincidence, not a duplicate -- only the same person resubmitting/reusing a bill is.
+        if vendor_name and amount is not None and bill_date and employee_id is not None:
             vendor = db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_name == vendor_name).first()
             if vendor:
                 q = db.query(ErpExpenseTransaction).filter(
                     ErpExpenseTransaction.vendor_id == vendor.vendor_id,
                     ErpExpenseTransaction.amount == amount,
                     ErpExpenseTransaction.bill_date == bill_date,
+                    ErpExpenseTransaction.employee_id == employee_id,
                     ErpExpenseTransaction.status != "rejected",
                 )
                 if exclude_transaction_id:
@@ -250,7 +254,7 @@ class TransactionService:
                     return {
                         "reason": "same_vendor_amount_date",
                         "existing_claim_id": hit_txn.transaction_id,
-                        "message": "A claim with the same vendor, amount, and date already exists.",
+                        "message": "This employee already has another claim with the same vendor, amount, and date.",
                     }
         return None
 
@@ -280,7 +284,7 @@ class TransactionService:
         category = db.query(ErpExpenseCategory).filter(ErpExpenseCategory.category_id == category_id).first()
         if not category:
             raise ValueError("Unknown category_id")
-        vendor_obj = _resolve_vendor(db, vendor, source="ocr_auto" if receipt_id or s3_key else "manual")
+        vendor_obj = _resolve_vendor(db, vendor)
 
         txn = ErpExpenseTransaction(
             type=type,
@@ -289,6 +293,7 @@ class TransactionService:
             project_cache_id=project_id,
             category_id=category.category_id,
             vendor_id=vendor_obj.vendor_id if vendor_obj else None,
+            vendor_raw_text=None if vendor_obj else (vendor.strip() if vendor and vendor.strip() else None),
             bill_date=bill_date,
             currency=currency,
             exchange_rate=exchange_rate,
@@ -314,7 +319,7 @@ class TransactionService:
 
         _history(db, txn.transaction_id, user.id, "employee", "created" if not submit else "submitted")
 
-        duplicate = self._find_duplicate(db, vendor, amount, bill_date, txn.transaction_id)
+        duplicate = self._find_duplicate(db, vendor, amount, bill_date, txn.transaction_id, employee_id=txn.employee_id)
         txn.duplicate_flag = 1 if duplicate else 0
 
         db.commit()
@@ -345,6 +350,7 @@ class TransactionService:
         if "vendor" in updates and updates["vendor"]:
             vendor_obj = _resolve_vendor(db, updates["vendor"])
             txn.vendor_id = vendor_obj.vendor_id if vendor_obj else None
+            txn.vendor_raw_text = None if vendor_obj else updates["vendor"].strip()
         for field, attr in (
             ("amount", "amount"),
             ("vat_amount", "vat_amount"),
@@ -369,7 +375,8 @@ class TransactionService:
         txn.submitted_on = datetime.utcnow()
         # Re-check for duplicates at submission time — draft edits can change vendor/amount/date after the initial check, making it stale.
         duplicate = self._find_duplicate(
-            db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id
+            db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id,
+            employee_id=txn.employee_id,
         )
         txn.duplicate_flag = 1 if duplicate else 0
         _history(db, txn.transaction_id, user.id, "employee", "submitted")
@@ -412,7 +419,8 @@ class TransactionService:
         data = transaction_to_dict(txn, include_history=True, db=db)
         if txn.documents:
             data["duplicate_warning"] = self._find_duplicate(
-                db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id
+                db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id,
+                employee_id=txn.employee_id,
             )
         return data
 
@@ -478,7 +486,7 @@ class TransactionService:
         from services import approval_service, email_templates, notification_service
 
         approver = approval_service.resolve_current_approver(db, txn)
-        vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
+        vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
         content = email_templates.submission_email(email_templates.build_context(txn))
         notification_service.send(
             db, approver, "submission", txn.transaction_id,
@@ -492,7 +500,7 @@ class TransactionService:
         from services import email_templates, notification_service
 
         employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
-        vendor_name = txn.vendor.vendor_name if txn.vendor else "unknown vendor"
+        vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
         action_ar = {"paid": "دفع"}.get(action, action)  # only "paid" is used via this path today
         html = None
         if action == "paid":

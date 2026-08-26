@@ -222,6 +222,21 @@ class ApiClient {
     return ExpenseClaim.fromJson(_decodeMap(res));
   }
 
+  Future<ExpenseClaim> resolveVendor(int id, {int? vendorId, bool createNew = false}) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/approvals/$id/resolve-vendor'),
+          headers: _headers,
+          body: jsonEncode({'vendor_id': vendorId, 'create_new': createNew}),
+        ));
+    return ExpenseClaim.fromJson(_decodeMap(res));
+  }
+
+  Future<List<VendorRef>> vendors() async {
+    final res = await _authorized(() => http.get(_uri('/api/vendors'), headers: _headers));
+    final list = jsonDecode(res.body) as List;
+    return list.map((e) => VendorRef.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<Map<String, dynamic>> bulkApprove(List<int> transactionIds) async {
     final res = await _authorized(() => http.post(
           _uri('/api/approvals/bulk-approve'),

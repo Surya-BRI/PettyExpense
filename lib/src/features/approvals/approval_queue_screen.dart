@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
@@ -9,6 +10,32 @@ import '../../utils/money.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/shimmer_box.dart';
 import '../shared/status_chip.dart';
+
+// 'submitted' (New) sorts ahead of 'disputed' -- fresh claims are the priority
+// queue item; disputed ones already had a round of feedback and are waiting
+// on the employee, not brand-new work for this approver.
+const _statusSortPriority = {'submitted': 0, 'disputed': 1};
+
+DateTime? _parseDate(String? raw) => raw == null ? null : DateTime.tryParse(raw);
+
+List<ExpenseClaim> _sortedForQueue(List<ExpenseClaim> claims) {
+  final sorted = List<ExpenseClaim>.from(claims);
+  sorted.sort((a, b) {
+    final priority = (_statusSortPriority[a.status] ?? 99).compareTo(_statusSortPriority[b.status] ?? 99);
+    if (priority != 0) return priority;
+    final aDate = _parseDate(a.submittedAt) ?? _parseDate(a.createdAt);
+    final bDate = _parseDate(b.submittedAt) ?? _parseDate(b.createdAt);
+    if (aDate == null || bDate == null) return 0;
+    return bDate.compareTo(aDate); // newest first
+  });
+  return sorted;
+}
+
+String _formatDateTime(String? raw) {
+  final date = _parseDate(raw);
+  if (date == null) return '';
+  return DateFormat('MMM d, yyyy · h:mm a').format(date.toLocal());
+}
 
 final approvalsQueueProvider =
     FutureProvider.autoDispose.family<List<ExpenseClaim>, String>((ref, stage) {
@@ -81,9 +108,9 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                 ),
               ),
               data: (claims) {
-                final filtered = _statusFilter == 'all'
-                    ? claims
-                    : claims.where((c) => c.status == _statusFilter).toList();
+                final filtered = _sortedForQueue(
+                  _statusFilter == 'all' ? claims : claims.where((c) => c.status == _statusFilter).toList(),
+                );
                 if (filtered.isEmpty) {
                   return Center(
                     child: Text(
@@ -126,8 +153,13 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${formatMoney(c.currency, c.amount)} · ${c.category} · employee #${c.employeeId}',
+                                      '${formatMoney(c.currency, c.amount)} · ${c.category} · ${c.employeeDisplay}',
                                       style: const TextStyle(color: AppColors.textSecondary),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _formatDateTime(c.submittedAt ?? c.createdAt),
+                                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                     ),
                                   ],
                                 ),

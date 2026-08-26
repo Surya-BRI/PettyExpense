@@ -19,6 +19,11 @@ class BulkApproveRequest(BaseModel):
     transaction_ids: list[int]
 
 
+class ResolveVendorRequest(BaseModel):
+    vendor_id: Optional[int] = None
+    create_new: bool = False
+
+
 @router.get("/queue")
 def queue(
     stage: str,
@@ -87,6 +92,23 @@ def reject(
 ):
     try:
         return approval_service.advance(db, user, transaction_id, "reject", body.comment)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{transaction_id}/resolve-vendor")
+def resolve_vendor(
+    transaction_id: int,
+    body: ResolveVendorRequest,
+    user: CurrentUser = Depends(require_approver),
+    db: Session = Depends(get_db),
+):
+    try:
+        return approval_service.resolve_vendor(db, user, transaction_id, vendor_id=body.vendor_id, create_new=body.create_new)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:

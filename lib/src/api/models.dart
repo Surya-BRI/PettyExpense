@@ -240,6 +240,7 @@ class ExpenseClaim {
     this.receipt,
     this.history,
     this.duplicateWarning,
+    this.vendorUnmatched = false,
     this.stageSequence = const [],
   });
 
@@ -270,6 +271,9 @@ class ExpenseClaim {
   final ReceiptInfo? receipt;
   final List<ClaimHistoryItem>? history;
   final DuplicateWarning? duplicateWarning;
+  /// True when the vendor text (typed or OCR'd) didn't match any known vendor —
+  /// vendorId stays null and vendorName falls back to the raw, unmatched text.
+  final bool vendorUnmatched;
   final List<String> stageSequence;
 
   /// Backward-compat display helper — old UI code refers to "vendor".
@@ -329,6 +333,7 @@ class ExpenseClaim {
       duplicateWarning: json['duplicate_warning'] == null
           ? null
           : DuplicateWarning.fromJson(json['duplicate_warning'] as Map<String, dynamic>),
+      vendorUnmatched: json['vendor_unmatched'] as bool? ?? false,
       stageSequence: (json['stage_sequence'] as List?)?.map((e) => e as String).toList() ?? const [],
     );
   }
@@ -346,6 +351,20 @@ class CategoryRef {
       id: (json['id'] as num).toInt(),
       name: json['name'] as String,
       nameAr: json['name_ar'] as String?,
+    );
+  }
+}
+
+class VendorRef {
+  const VendorRef({required this.id, required this.name});
+
+  final int id;
+  final String name;
+
+  factory VendorRef.fromJson(Map<String, dynamic> json) {
+    return VendorRef(
+      id: (json['id'] as num).toInt(),
+      name: json['name'] as String,
     );
   }
 }
