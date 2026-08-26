@@ -445,12 +445,58 @@ def _line_label_coverage(text: str, matches: list[LabelMatch]) -> float:
     return covered / max(len(text), 1)
 
 
+_CODE_LABEL_SHAPE_RE = re.compile(r"^[A-Za-z]{1,3}\s*[:.]\s*\S")
+
+
 def _is_vendor_eligible_line(text: str, matches: list[LabelMatch]) -> bool:
     if len(text) < 3 or re.fullmatch(r"[\d\s.\-/:]+", text):
         return False
     if matches and _line_label_coverage(text, matches) > 0.4:
         return False  # this line is mostly a recognized label/value line, not a vendor name
+    if _TIME_PATTERN.match(text):
+        return False  # a clock reading is never a business name, in any language
     return True
+
+
+def _letter_ratio(text: str) -> float:
+    stripped = re.sub(r"\s+", "", text)
+    if not stripped:
+        return 0.0
+    letters = sum(1 for c in stripped if c.isalpha())  # unicode-aware -- counts Arabic letters too
+    return letters / len(stripped)
+
+
+def _median_line_height(lines: list[OcrLine]) -> Optional[float]:
+    heights = [ln.bounding_box[3] - ln.bounding_box[1] for ln in lines if ln.bounding_box is not None]
+    if not heights:
+        return None
+    heights.sort()
+    mid = len(heights) // 2
+    return heights[mid] if len(heights) % 2 else (heights[mid - 1] + heights[mid]) / 2.0
+
+
+def _vendor_shape_signals(text: str, line: OcrLine, median_height: Optional[float]) -> list[str]:
+    # Positive/negative signals for "does this look like a business name", entirely generic --
+    # shape and typography only, never a specific brand/vendor literal.
+    signals = []
+    if _CODE_LABEL_SHAPE_RE.match(text):
+        signals.append("label_colon_code_shape")  # "S:Standard", "Z:Zero" -- a legend/code fragment, not a name
+    if _digit_dominated(text):
+        signals.append("digit_dominated_line")
+    letter_ratio = _letter_ratio(text)
+    word_count = sum(1 for tok in text.split() if sum(c.isalpha() for c in tok) >= 2)
+    stripped_len = len(text.strip())
+    if letter_ratio >= 0.6 and word_count >= 1 and stripped_len >= 4 and not signals:
+        signals.append("business_name_shape")
+        # A single short word is as likely a logo fragment/watermark as a real name; a real
+        # business name is almost always multiple words or a genuinely long single one.
+        if word_count >= 2 and stripped_len >= 10:
+            signals.append("multi_word_name_shape")
+    if median_height and line.bounding_box is not None:
+        height = line.bounding_box[3] - line.bounding_box[1]
+        if height >= median_height * 1.3:
+            signals.append("larger_than_median_line_height")
+    return signals
 
 
 _MAX_HEADER_LINE_GAP_HEIGHT_RATIO = 1.6
@@ -498,17 +544,21 @@ def _vendor_candidates(
     lines: list[OcrLine], label_matches_by_line: list[list[LabelMatch]], reference_data: ReferenceData
 ) -> list[FieldCandidate]:
     candidates = []
-    top_n = min(5, len(lines))
+    # A generous window -- real headers on noisy real-world photos can sit a few lines past
+    # index 0. Position and shape signals (scoring.py) do the actual ranking work now, not
+    # this window size, so widening it is low-risk.
+    top_n = min(8, len(lines))
     eligible = [
         _is_vendor_eligible_line(lines[i].text.strip(), label_matches_by_line[i]) for i in range(top_n)
     ]
+    median_height = _median_line_height(lines)
 
     for i in range(top_n):
         if not eligible[i]:
             continue
         line = lines[i]
         text = line.text.strip()
-        signals = ["top_of_receipt"]
+        signals = ["top_of_receipt"] + _vendor_shape_signals(text, line, median_height)
         confidence = max(0.1, line.confidence * (1.0 - i * 0.12))
         bonus, bonus_signals = _vendor_known_match_bonus(text, reference_data)
         confidence = min(1.0, confidence + bonus)
@@ -516,7 +566,7 @@ def _vendor_candidates(
         candidates.append(
             FieldCandidate(
                 "vendor", text, line.text, confidence, line.page, line.bounding_box, signals,
-                reading_order=line.reading_order,
+                reading_order=line.reading_order, ocr_confidence=line.confidence,
             )
         )
 
@@ -557,7 +607,10 @@ def _vendor_candidates(
 
     continuations = set()
     for i in range(top_n):
-        if not eligible[i] or i in continuations:
+        # A short fragment (garbled OCR noise, a document-type header like "Tax Invoice"
+        # mangled beyond label-matching) shouldn't anchor a merge and drag a real name into
+        # it -- it can still stand as its own low-scored candidate, just not glue onto one.
+        if not eligible[i] or i in continuations or len(lines[i].text.strip()) < 8:
             continue
         chain = [i]
         cur = i
@@ -584,11 +637,12 @@ def _vendor_candidates(
                 base_confidence = max(0.1, lines[i].confidence * (1.0 - i * 0.12))
                 bonus, bonus_signals = _vendor_known_match_bonus(merged_text, reference_data)
                 confidence = min(1.0, base_confidence + 0.1 + bonus)
+                shape_signals = _vendor_shape_signals(merged_text, lines[i], median_height)
                 candidates.append(
                     FieldCandidate(
                         "vendor", merged_text, merged_text, confidence, lines[i].page, merged_bbox,
-                        ["top_of_receipt", "multiline_header_merge"] + bonus_signals,
-                        reading_order=lines[i].reading_order,
+                        ["top_of_receipt", "multiline_header_merge"] + shape_signals + bonus_signals,
+                        reading_order=lines[i].reading_order, ocr_confidence=lines[i].confidence,
                     )
                 )
     return candidates

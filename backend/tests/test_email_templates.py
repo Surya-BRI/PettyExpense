@@ -105,13 +105,19 @@ def test_submitted_by_department_and_submitted_on_shown():
     assert "18 Aug 2026, 14:32" in content.html
 
 
-def test_awaiting_approver_row_shown_only_when_approver_given():
-    without = et.submission_email(_ctx())
-    assert "Awaiting approval from" not in without.html
+def test_current_holder_row_shows_stage_alone_or_name_and_stage():
+    without_name = et.submission_email(_ctx())
+    assert "Currently with" in without_name.html
+    assert "Head of Department" in without_name.html  # stage label, resolved from stage="hod"
     with_approver = et.submission_email(_ctx(approver_name="Ali Hassan"))
-    assert "Awaiting approval from" in with_approver.html
+    assert "Currently with" in with_approver.html
     assert "Ali Hassan" in with_approver.html
-    assert "Head of Department" in with_approver.html  # stage label, resolved from stage="hod"
+    assert "Head of Department" in with_approver.html
+
+
+def test_current_holder_row_absent_once_stage_is_cleared():
+    no_stage = et.submission_email(_ctx(stage=None))
+    assert "Currently with" not in no_stage.html
 
 
 def test_view_claim_button_links_to_the_public_base_url():

@@ -72,6 +72,17 @@ def _format_plausibility(candidate: FieldCandidate) -> tuple[float, Optional[str
         return -0.1, "format_penalty_implausible_rate"
     if field == "date":
         return 0.1, "format_date_shape"
+    if field == "vendor":
+        if "label_colon_code_shape" in candidate.signals or "digit_dominated_line" in candidate.signals:
+            return -0.25, "format_penalty_not_a_name"
+        if "business_name_shape" in candidate.signals:
+            bonus = 0.15
+            if "larger_than_median_line_height" in candidate.signals:
+                bonus += 0.05
+            if "multi_word_name_shape" in candidate.signals:
+                bonus += 0.15
+            return bonus, "format_business_name_shape"
+        return 0.0, None
     return 0.0, None
 
 

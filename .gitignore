@@ -41,6 +41,9 @@ migrate_working_dir/
 /build/
 # Flutter build cache moved from /build/ into assets/build/ — not the app's real assets
 assets/build/
+
+# Real receipt photos pulled read-only from S3 for baseline testing — someone's actual uploaded data, never committed
+assets/real_uploads/
 /coverage/
 
 # Symbolication related
