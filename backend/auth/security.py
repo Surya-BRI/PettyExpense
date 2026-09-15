@@ -100,7 +100,22 @@ SEED_USERS = [
         "department": None,
         "email": "teja@example.com",
     },
+    {
+        "username": "fatima",
+        "display_name": "Fatima",
+        "password": "fatima123",
+        "role": "employee",
+        "department": "Sales",
+        "email": "fatima@example.com",
+    },
 ]
+
+# Demo users who can sign in under more than one region — resolved via
+# ErpExpenseMultiRegionUserRegion, not a column on the user row, since the choice is
+# per-login-session, not a fixed attribute of the account.
+MULTI_REGION_USERS = {
+    "fatima": ["UAE", "KSA", "OMAN"],
+}
 
 
 def hash_password(password: str) -> str:
@@ -117,21 +132,24 @@ def create_token(data: dict, expires_delta: timedelta) -> str:
     return jwt.encode(payload, settings.secret_key, algorithm="HS256")
 
 
-def create_access_token(user: ErpAuthExpenseUsers) -> str:
+def create_access_token(user: ErpAuthExpenseUsers, region_code: Optional[str] = None) -> str:
     return create_token(
         {
             "sub": str(user.user_id),
             "role": user.role.role_code,
             "name": user.display_name,
+            "region": region_code,
             "type": "access",
         },
         timedelta(minutes=settings.access_token_expire_minutes),
     )
 
 
-def create_refresh_token(user: ErpAuthExpenseUsers) -> str:
+def create_refresh_token(user: ErpAuthExpenseUsers, region_code: Optional[str] = None) -> str:
+    # Carries the region too, so a token refresh can recreate the access token without
+    # silently losing the region the user originally signed in under.
     return create_token(
-        {"sub": str(user.user_id), "type": "refresh"},
+        {"sub": str(user.user_id), "region": region_code, "type": "refresh"},
         timedelta(days=settings.refresh_token_expire_days),
     )
 
@@ -169,6 +187,45 @@ def seed_users() -> None:
         db.close()
 
 
+def seed_multi_region_users() -> None:
+    from database.models import ErpExpenseMultiRegionUserRegion, ErpExpenseRegionConfig
+
+    db = SessionLocal()
+    try:
+        region_by_code = {r.region_code: r for r in db.query(ErpExpenseRegionConfig).all()}
+        for username, region_codes in MULTI_REGION_USERS.items():
+            user = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_name == username).first()
+            if not user:
+                continue
+            existing = {
+                m.region_id
+                for m in db.query(ErpExpenseMultiRegionUserRegion)
+                .filter(ErpExpenseMultiRegionUserRegion.user_id == user.user_id)
+                .all()
+            }
+            for code in region_codes:
+                region = region_by_code.get(code)
+                if not region or region.region_id in existing:
+                    continue
+                db.add(ErpExpenseMultiRegionUserRegion(user_id=user.user_id, region_id=region.region_id, is_active=1))
+        db.commit()
+    finally:
+        db.close()
+
+
+def allowed_regions_for(db: Session, user: ErpAuthExpenseUsers) -> list[str]:
+    """Region codes a user may sign in under. Empty means not multi-region -- unrestricted."""
+    from database.models import ErpExpenseMultiRegionUserRegion, ErpExpenseRegionConfig
+
+    rows = (
+        db.query(ErpExpenseRegionConfig.region_code)
+        .join(ErpExpenseMultiRegionUserRegion, ErpExpenseMultiRegionUserRegion.region_id == ErpExpenseRegionConfig.region_id)
+        .filter(ErpExpenseMultiRegionUserRegion.user_id == user.user_id, ErpExpenseMultiRegionUserRegion.is_active == 1)
+        .all()
+    )
+    return [r[0] for r in rows]
+
+
 def get_user_by_id(db: Session, user_id: int) -> Optional[ErpAuthExpenseUsers]:
     return (
         db.query(ErpAuthExpenseUsers)
@@ -203,12 +260,21 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Erp
 
 
 class CurrentUser:
-    def __init__(self, id: int, display_name: str, role: str, email: Optional[str] = None, department_id: Optional[int] = None):
+    def __init__(
+        self,
+        id: int,
+        display_name: str,
+        role: str,
+        email: Optional[str] = None,
+        department_id: Optional[int] = None,
+        region_code: Optional[str] = None,
+    ):
         self.id = id
         self.display_name = display_name
         self.role = role
         self.email = email
         self.department_id = department_id
+        self.region_code = region_code
 
     @property
     def is_admin(self) -> bool:
@@ -219,8 +285,8 @@ class CurrentUser:
         return self.role in ("hod", "accountant", "finance_manager") or self.is_admin
 
 
-def _to_current_user(user: ErpAuthExpenseUsers) -> CurrentUser:
-    return CurrentUser(user.user_id, user.display_name, user.role.role_code, user.email, user.department_id)
+def _to_current_user(user: ErpAuthExpenseUsers, region_code: Optional[str] = None) -> CurrentUser:
+    return CurrentUser(user.user_id, user.display_name, user.role.role_code, user.email, user.department_id, region_code)
 
 
 def get_current_user(
@@ -251,7 +317,7 @@ def get_current_user(
     user = get_user_by_id(db, int(user_id_raw))
     if not user:
         raise HTTPException(status_code=401, detail="User not found or not allowlisted")
-    return _to_current_user(user)
+    return _to_current_user(user, payload.get("region"))
 
 
 def require_role(*role_codes: str):

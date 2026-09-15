@@ -57,11 +57,11 @@ class ApiClient {
     return res;
   }
 
-  Future<Map<String, dynamic>> login(String username, String password) async {
+  Future<Map<String, dynamic>> login(String username, String password, {String? regionCode}) async {
     final res = await http.post(
       _uri('/api/auth/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
+      body: jsonEncode({'username': username, 'password': password, 'region_code': regionCode}),
     );
     return _decodeMap(res);
   }

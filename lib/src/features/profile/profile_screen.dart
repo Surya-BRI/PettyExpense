@@ -47,7 +47,8 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: const BrandAppBar(title: 'Profile'),
+      // Every role has a dedicated Alerts tab in the bottom nav now, so the app-bar bell is redundant here.
+      appBar: const BrandAppBar(title: 'Profile', showNotificationAction: false),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
         children: [

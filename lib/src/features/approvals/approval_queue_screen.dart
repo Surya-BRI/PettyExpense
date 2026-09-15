@@ -78,7 +78,7 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
     final async = ref.watch(approvalsQueueProvider(widget.stage));
 
     return Scaffold(
-      appBar: BrandAppBar(title: _stageLabels[widget.stage] ?? 'Approvals'),
+      appBar: BrandAppBar(title: _stageLabels[widget.stage] ?? 'Approvals', showNotificationAction: false),
       body: Column(
         children: [
           Padding(

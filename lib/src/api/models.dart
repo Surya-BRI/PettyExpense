@@ -8,6 +8,7 @@ class AuthUser {
     this.username,
     this.email,
     this.departmentId,
+    this.regionCode,
   });
 
   final int id;
@@ -16,6 +17,7 @@ class AuthUser {
   final String? username;
   final String? email;
   final int? departmentId;
+  final String? regionCode;
 
   UserRole get userRole => UserRoleX.fromJson(role);
   bool get isApprover => userRole.isApprover;
@@ -28,6 +30,7 @@ class AuthUser {
       username: json['username'] as String?,
       email: json['email'] as String?,
       departmentId: (json['department_id'] as num?)?.toInt(),
+      regionCode: json['region_code'] as String?,
     );
   }
 
@@ -38,6 +41,7 @@ class AuthUser {
         'username': username,
         'email': email,
         'department_id': departmentId,
+        'region_code': regionCode,
       };
 }
 
