@@ -251,3 +251,4 @@ Status as of 2026-08-16: backend deployed and running; public HTTPS live and ver
 | Backend port in use | Stop the other process or change `--port` and match `API_BASE_URL` |
 | `JAVA_HOME` invalid | Fix JAVA_HOME, or let Flutter use its bundled JDK via Android Studio / Flutter tooling |
 | Login returns 500, log shows `ValueError: password cannot be longer than 72 bytes` | `bcrypt>=4.1` breaks `passlib[bcrypt]==1.7.4`'s internal self-test (unrelated to actual password length) — run `pip install "bcrypt<4.1"` and restart |
+| Flutter build fails: `doclens_screen.dart` — `No named parameter with the name 'onReorderItem'` | Published `doclens` (0.0.8 and 0.0.12) calls a nonexistent Flutter API param — should be `onReorder`. Patched locally in [`third_party/doclens`](third_party/doclens) (one-line fix) and wired in via `dependency_overrides` in [`pubspec.yaml`](pubspec.yaml). Remove the override once a fixed `doclens` version is published upstream |
