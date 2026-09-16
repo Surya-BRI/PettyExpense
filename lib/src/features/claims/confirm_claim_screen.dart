@@ -11,6 +11,7 @@ import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/image_preview_screen.dart';
+import '../authentication/auth_controller.dart';
 
 final _arabic = RegExp(r'[\u0600-\u06FF]');
 
@@ -224,8 +225,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         'currency': _currency,
         'bill_date': _date.text.trim(),
         'category_id': _categoryId,
-        // TODO(region picker): hardcoded until a real per-bill region picker exists (Phase 6).
-        'region_code': 'UAE',
+        // The region the user signed in under (multi-region users pick one at login);
+        // falls back to UAE for single-region demo users who never had a region to pick.
+        'region_code': ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
         'type': _type,
         'project_id': _projectId,
         'op_number': selectedProject?.opNumber,

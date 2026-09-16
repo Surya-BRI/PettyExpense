@@ -34,6 +34,7 @@ DEFAULT_APPROVAL_MATRIX = {
 REGIONS = [
     ("UAE", "United Arab Emirates"),
     ("KSA", "Kingdom of Saudi Arabia"),
+    ("OMAN", "Oman"),
     ("IN", "India"),
 ]
 

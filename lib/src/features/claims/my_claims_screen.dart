@@ -60,6 +60,7 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
     return Scaffold(
       appBar: BrandAppBar(
         title: 'My claims',
+        showNotificationAction: false,
         actions: [
           PopupMenuButton<String>(
             initialValue: _statusFilter,

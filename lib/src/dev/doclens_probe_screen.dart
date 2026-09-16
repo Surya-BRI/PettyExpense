@@ -1,6 +1,7 @@
-// THROWAWAY diagnostic screen. Not part of the app. Prints doclens' raw
-// detection status and quad coordinates to the console, nothing else -- no
-// overlay, no state machine, no quality gate. Delete this file (and
+// THROWAWAY diagnostic screen. Not part of the app. Shows doclens' raw detection
+// status and quad coordinates as an on-screen overlay (readable in a phone
+// screenshot -- an installed APK has no attached console) -- no capture
+// overlay UI, no state machine, no quality gate. Delete this file (and
 // lib/probe_main.dart) once the 8:1 aspect ratio / glare validation is done.
 import 'dart:async';
 
@@ -19,7 +20,8 @@ class _DoclensProbeScreenState extends State<DoclensProbeScreen> {
   StreamSubscription<DetectionStatus>? _statusSub;
   StreamSubscription<Quad?>? _quadSub;
   int _frame = 0;
-  String _lastLine = 'starting...';
+  String _statusLine = 'status: starting...';
+  String _quadLine = 'quad: -';
 
   @override
   void initState() {
@@ -37,17 +39,17 @@ class _DoclensProbeScreenState extends State<DoclensProbeScreen> {
     await _controller.initialize();
     if (mounted) setState(() {});
     _statusSub = _controller.statusStream.listen((status) {
-      // ignore: avoid_print
-      print('[probe] status=${status.name}');
+      final line = 'status: ${status.name}';
+      debugPrint('[probe] $line');
+      if (mounted) setState(() => _statusLine = line);
     });
     _quadSub = _controller.quadStream.listen((quad) {
       _frame++;
       final line = quad == null
-          ? '[probe] frame=$_frame quad=null'
-          : '[probe] frame=$_frame area=${quad.area.toStringAsFixed(3)} $quad';
-      // ignore: avoid_print
-      print(line);
-      if (mounted) setState(() => _lastLine = line);
+          ? 'quad: frame=$_frame null'
+          : 'quad: frame=$_frame area=${quad.area.toStringAsFixed(3)}\n$quad';
+      debugPrint('[probe] $line');
+      if (mounted) setState(() => _quadLine = line);
     });
   }
 
@@ -75,13 +77,44 @@ class _DoclensProbeScreenState extends State<DoclensProbeScreen> {
           Positioned(
             left: 8,
             right: 8,
+            top: 40,
+            child: _ProbeOverlayText(_statusLine),
+          ),
+          Positioned(
+            left: 8,
+            right: 8,
             bottom: 24,
-            child: Text(
-              _lastLine,
-              style: const TextStyle(color: Colors.lightGreenAccent, fontSize: 11),
-            ),
+            child: _ProbeOverlayText(_quadLine),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// High-contrast text block (solid dark background, larger font) so status/quad
+/// values are legible in a phone screenshot regardless of what's behind them.
+class _ProbeOverlayText extends StatelessWidget {
+  const _ProbeOverlayText(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.lightGreenAccent,
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          fontFamily: 'monospace',
+        ),
       ),
     );
   }

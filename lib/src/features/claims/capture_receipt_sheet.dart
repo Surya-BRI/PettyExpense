@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../api/api_client.dart';
 import '../../theme/app_theme.dart';
+import 'guided_capture_screen.dart';
 
 /// Simple sheet: camera or gallery only (no tech/OCR wording).
 Future<void> showCaptureReceiptSheet(BuildContext context, WidgetRef ref) {
@@ -41,20 +42,49 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
         setState(() => _busy = false);
         return;
       }
-      final stored = await ref.read(apiClientProvider).uploadReceipt(File(xfile.path));
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      context.push('/confirm', extra: {
-        'ocr': stored,
-        'localPath': xfile.path,
-        'runOcr': true,
-      });
+      await _uploadAndContinue(xfile.path);
     } catch (e) {
       setState(() {
         _busy = false;
         _error = 'Could not upload receipt. Check connection and try again.';
       });
     }
+  }
+
+  Future<void> _openGuidedCapture() async {
+    final result = await Navigator.of(context, rootNavigator: true).push<GuidedCaptureResult>(
+      MaterialPageRoute(builder: (_) => const GuidedCaptureScreen()),
+    );
+    if (!mounted || result == null) return;
+    if (result.useFallback) {
+      await _pick(ImageSource.camera);
+      return;
+    }
+    final path = result.imagePath;
+    if (path == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _uploadAndContinue(path);
+    } catch (e) {
+      setState(() {
+        _busy = false;
+        _error = 'Could not upload receipt. Check connection and try again.';
+      });
+    }
+  }
+
+  Future<void> _uploadAndContinue(String path) async {
+    final stored = await ref.read(apiClientProvider).uploadReceipt(File(path));
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    context.push('/confirm', extra: {
+      'ocr': stored,
+      'localPath': path,
+      'runOcr': true,
+    });
   }
 
   @override
@@ -106,7 +136,7 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
             )
           else ...[
             FilledButton.icon(
-              onPressed: () => _pick(ImageSource.camera),
+              onPressed: _openGuidedCapture,
               icon: const Icon(Icons.photo_camera),
               label: const Text('Open camera'),
             ),

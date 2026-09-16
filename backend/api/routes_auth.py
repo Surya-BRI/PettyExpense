@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from auth.security import (
     CurrentUser,
+    allowed_regions_for,
     authenticate_user,
     create_access_token,
     create_refresh_token,
@@ -23,6 +24,7 @@ settings = get_settings()
 class LoginRequest(BaseModel):
     username: str
     password: str
+    region_code: Optional[str] = None
 
 
 class RefreshRequest(BaseModel):
@@ -36,7 +38,7 @@ class TokenResponse(BaseModel):
     user: dict
 
 
-def _user_dict(user) -> dict:
+def _user_dict(user, region_code: Optional[str] = None) -> dict:
     return {
         "id": user.user_id,
         "username": user.user_name,
@@ -44,6 +46,7 @@ def _user_dict(user) -> dict:
         "role": user.role.role_code,
         "department_id": user.department_id,
         "email": user.email,
+        "region_code": region_code,
     }
 
 
@@ -52,10 +55,20 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     user = authenticate_user(db, body.username, body.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    # A multi-region user must pick one of their assigned regions; a single-region user
+    # isn't restricted, so whatever (or nothing) they send is accepted as-is.
+    allowed = allowed_regions_for(db, user)
+    region_code = body.region_code
+    if allowed and region_code not in allowed:
+        raise HTTPException(
+            status_code=400, detail=f"Choose a region to sign in with: {', '.join(allowed)}"
+        )
+
     return TokenResponse(
-        access_token=create_access_token(user),
-        refresh_token=create_refresh_token(user),
-        user=_user_dict(user),
+        access_token=create_access_token(user, region_code),
+        refresh_token=create_refresh_token(user, region_code),
+        user=_user_dict(user, region_code),
     )
 
 
@@ -71,10 +84,11 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     except JWTError as exc:
         raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
 
+    region_code = payload.get("region")
     return TokenResponse(
-        access_token=create_access_token(user),
-        refresh_token=create_refresh_token(user),
-        user=_user_dict(user),
+        access_token=create_access_token(user, region_code),
+        refresh_token=create_refresh_token(user, region_code),
+        user=_user_dict(user, region_code),
     )
 
 
@@ -86,6 +100,7 @@ def me(user: CurrentUser = Depends(get_current_user)):
         "role": user.role,
         "department_id": user.department_id,
         "email": user.email,
+        "region_code": user.region_code,
     }
 
 

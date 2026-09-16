@@ -102,10 +102,10 @@ class AuthController extends StateNotifier<AuthState> {
     return access;
   }
 
-  Future<void> login(String username, String password) async {
+  Future<void> login(String username, String password, {String? regionCode}) async {
     state = state.copyWith(isLoading: true);
     final client = ApiClient(baseUrl: kDefaultApiBase);
-    final data = await client.login(username, password);
+    final data = await client.login(username, password, regionCode: regionCode);
     final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
     final access = data['access_token'] as String;
     final refresh = data['refresh_token'] as String;
