@@ -236,9 +236,11 @@ def _run_ocr(image_bytes: bytes, mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any
 
 
 _RUNPOD_POLL_INTERVAL_S = 2
-# RunPod cold-starts observed at ~10-15s in testing; capped so a stuck/slow job still falls back
-# to the CPU pipeline within a bounded time instead of hanging the request indefinitely.
-_RUNPOD_MAX_WAIT_S = 45
+# RunPod cold-starts observed at ~10-15s in testing. Kept well under gunicorn's worker --timeout
+# (90s, see ecosystem.config.js) so a stuck/slow RunPod job still leaves real headroom for the
+# CPU fallback to run afterward, rather than the whole worker getting killed by the timeout
+# watchdog before CPU OCR even starts.
+_RUNPOD_MAX_WAIT_S = 20
 _RUNPOD_REQUEST_TIMEOUT_S = 15
 
 
