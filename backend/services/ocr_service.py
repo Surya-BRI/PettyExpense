@@ -235,6 +235,83 @@ def _run_ocr(image_bytes: bytes, mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any
     return parsed
 
 
+_RUNPOD_POLL_INTERVAL_S = 2
+# RunPod cold-starts observed at ~10-15s in testing; capped so a stuck/slow job still falls back
+# to the CPU pipeline within a bounded time instead of hanging the request indefinitely.
+_RUNPOD_MAX_WAIT_S = 45
+_RUNPOD_REQUEST_TIMEOUT_S = 15
+
+
+def _run_runpod_ocr(image_bytes: bytes, mode: str) -> dict[str, Any] | None:
+    # GPU OCR via a RunPod serverless endpoint, tried before the CPU RapidOCR pipeline. Returns
+    # None on anything short of a clean success (not configured, HTTP error, FAILED status,
+    # timeout, empty text) so the caller falls through to the CPU path rather than surfacing a
+    # RunPod-specific error to the user.
+    settings = get_settings()
+    endpoint_id = settings.runpod_endpoint_id.strip()
+    api_key = settings.runpod_api_key.strip()
+    if not endpoint_id or not api_key:
+        return None
+
+    import base64
+    import time
+
+    import httpx
+
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {"input": {"image_base64": base64.b64encode(image_bytes).decode("utf-8")}}
+
+    try:
+        run_resp = httpx.post(
+            f"https://api.runpod.ai/v2/{endpoint_id}/run",
+            headers=headers, json=payload, timeout=_RUNPOD_REQUEST_TIMEOUT_S,
+        )
+        run_resp.raise_for_status()
+        job_id = run_resp.json().get("id")
+        if not job_id:
+            logger.warning("RunPod OCR: no job id in response, falling back to CPU OCR")
+            return None
+
+        status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
+        deadline = time.monotonic() + _RUNPOD_MAX_WAIT_S
+        while time.monotonic() < deadline:
+            status_resp = httpx.get(status_url, headers=headers, timeout=_RUNPOD_REQUEST_TIMEOUT_S)
+            status_resp.raise_for_status()
+            status_data = status_resp.json()
+            status = status_data.get("status")
+
+            if status == "COMPLETED":
+                text = (status_data.get("output") or {}).get("text", "") or ""
+                if not text.strip():
+                    logger.warning("RunPod OCR: COMPLETED with empty text, falling back to CPU OCR")
+                    return None
+                words = words_from_text(text)
+                lines = dedupe_lines(group_into_lines(words))
+                result = extract(lines, _reference_data)
+                parsed = to_legacy_dict(result)
+                parsed["raw_text"] = result.raw_text
+                parsed["raw_json"] = {
+                    "engine": "runpod_paddleocr",
+                    "mode": mode,
+                    "field_confidence": parsed["field_confidence"],
+                    "low_confidence_fields": parsed["low_confidence_fields"],
+                    "expense_type": parsed["expense_type"],
+                }
+                return parsed
+
+            if status == "FAILED":
+                logger.warning("RunPod OCR job failed: %s", status_data)
+                return None
+
+            time.sleep(_RUNPOD_POLL_INTERVAL_S)
+
+        logger.warning("RunPod OCR: job %s did not complete within %ds, falling back to CPU OCR", job_id, _RUNPOD_MAX_WAIT_S)
+        return None
+    except Exception:
+        logger.exception("RunPod OCR call failed, falling back to CPU OCR")
+        return None
+
+
 def _stub_ocr(filename_hint: str = "") -> dict[str, Any]:
     vendor = random.choice(SAMPLE_VENDORS)
     amount = round(random.uniform(120, 2500), 2)
@@ -254,12 +331,18 @@ def _stub_ocr(filename_hint: str = "") -> dict[str, Any]:
 class OcrService:
     def run(self, image_bytes: bytes, filename: str = "receipt.jpg", mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any]:
         settings = get_settings()
-        # "paddle" predates this engine rewrite; it now just means "run the real OCR pipeline" (RapidOCR-only today).
+        # "paddle" predates this engine rewrite; it now just means "run the real OCR pipeline".
         if settings.ocr_backend == "paddle":
+            # RunPod GPU tried first when configured; any failure/timeout falls through to the
+            # CPU RapidOCR pipeline below rather than surfacing a RunPod-specific error.
+            runpod_result = _run_runpod_ocr(image_bytes, mode)
+            if runpod_result:
+                return runpod_result
+
             real = _run_ocr(image_bytes, mode)
             if real:
                 return real
-            # Real engine failed (already logged) — must NOT fall through to fake stub data; raise so the app's "enter manually" UX takes over.
+            # Both engines failed (already logged) — must NOT fall through to fake stub data; raise so the app's "enter manually" UX takes over.
             raise RuntimeError(
                 "OCR pipeline failed to process this receipt — see server logs for the underlying exception."
             )
