@@ -140,6 +140,11 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                   ],
                 ),
               ),
+              // Visible at every stage (employee-scoped -- see transaction_service._find_duplicate --
+              // so it only ever fires against the SAME employee's own past claims, never a coincidence
+              // across two different people). Purely informational outside Accountant, though: the
+              // backend only blocks bulk-approve on it at the accountant stage -- HOD/Finance Manager
+              // aren't required to act on it, just aware of it.
               if (claim.duplicateWarning != null) ...[
                 const SizedBox(height: 16),
                 Material(
@@ -150,6 +155,32 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                     child: Text('Duplicate warning: ${claim.duplicateWarning!.message}'),
                   ),
                 ),
+              ],
+              if (claim.vendorUnmatched) ...[
+                const SizedBox(height: 16),
+                // Resolving a vendor match is an Accountant decision (backend enforces this too,
+                // see approval_service.resolve_vendor) -- other stages only ever see the notice.
+                if (awaitingThisStage && widget.stage == 'accountant')
+                  _VendorResolveCard(
+                    transactionId: widget.transactionId,
+                    rawVendorText: claim.vendorName ?? '',
+                    busy: _busy,
+                    onResolve: (vendorId, createNew) => _act(
+                      () => api.resolveVendor(widget.transactionId, vendorId: vendorId, createNew: createNew),
+                    ),
+                  )
+                else
+                  Material(
+                    color: AppColors.warningSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'Unmatched vendor: "${claim.vendorName}" is not in the vendor list yet — '
+                        'the Accountant will confirm or link it.',
+                      ),
+                    ),
+                  ),
               ],
               if (!awaitingThisStage && !awaitingPayment) ...[
                 const SizedBox(height: 16),
@@ -168,18 +199,27 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                   controller: _comment,
                   maxLines: 2,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Comment',
-                    helperText: 'Required when disputing or rejecting a claim',
+                    helperText: widget.stage == 'accountant' && claim.duplicateWarning != null
+                        ? 'Required to dispute, reject, or approve this duplicate-flagged claim'
+                        : 'Required when disputing or rejecting a claim',
                   ),
                 ),
                 const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _busy
-                      ? null
-                      : () => _act(() => api.approveTransaction(claim.id, comment: _comment.text.trim())),
-                  child: const Text('Approve'),
-                ),
+                // "Warn, allow-with-justification" for a duplicate-flagged claim, but only where
+                // that judgment call actually belongs -- Accountant stage (backend enforces this
+                // too, see approval_service.advance). HOD/Finance Manager approve unblocked.
+                Builder(builder: (context) {
+                  final requiresJustification = widget.stage == 'accountant' && claim.duplicateWarning != null;
+                  final blocked = _busy || (requiresJustification && _comment.text.trim().isEmpty);
+                  return FilledButton(
+                    onPressed: blocked
+                        ? null
+                        : () => _act(() => api.approveTransaction(claim.id, comment: _comment.text.trim())),
+                    child: Text(requiresJustification ? 'Approve (justify the duplicate above)' : 'Approve'),
+                  );
+                }),
                 const SizedBox(height: 8),
                 OutlinedButton(
                   onPressed: _busy || _comment.text.trim().isEmpty
@@ -248,3 +288,90 @@ const _stageLabels = {
   'accountant': 'Accountant',
   'finance_manager': 'Finance Manager',
 };
+
+/// Lets whoever's holding the claim at its current stage either link the unmatched vendor
+/// text to an existing known vendor, or confirm it's genuinely new — closing the loop the
+/// plain warning banner used to leave dead-ended (see PETTY_CASH_PHASED_PLAN.md Phase 4).
+class _VendorResolveCard extends ConsumerStatefulWidget {
+  const _VendorResolveCard({
+    required this.transactionId,
+    required this.rawVendorText,
+    required this.busy,
+    required this.onResolve,
+  });
+
+  final int transactionId;
+  final String rawVendorText;
+  final bool busy;
+
+  /// (vendorId, createNew) -- exactly one of vendorId or createNew=true is meaningful per call.
+  final void Function(int? vendorId, bool createNew) onResolve;
+
+  @override
+  ConsumerState<_VendorResolveCard> createState() => _VendorResolveCardState();
+}
+
+class _VendorResolveCardState extends ConsumerState<_VendorResolveCard> {
+  late Future<List<VendorRef>> _vendorsFuture;
+  VendorRef? _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _vendorsFuture = ref.read(apiClientProvider).vendors();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.warningSoft,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Unmatched vendor: "${widget.rawVendorText}" is not in the vendor list.'),
+            const SizedBox(height: 10),
+            FutureBuilder<List<VendorRef>>(
+              future: _vendorsFuture,
+              builder: (context, snapshot) {
+                final vendors = snapshot.data ?? const <VendorRef>[];
+                return Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<VendorRef>(
+                        initialValue: _selected,
+                        isExpanded: true,
+                        hint: Text(snapshot.connectionState == ConnectionState.waiting ? 'Loading vendors…' : 'Link to existing vendor'),
+                        items: vendors
+                            .map((v) => DropdownMenuItem(value: v, child: Text(v.name, overflow: TextOverflow.ellipsis)))
+                            .toList(),
+                        onChanged: widget.busy ? null : (v) => setState(() => _selected = v),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    FilledButton(
+                      onPressed: widget.busy || _selected == null
+                          ? null
+                          : () => widget.onResolve(_selected!.id, false),
+                      child: const Text('Link'),
+                    ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton(
+                onPressed: widget.busy ? null : () => widget.onResolve(null, true),
+                child: Text('Confirm "${widget.rawVendorText}" as a new vendor'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

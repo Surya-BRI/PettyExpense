@@ -8,6 +8,9 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Unicode,
+    UnicodeText,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
@@ -58,7 +61,7 @@ class ErpAuthExpenseUsers(Base, AuditColumns):
 
     user_id: Mapped[int] = mapped_column("userId", Integer, primary_key=True, autoincrement=True)
     user_name: Mapped[str] = mapped_column("userName", String(128), unique=True, index=True)
-    display_name: Mapped[str] = mapped_column("displayName", String(256))
+    display_name: Mapped[str] = mapped_column("displayName", Unicode(256))
     password_hash: Mapped[str] = mapped_column("passwordHash", String(256))
     role_id: Mapped[int] = mapped_column("roleId", Integer, ForeignKey("ErpMasterExpenseRole.roleId"))
     department_id: Mapped[Optional[int]] = mapped_column(
@@ -66,6 +69,8 @@ class ErpAuthExpenseUsers(Base, AuditColumns):
     )
     email: Mapped[Optional[str]] = mapped_column("email", String(256), nullable=True)
     is_deleted: Mapped[int] = mapped_column("isDeleted", Integer, default=0)
+    # New column on an existing table — create_all() will not add it, run the ALTER script separately.
+    language_preference: Mapped[str] = mapped_column("languagePreference", String(8), default="en")
 
     role: Mapped[ErpMasterExpenseRole] = relationship()
     department: Mapped[Optional[ErpExpenseDepartment]] = relationship()
@@ -80,7 +85,7 @@ class ErpExpenseRegionConfig(Base, AuditColumns):
     allocation_model: Mapped[str] = mapped_column("allocationModel", String(32), default="petty_cash")
     approval_matrix_json: Mapped[str] = mapped_column("approvalMatrixJson", Text)
     petty_cash_hard_limit_enabled: Mapped[int] = mapped_column("pettyCashHardLimitEnabled", Integer, default=0)
-    company_name: Mapped[Optional[str]] = mapped_column("companyName", String(256), nullable=True)
+    company_name: Mapped[Optional[str]] = mapped_column("companyName", Unicode(256), nullable=True)
     logo_url: Mapped[Optional[str]] = mapped_column("logoUrl", String(512), nullable=True)
     brand_color: Mapped[Optional[str]] = mapped_column("brandColor", String(16), nullable=True)
 
@@ -89,8 +94,8 @@ class ErpExpenseCategory(Base, AuditColumns):
     __tablename__ = "ErpExpenseCategory"
 
     category_id: Mapped[int] = mapped_column("categoryId", Integer, primary_key=True, autoincrement=True)
-    category_name: Mapped[str] = mapped_column("categoryName", String(128))
-    category_name_ar: Mapped[Optional[str]] = mapped_column("categoryNameAr", String(128), nullable=True)
+    category_name: Mapped[str] = mapped_column("categoryName", Unicode(128))
+    category_name_ar: Mapped[Optional[str]] = mapped_column("categoryNameAr", Unicode(128), nullable=True)
     owning_department_id: Mapped[Optional[int]] = mapped_column(
         "owningDepartmentId", Integer, ForeignKey("ErpExpenseDepartment.departmentId"), nullable=True
     )
@@ -102,7 +107,7 @@ class ErpExpenseVendor(Base, AuditColumns):
     __tablename__ = "ErpExpenseVendor"
 
     vendor_id: Mapped[int] = mapped_column("vendorId", Integer, primary_key=True, autoincrement=True)
-    vendor_name: Mapped[str] = mapped_column("vendorName", String(256), index=True)
+    vendor_name: Mapped[str] = mapped_column("vendorName", Unicode(256), index=True)
     trn_number: Mapped[Optional[str]] = mapped_column("trnNumber", String(64), nullable=True)
     source: Mapped[str] = mapped_column("source", String(32), default="manual")  # manual | ocr_auto
 
@@ -175,8 +180,12 @@ class ErpExpenseTransaction(Base):
     current_stage: Mapped[Optional[str]] = mapped_column("currentStage", String(32), nullable=True)
     dispute_returned: Mapped[int] = mapped_column("disputeReturned", Integer, default=0)
     stage_due_at: Mapped[Optional[datetime]] = mapped_column("stageDueAt", DateTime, nullable=True)
-    remarks: Mapped[Optional[str]] = mapped_column("remarks", Text, nullable=True)
+    remarks: Mapped[Optional[str]] = mapped_column("remarks", UnicodeText, nullable=True)
     duplicate_flag: Mapped[int] = mapped_column("duplicateFlag", Integer, default=0)
+    # Set only when the vendor text (typed or OCR'd) didn't match any known ErpExpenseVendor —
+    # vendor_id stays null in that case rather than silently auto-creating a new vendor row.
+    # New column on an existing table -- create_all() won't add it, see scripts/add_vendor_raw_text_column.py.
+    vendor_raw_text: Mapped[Optional[str]] = mapped_column("vendorRawText", Unicode(256), nullable=True)
     ocr_confidence_json: Mapped[Optional[str]] = mapped_column("ocrConfidenceJson", Text, nullable=True)
     op_number: Mapped[Optional[str]] = mapped_column("opNumber", String(128), nullable=True)
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
@@ -209,8 +218,8 @@ class ErpExpenseDocument(Base):
     )
     s3_key: Mapped[str] = mapped_column("s3Key", String(512))
     content_type: Mapped[str] = mapped_column("contentType", String(128), default="image/jpeg")
-    ocr_raw_json: Mapped[Optional[str]] = mapped_column("ocrRawJson", Text, nullable=True)
-    ocr_vendor: Mapped[Optional[str]] = mapped_column("ocrVendor", String(256), nullable=True)
+    ocr_raw_json: Mapped[Optional[str]] = mapped_column("ocrRawJson", UnicodeText, nullable=True)
+    ocr_vendor: Mapped[Optional[str]] = mapped_column("ocrVendor", Unicode(256), nullable=True)
     ocr_amount: Mapped[Optional[float]] = mapped_column("ocrAmount", Float, nullable=True)
     ocr_vat_amount: Mapped[Optional[float]] = mapped_column("ocrVatAmount", Float, nullable=True)
     ocr_total_amount: Mapped[Optional[float]] = mapped_column("ocrTotalAmount", Float, nullable=True)
@@ -247,7 +256,7 @@ class ErpExpenseApprovalHistory(Base):
     stage: Mapped[str] = mapped_column("stage", String(32))  # hod | department_hod | accountant | finance_manager
     actor_id: Mapped[int] = mapped_column("actorId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"))
     action: Mapped[str] = mapped_column("action", String(32))  # approve | dispute | reject
-    comment: Mapped[Optional[str]] = mapped_column("comment", Text, nullable=True)
+    comment: Mapped[Optional[str]] = mapped_column("comment", UnicodeText, nullable=True)
     acted_on: Mapped[datetime] = mapped_column("actedOn", DateTime, default=datetime.utcnow)
 
     transaction: Mapped[ErpExpenseTransaction] = relationship(back_populates="approval_history")
@@ -262,6 +271,39 @@ class ErpExpenseApproverDelegation(Base):
     start_date: Mapped[str] = mapped_column("startDate", String(32))  # ISO date string
     end_date: Mapped[str] = mapped_column("endDate", String(32))
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
+
+
+class ErpExpenseNotification(Base):
+    """One row per (event, recipient, channel) delivery attempt — the audit log the spec asks for."""
+
+    __tablename__ = "ErpExpenseNotification"
+    __table_args__ = (
+        UniqueConstraint("transactionId", "type", "userId", "channel", name="uqNotificationDedup"),
+    )
+
+    notification_id: Mapped[int] = mapped_column("notificationId", Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column("userId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), index=True)
+    transaction_id: Mapped[Optional[int]] = mapped_column(
+        "transactionId", Integer, ForeignKey("ErpExpenseTransaction.transactionId"), nullable=True, index=True
+    )
+    type: Mapped[str] = mapped_column("type", String(32))  # submission | dispute | rejection | approval | paid | test
+    channel: Mapped[str] = mapped_column("channel", String(16))  # email | in_app
+    status: Mapped[str] = mapped_column("status", String(16), default="sent")  # sent | read | failed
+    message: Mapped[Optional[str]] = mapped_column("message", UnicodeText, nullable=True)
+    sent_at: Mapped[datetime] = mapped_column("sentAt", DateTime, default=datetime.utcnow)
+
+
+class ErpExpenseNotificationPreference(Base):
+    __tablename__ = "ErpExpenseNotificationPreference"
+    __table_args__ = (
+        UniqueConstraint("userId", "channel", "category", name="uqNotificationPreference"),
+    )
+
+    preference_id: Mapped[int] = mapped_column("preferenceId", Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column("userId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), index=True)
+    channel: Mapped[str] = mapped_column("channel", String(16))
+    category: Mapped[str] = mapped_column("category", String(32))  # matches ErpExpenseNotification.type
+    is_enabled: Mapped[int] = mapped_column("isEnabled", Integer, default=1)
 
 
 settings = get_settings()

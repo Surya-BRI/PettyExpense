@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/dubai_time.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/authenticated_image.dart';
@@ -166,16 +167,16 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                         child: Text('None', style: TextStyle(color: AppColors.textSecondary)),
                       )
                     : Column(
+                        // Most recent activity first -- the backend returns oldest-first for
+                        // approval-chain logic, but a timeline reads better newest-on-top.
                         children: [
-                          for (final h in claim.history!)
+                          for (final h in claim.history!.reversed)
                             ListTile(
                               dense: true,
                               title: Text('${h.stage ?? 'None'} · ${h.action}'),
                               subtitle: h.remarks != null && h.remarks!.isNotEmpty ? Text(h.remarks!) : null,
                               trailing: Text(
-                                h.createdAt != null && h.createdAt!.length >= 16
-                                    ? h.createdAt!.substring(0, 16)
-                                    : '',
+                                formatDubaiTime(h.createdAt),
                                 style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                               ),
                             ),

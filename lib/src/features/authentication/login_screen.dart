@@ -14,29 +14,27 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _DemoUser {
-  const _DemoUser(this.username, this.password, this.label);
-  final String username;
-  final String password;
-  final String label;
-}
+const _regions = ['UAE', 'KSA', 'OMAN'];
+const _regionLabels = {'UAE': 'UAE', 'KSA': 'KSA', 'OMAN': 'Oman'};
 
-const _demoUsers = [
-  _DemoUser('surya', 'surya123', 'Surya (Employee · Sales)'),
-  _DemoUser('raghu', 'raghu123', 'Raghu (Employee · Sales)'),
-  _DemoUser('vikram', 'vikram123', 'Vikram (Employee · IT)'),
-  _DemoUser('denny', 'denny123', 'Denny (HOD · IT)'),
-  _DemoUser('sajeesh', 'sajeesh123', 'Sajeesh (HOD · Sales)'),
-  _DemoUser('anjana', 'anjana123', 'Anjana (Accountant)'),
-  _DemoUser('sandeep', 'sandeep123', 'Sandeep (Finance Manager)'),
-  _DemoUser('rajesh', 'rajesh123', 'Rajesh (Finance Manager)'),
-  _DemoUser('teja', 'teja123', 'Teja (Admin)'),
+// Reference only -- type these into the fields above. Fatima is excluded here since her
+// region choice is restricted (UAE/KSA/Oman only) rather than free like every account below.
+const _demoAccounts = [
+  ('surya', 'surya123', 'Employee · Sales'),
+  ('raghu', 'raghu123', 'Employee · Sales'),
+  ('vikram', 'vikram123', 'Employee · IT'),
+  ('denny', 'denny123', 'HOD · IT'),
+  ('sajeesh', 'sajeesh123', 'HOD · Sales'),
+  ('anjana', 'anjana123', 'Accountant'),
+  ('sandeep', 'sandeep123', 'Finance Manager'),
+  ('rajesh', 'rajesh123', 'Finance Manager'),
+  ('teja', 'teja123', 'Admin'),
 ];
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _userCtrl = TextEditingController(text: 'surya');
-  final _passCtrl = TextEditingController(text: 'surya123');
-  String? _selectedUsername = 'surya';
+  final _userCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  String _selectedRegion = 'UAE';
   String? _error;
   bool _busy = false;
   bool _obscurePassword = true;
@@ -57,6 +55,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await ref.read(authControllerProvider.notifier).login(
             _userCtrl.text.trim(),
             _passCtrl.text,
+            regionCode: _selectedRegion,
           );
       final user = ref.read(authControllerProvider).user;
       if (!mounted) return;
@@ -66,14 +65,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  void _fill(String user, String pass) {
-    setState(() {
-      _selectedUsername = user;
-      _userCtrl.text = user;
-      _passCtrl.text = pass;
-    });
   }
 
   @override
@@ -115,26 +106,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const Spacer(flex: 2),
-                      InputDecorator(
-                        decoration: const InputDecoration(labelText: 'User'),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            isExpanded: true,
-                            value: _selectedUsername,
-                            items: _demoUsers
-                                .map(
-                                  (u) => DropdownMenuItem(
-                                    value: u.username,
-                                    child: Text(u.label),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (username) {
-                              final u = _demoUsers.firstWhere((d) => d.username == username);
-                              _fill(u.username, u.password);
-                            },
-                          ),
-                        ),
+                      Text('Sign in as region', style: Theme.of(context).textTheme.labelMedium),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          for (final region in _regions) ...[
+                            Expanded(child: _RegionPill(
+                              label: _regionLabels[region] ?? region,
+                              selected: _selectedRegion == region,
+                              onTap: () => setState(() => _selectedRegion = region),
+                            )),
+                            if (region != _regions.last) const SizedBox(width: 10),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 20),
                       TextField(
@@ -162,6 +146,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _busy ? null : _login,
                         child: Text(_busy ? 'Signing in…' : 'Sign in'),
                       ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Demo accounts — tap to fill in', style: Theme.of(context).textTheme.labelMedium),
+                            const SizedBox(height: 4),
+                            for (final (username, password, role) in _demoAccounts)
+                              InkWell(
+                                onTap: () => setState(() {
+                                  _userCtrl.text = username;
+                                  _passCtrl.text = password;
+                                }),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4),
+                                  child: Text(
+                                    '$username / $password — $role',
+                                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                       const Spacer(flex: 1),
                     ],
                   ),
@@ -169,6 +182,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _RegionPill extends StatelessWidget {
+  const _RegionPill({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.darkBlue : AppColors.card,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: selected ? AppColors.darkBlue : AppColors.divider),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: selected ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
         ),
       ),
     );

@@ -11,8 +11,8 @@ class NotificationBellButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(notificationsProvider);
-    final count = async.maybeWhen(data: (items) => items.length, orElse: () => 0);
+    final async = ref.watch(unreadNotificationCountProvider);
+    final count = async.maybeWhen(data: (n) => n, orElse: () => 0);
 
     return IconButton(
       tooltip: 'Notifications',

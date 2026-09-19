@@ -1,0 +1,27 @@
+# Default + optional per-region-code priors used only as PLAUSIBILITY signals,
+# never as hard filters. A currency or VAT rate outside these lists still
+# produces a candidate — it simply scores slightly lower. Region-code overrides
+# key off ErpExpenseRegionConfig.region_code; unknown/missing region codes fall
+# back to "default".
+default:
+  valid_currency_codes:
+    - AED
+    - SAR
+    - USD
+    - EUR
+    - GBP
+    - INR
+    - QAR
+    - KWD
+    - OMR
+    - BHD
+    - EGP
+  plausible_vat_rates: [0, 5, 15]
+
+regions:
+  UAE:
+    plausible_vat_rates: [0, 5]
+  KSA:
+    plausible_vat_rates: [0, 5, 15]
+  IN:
+    plausible_vat_rates: [0, 5, 12, 18, 28]

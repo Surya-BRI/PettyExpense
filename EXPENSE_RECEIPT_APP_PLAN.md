@@ -227,6 +227,12 @@ Upload flow recommendation:
 
 ## 9) OCR Strategy (free / self-hosted)
 
+> **Update (2026-08-22):** the table below reflects the original planning-time survey.
+> The app has since run PaddleOCR, and as of this date has switched again to **RapidOCR**
+> (ONNXRuntime backend) — see [`assets/docs/OCR_ENGINE_EVALUATION.md`](assets/docs/OCR_ENGINE_EVALUATION.md)
+> for the evaluation history and [`assets/docs/PETTY_CASH_PHASED_PLAN.md`](assets/docs/PETTY_CASH_PHASED_PLAN.md)
+> Phase 4 for current status.
+
 ### Recommended pipeline
 ```
 Photo → S3 → PaddleOCR (text) → regex / Ollama JSON extract → editable form → submit

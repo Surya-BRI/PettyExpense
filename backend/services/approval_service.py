@@ -72,6 +72,14 @@ def _apply_delegation(db: Session, approver: Optional[ErpAuthExpenseUsers]) -> O
     return db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == delegation.backup_id).first() or approver
 
 
+def resolve_current_approver(db: Session, txn: ErpExpenseTransaction) -> Optional[ErpAuthExpenseUsers]:
+    # Single entry point for "who should be notified about this transaction right now" — used by submit and resubmit.
+    _ensure_stage(db, txn)
+    if not txn.current_stage:
+        return None
+    return resolve_stage_approver(db, txn, txn.current_stage)
+
+
 def resolve_stage_approver(db: Session, txn: ErpExpenseTransaction, stage: str) -> Optional[ErpAuthExpenseUsers]:
     employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
     category = db.query(ErpExpenseCategory).filter(ErpExpenseCategory.category_id == txn.category_id).first()
@@ -148,7 +156,7 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
             joinedload(ErpExpenseTransaction.vendor),
         )
         .filter(ErpExpenseTransaction.status.in_(ACTIONABLE_STATUSES))
-        .order_by(ErpExpenseTransaction.created_on.asc())
+        .order_by(ErpExpenseTransaction.created_on.desc())
         .all()
     )
     results = []
@@ -164,6 +172,7 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
 
 
 def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, comment: Optional[str]) -> dict[str, Any]:
+    from services import notification_service
     from services.transaction_service import transaction_to_dict
 
     if action not in ("approve", "dispute", "reject"):
@@ -184,6 +193,12 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
 
     if action in ("dispute", "reject") and (not comment or not comment.strip()):
         raise ValueError(f"A comment is required to {action}")
+    # "Warn, allow-with-justification" per spec -- approving a duplicate-flagged claim is the
+    # one place this actually matters, since the flag has no dedicated resolve action of its
+    # own (unlike vendor matching) and never blocks approve otherwise. Accountant stage only,
+    # same as the vendor-resolve gate -- HOD/Finance Manager aren't required to justify it.
+    if action == "approve" and stage == "accountant" and txn.duplicate_flag and (not comment or not comment.strip()):
+        raise ValueError("A comment is required to approve a duplicate-flagged claim")
 
     if action == "approve":
         seq = resolve_stage_sequence(db, txn)
@@ -212,10 +227,116 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
 
     db.commit()
     txn = _load_txn(db, transaction_id)
+
+    vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
+    from services import email_templates
+
+    if action == "approve":
+        if txn.status == "approved":
+            employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
+            content = email_templates.approval_final_email(email_templates.build_context(txn))
+            notification_service.send(
+                db, employee, "approval", txn.transaction_id,
+                f"Expense claim approved ({vendor_name})", f"تمت الموافقة على مطالبة النفقات ({vendor_name})",
+                f"Your claim {txn.transaction_id} for {txn.currency} {txn.amount} was approved.",
+                f"تمت الموافقة على مطالبتك رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount}.",
+                html_body_en=content.html,
+            )
+        else:
+            next_approver = resolve_stage_approver(db, txn, txn.current_stage)
+            content = email_templates.approval_pending_email(email_templates.build_context(txn))
+            notification_service.send(
+                db, next_approver, "approval", txn.transaction_id,
+                f"Claim awaiting your approval ({vendor_name})", f"مطالبة نفقات في انتظار موافقتك ({vendor_name})",
+                f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is now at your stage ({txn.current_stage}).",
+                f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} وصلت إلى مرحلتك ({txn.current_stage}).",
+                html_body_en=content.html,
+            )
+    else:
+        employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
+        if action == "reject":
+            content = email_templates.rejection_email(email_templates.build_context(txn, comment=comment))
+            notification_service.send(
+                db, employee, "rejection", txn.transaction_id,
+                f"Expense claim rejected ({vendor_name})", f"تم رفض مطالبة النفقات ({vendor_name})",
+                f"Your claim {txn.transaction_id} was rejected. Reason: {comment}",
+                f"تم رفض مطالبتك رقم {txn.transaction_id}. السبب: {comment}",
+                html_body_en=content.html,
+            )
+        else:  # dispute
+            content = email_templates.dispute_email(email_templates.build_context(txn, comment=comment))
+            notification_service.send(
+                db, employee, "dispute", txn.transaction_id,
+                f"Expense claim needs correction ({vendor_name})", f"مطالبة النفقات تحتاج إلى تصحيح ({vendor_name})",
+                f"Your claim {txn.transaction_id} was sent back for correction. Reason: {comment}",
+                f"تم إرجاع مطالبتك رقم {txn.transaction_id} للتصحيح. السبب: {comment}",
+                html_body_en=content.html,
+            )
+
+    return transaction_to_dict(txn, include_history=True, db=db)
+
+
+def resolve_vendor(
+    db: Session,
+    user: CurrentUser,
+    transaction_id: int,
+    vendor_id: Optional[int] = None,
+    create_new: bool = False,
+) -> dict[str, Any]:
+    # Closes the loop left open by transaction_service._resolve_vendor no longer auto-creating
+    # on a miss: whoever's holding this claim at its current approval stage explicitly links it
+    # to an existing vendor or confirms it's genuinely new, instead of a flag nobody can act on.
+    from database.models import ErpExpenseVendor
+    from services.transaction_service import transaction_to_dict
+
+    txn = _load_txn(db, transaction_id)
+    if txn.status not in ACTIONABLE_STATUSES:
+        raise ValueError("Transaction is not awaiting approval")
+
+    _ensure_stage(db, txn)
+    stage = txn.current_stage
+    if not stage:
+        raise ValueError("No approval stage resolved for this transaction")
+
+    if not user.is_admin:
+        # Vendor matching is an Accountant decision per spec, not any current-stage approver's
+        # call -- an HOD sitting earlier in the sequence shouldn't be resolving this.
+        if stage != "accountant":
+            raise PermissionError("Only the Accountant stage (or an Admin) can resolve an unmatched vendor")
+        approver = resolve_stage_approver(db, txn, stage)
+        if not approver or approver.user_id != user.id:
+            raise PermissionError("You are not the approver for this stage")
+
+    if txn.vendor_id:
+        raise ValueError("Vendor is already resolved for this transaction")
+    if not txn.vendor_raw_text:
+        raise ValueError("No unmatched vendor text on this transaction")
+    if (vendor_id is None) == (not create_new):
+        raise ValueError("Pass exactly one of vendor_id or create_new=true")
+
+    if vendor_id is not None:
+        vendor = (
+            db.query(ErpExpenseVendor)
+            .filter(ErpExpenseVendor.vendor_id == vendor_id, ErpExpenseVendor.is_active == 1)
+            .first()
+        )
+        if not vendor:
+            raise LookupError("Vendor not found")
+    else:
+        vendor = ErpExpenseVendor(vendor_name=txn.vendor_raw_text, source="accountant_confirmed", is_active=1)
+        db.add(vendor)
+        db.flush()
+
+    txn.vendor_id = vendor.vendor_id
+    txn.vendor_raw_text = None
+    _history(db, txn.transaction_id, user.id, stage, "vendor_resolved", f"Linked to vendor #{vendor.vendor_id} ({vendor.vendor_name})")
+    db.commit()
+    txn = _load_txn(db, transaction_id)
     return transaction_to_dict(txn, include_history=True, db=db)
 
 
 def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) -> dict[str, Any]:
+    from services import notification_service
     from services.transaction_service import transaction_to_dict
 
     txn = _load_txn(db, transaction_id)
@@ -229,6 +350,24 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
     txn.dispute_returned = 0
     db.commit()
     txn = _load_txn(db, transaction_id)
+
+    approver = resolve_current_approver(db, txn)
+    vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
+    # "resubmit" is a distinct type from "submission" -- reusing "submission" collided with the
+    # (transactionId, type, userId, channel) idempotency key whenever the resubmit lands on the
+    # same approver who received the original submission notification (e.g. a dispute at the
+    # first stage), silently swallowing the resubmit notification.
+    from services import email_templates
+
+    ctx = email_templates.build_context(txn)
+    content = email_templates.resubmit_email(ctx)
+    notification_service.send(
+        db, approver, "resubmit", txn.transaction_id,
+        f"Corrected claim resubmitted ({vendor_name})", f"تم إعادة تقديم المطالبة المصححة ({vendor_name})",
+        f"Claim {txn.transaction_id} was corrected and resubmitted for your review.",
+        f"تم تصحيح المطالبة رقم {txn.transaction_id} وإعادة تقديمها لمراجعتك.",
+        html_body_en=content.html,
+    )
     return transaction_to_dict(txn, include_history=True, db=db)
 
 
@@ -249,12 +388,16 @@ def bulk_approve(db: Session, user: CurrentUser, transaction_ids: list[int]) -> 
         if not user.is_admin and (not approver or approver.user_id != user.id):
             skipped.append({"id": transaction_id, "reason": "not_your_stage"})
             continue
-        if txn.duplicate_flag:
-            skipped.append({"id": transaction_id, "reason": "duplicate_flagged"})
-            continue
-        if not txn.vendor_id:
-            skipped.append({"id": transaction_id, "reason": "vendor_unresolved"})
-            continue
+        # Duplicate and unmatched-vendor review are Accountant-stage concerns (per spec) --
+        # an HOD or Finance Manager's bulk-approve isn't blocked by either; only the
+        # Accountant's is, forcing a manual look exactly where that judgment call belongs.
+        if txn.current_stage == "accountant":
+            if txn.duplicate_flag:
+                skipped.append({"id": transaction_id, "reason": "duplicate_flagged"})
+                continue
+            if not txn.vendor_id:
+                skipped.append({"id": transaction_id, "reason": "vendor_unresolved"})
+                continue
         region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == txn.region_id).first()
         threshold = _matrix(region).get("bulk_approve_threshold")
         if threshold is not None and txn.amount > threshold:

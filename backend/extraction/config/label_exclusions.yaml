@@ -1,0 +1,12 @@
+# Generic "false-friend" guard: a phrase that contains a concept's synonym as
+# a substring but means something else entirely — "Total Savings" isn't the
+# grand total, "Total Qty" is a piece count, not money. When a concept's
+# match is immediately followed by one of its listed exclusion words, the
+# match is dropped. These are common English/Arabic receipt phrasings, not
+# vendor- or layout-specific strings.
+total:
+  - savings
+  - saving
+  - qty
+  - quantity
+  - items

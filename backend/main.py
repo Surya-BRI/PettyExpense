@@ -12,8 +12,10 @@ from api.routes_approvals import router as approvals_router
 from api.routes_auth import router as auth_router
 from api.routes_claims import categories_router, router as claims_router
 from api.routes_config import router as config_router
+from api.routes_notifications import router as notifications_router
 from api.routes_projects import router as projects_router
-from auth.security import seed_users
+from api.routes_public import router as public_router
+from auth.security import seed_multi_region_users, seed_users
 from config import get_settings
 from database.models import init_db
 from scripts.seed_phase1_reference_data import seed_hod_assignments, seed_reference_data
@@ -37,6 +39,8 @@ app.include_router(admin_router)
 app.include_router(approvals_router)
 app.include_router(config_router)
 app.include_router(projects_router)
+app.include_router(notifications_router)
+app.include_router(public_router)
 
 
 @app.on_event("startup")
@@ -48,6 +52,7 @@ def on_startup() -> None:
     seed_reference_data()
     seed_users()
     seed_hod_assignments()
+    seed_multi_region_users()
 
 
 @app.get("/health")

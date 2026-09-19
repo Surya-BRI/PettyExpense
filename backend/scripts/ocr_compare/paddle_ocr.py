@@ -1,46 +1,32 @@
-"""PaddleOCR — the only OCR engine this project uses.
-
-First call downloads model weights (cached under ~/.paddlex/official_models/) —
-expect the first run per language to be slow, subsequent runs fast.
-
-PaddleOCR 3.x note: MKLDNN/oneDNN CPU inference crashes on this Windows setup with
-`NotImplementedError: ConvertPirAttribute2RuntimeAttribute ...` — enable_mkldnn=False
-works around it. If you're on a different machine and don't hit that crash, this
-still works fine with mkldnn enabled.
-"""
-import os
+"""OCR engine wrapper for the comparison harness — reuses services/ocr_service.py's exact shared-detection pipeline so results never drift from production."""
+import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
-os.environ.setdefault("FLAGS_use_mkldnn", "0")
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
 
-_engines: dict[str, Any] = {}  # cached per-language PaddleOCR instances
+# Reuses production's exact model config/resize/engine logic (this `from` import isn't affected by services/__init__.py's `ocr_service` name shadowing).
+from services.ocr_service import (  # noqa: E402
+    _OCR_MAX_SIDE_PX,
+    _resize_for_ocr,
+    _run_shared_detection_ocr,
+)
 
 
-def _get_engine(lang: str):
-    if lang not in _engines:
-        from paddleocr import PaddleOCR  # imported lazily — heavy dependency
-
-        _engines[lang] = PaddleOCR(lang=lang, enable_mkldnn=False)
-    return _engines[lang]
-
-
-def extract_text_paddle(image_path: str, lang: str = "en") -> dict[str, Any]:
-    """lang: 'en' for Latin-script bills, 'ar' for Arabic-script bills.
-    Returns {engine, raw_text, words: [{text, confidence}], error?}."""
+def extract_words_shared(image_path: str, mode: str = "auto", max_side: Optional[int] = _OCR_MAX_SIDE_PX) -> dict[str, Any]:
+    # Runs the real shared-detection pipeline and returns both recognizer readings for debugging: {engine, mode, en: {...}, ar: {...}, error?}.
     try:
-        engine = _get_engine(lang)
-        results = engine.predict(image_path)
-    except Exception as exc:  # PaddleOCR/paddlepaddle not installed or failed to init
-        return {"engine": f"paddleocr[{lang}]", "raw_text": "", "words": [], "error": str(exc)}
+        with open(image_path, "rb") as f:
+            original_bytes = f.read()
+        image_bytes = _resize_for_ocr(original_bytes, max_side) if max_side is not None else original_bytes
+        en_words, ar_words = _run_shared_detection_ocr(image_bytes, mode)
+    except Exception as exc:  # rapidocr/onnxruntime not installed or failed to init
+        return {"engine": "rapidocr", "mode": mode, "en": {"raw_text": "", "words": []}, "ar": {"raw_text": "", "words": []}, "error": str(exc)}
 
-    words: list[dict[str, Any]] = []
-    for r in results:
-        texts = r.get("rec_texts", [])
-        scores = r.get("rec_scores", [])
-        for text, score in zip(texts, scores):
-            if text.strip():
-                words.append({"text": text, "confidence": float(score)})
+    def _pack(words):
+        packed = [{"text": w.text, "confidence": w.confidence, "bounding_box": w.bounding_box} for w in words]
+        return {"raw_text": "\n".join(w["text"] for w in packed), "words": packed}
 
-    raw_text = "\n".join(w["text"] for w in words)
-    return {"engine": f"paddleocr[{lang}]", "raw_text": raw_text, "words": words, "error": None}
+    return {"engine": "rapidocr", "mode": mode, "en": _pack(en_words), "ar": _pack(ar_words), "error": None}

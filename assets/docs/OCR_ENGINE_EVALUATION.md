@@ -1,8 +1,79 @@
 # OCR Engine Evaluation — Process & Results
 
-**Decision (2026-08-15): PaddleOCR only.** Google Vision, Azure Vision, and Surya have been
-removed from the repo and from `backend/.env`. The running app and `scripts/ocr_compare`
-use PaddleOCR (`OCR_BACKEND=paddle`). Historical results below are kept for the record.
+**Superseded (2026-08-22): the app now runs RapidOCR, not PaddleOCR.** Everything below —
+including the "Decision (2026-08-15): PaddleOCR only" line — is kept as the historical record
+of *why PaddleOCR was picked over Google/Azure/Surya at the time*; it does not describe the
+current engine. `backend/requirements.txt` no longer lists `paddlepaddle`/`paddleocr` at all.
+The running app and `backend/scripts/ocr_compare` (`paddle_ocr.py`, despite its filename) now
+both go through `services/ocr_service.py`'s shared-detection RapidOCR/ONNXRuntime pipeline —
+one PP-OCRv6 text-detection pass, then sequential English + Arabic RapidOCR recognizer passes
+over the same detected regions. **Naming note (verified against code, 2026-08-26):** the actual
+config value that selects this path is still the literal string `"paddle"` — `config.py`'s
+`ocr_backend: str = "paddle"` and `ocr_service.py`'s `if settings.ocr_backend == "paddle":` check
+were never renamed when the underlying engine changed, so `/health` reports
+`"ocr_backend":"paddle"` even though RapidOCR is what's actually running. `stub` remains the
+fallback value. Don't set `OCR_BACKEND=rapidocr` expecting it to mean anything — it doesn't;
+the setting still has to be `paddle` (or unset) to get the real pipeline.
+
+**Rough re-comparison run, 2026-08-22** (9 KSA samples, production `ocr_service.run` output vs.
+this doc's historical PaddleOCR table — eyeballed, not verified ground truth for either engine):
+RapidOCR got the amount field right/plausible on 5/9 bills vs. PaddleOCR's 3 confirmed + 2
+ambiguous — genuinely fixed the "45/"→"451" misread on one bill (ksa2), but reproduced the
+identical bug on another (ksa6), and introduced a new wrong-amount failure on ksa1 that wasn't
+there before. Also a real regression: on the two clean digital Uber-screenshot samples (ksa8,
+ksa9) where PaddleOCR read the vendor name "perfectly," RapidOCR's production pipeline extracted
+garbage (`"4 487%"`) or nothing at all — likely a bug in `extraction/select.py`'s vendor-picking
+logic on that layout, not an OCR-engine accuracy issue, since the raw recognized text almost
+certainly contains "Uber" fine. Net: a modest, inconsistent improvement, not the clean win a
+"single mixed-script pass" pitch might suggest — worth a real look at the vendor-selection
+regression before presenting this switch as a straightforward accuracy win.
+
+**A third engine, PaddleOCR-VL (a vision-language OCR model), is now under active comparison**
+(commit `e1d248a`, 2026-08-24) — see "Compare tooling (current)" below for the new benchmark
+scripts. No results are recorded in this doc yet; that comparison run hasn't happened.
+
+**RunPod GPU OCR integration (2026-09-18) — wired into production with automatic CPU fallback,
+but NOT a confirmed accuracy win; see comparison below.** A GPU-hosted `pp-ocrv5-arabic`
+PaddleOCR model, served via a RunPod serverless endpoint, was tested standalone against all 9
+KSA samples plus the 6 Dubai samples (raw results/notes: `scripts/ocr_results.csv` and
+`scripts/ocr_accuracy.md` at the repo root — a separate, lighter-weight comparison than this
+doc's graded tables, done before the backend integration below).
+
+- **Direct comparison against this doc's old CPU PaddleOCR run, same 9 KSA images**: the RunPod
+  GPU model is a **net regression on handwritten fields**. Amount: old CPU always had *some*
+  digits present in raw OCR text (even if misread, e.g. "45/"→"451"); RunPod frequently drops
+  the handwritten amount from the raw text entirely (3/9 images: ksa1, ksa2, ksa6 — worse than a
+  misread, since there's nothing to even fuzzy-correct). Date: old CPU nailed 4/7 physical-bill
+  dates cleanly; RunPod nailed effectively 0/7 cleanly. Vendor was roughly a wash (one clear win,
+  one clear loss). The 2 digital Uber-screenshot samples were identical/perfect on both engines —
+  the regression is specific to handwriting, not a general model-quality drop.
+- **Backend integration**: `services/ocr_service.py`'s `_run_runpod_ocr()` is tried **first**
+  (before the existing CPU RapidOCR pipeline) whenever `RUNPOD_ENDPOINT_ID`/`RUNPOD_API_KEY` are
+  set in `backend/.env` (see `.env.example` for the var names — real values are gitignored, not
+  in this doc). It returns `None` — never raises — on: not configured, HTTP error, missing job
+  id, `FAILED` status, 45s timeout, or empty OCR text, so `OcrService.run()` falls through to the
+  unchanged CPU `_run_ocr()` path automatically. On success, RunPod's raw text is fed through the
+  *same* production `extract()` pipeline the CPU path uses (`words_from_text` →
+  `group_into_lines` → `dedupe_lines` → `extract`), so the returned dict shape (fields,
+  `field_confidence`, `low_confidence_fields`) is identical regardless of which engine served
+  the request — `transaction_service.py`/Flutter need no changes to consume either path.
+- **Verified end-to-end, live** (not just unit-level): real POST to `/api/claims/ocr` with
+  `assets/ksa/ksa6.png` against a running server (real ERP-Dev DB write, real S3 upload,
+  `receipt_id: 140`) returned HTTP 200 with RunPod actually serving the request (no
+  fallback-warning logs). Also separately verified the fallback trigger itself, by forcing an
+  invalid API key: caught the resulting `401`, logged it, returned `None` so `_run_ocr()` (CPU)
+  would take over — confirmed at the code level, not re-run through the live server.
+- **The live end-to-end test reproduced the accuracy regression, not just the plumbing working**:
+  `ksa6.png` came back with `amount: 3611.0` / `total_amount: 3611.0` (actual bill: 35) — the
+  extraction pipeline grabbed a stray number from a P.O. Box/postal-code line
+  (`ص ب 40909الرياض 3611`) because the real handwritten fare was never in RunPod's OCR text at
+  all, and `date: "05/02/26"` (actual: `05/07/26`). Vendor was correct ("Shaml Al-Doha Company").
+  **Not yet decided**: whether RunPod should stay first in the try-order given this, or whether
+  the CPU path should be primary instead with RunPod demoted to a speed optimization for
+  clean/digital receipts only — flagged as open, not resolved, in "Open items" below.
+
+**Decision (2026-08-15, superseded above): PaddleOCR only.** Google Vision, Azure Vision, and Surya have been
+removed from the repo and from `backend/.env`. Historical results below are kept for the record.
 
 Investigation for Phase 4 (Bill Capture & OCR Enhancements) of the Petty Cash module, see
 [PETTY_CASH_PHASED_PLAN.md](PETTY_CASH_PHASED_PLAN.md).
@@ -246,7 +317,30 @@ SURYA_INFERENCE_PARALLEL=1
 
 ## Open items / next steps
 
-- [x] Engine choice: **PaddleOCR only** — Google / Azure / Surya tooling and keys removed.
+- [x] **RunPod GPU OCR wired into production (2026-09-18)** — tried first in `ocr_service.py`,
+      automatic fallback to CPU RapidOCR on any failure; verified working end-to-end via a live
+      HTTP request. **Not yet decided**: whether RunPod should stay first in the try-order, since
+      it's a confirmed accuracy *regression* vs. the CPU path on handwritten amounts/dates (see
+      the "RunPod GPU OCR integration" note above) — success ≠ better data. Also not yet done:
+      deciding/implementing any smarter routing (e.g. RunPod only for digital/screenshot receipts,
+      CPU for likely-handwritten ones) instead of a flat try-RunPod-then-CPU order.
+- [x] Engine choice (historical): **PaddleOCR only** — Google / Azure / Surya tooling and keys removed.
+- [x] Engine choice (current, 2026-08-22): switched to **RapidOCR/ONNXRuntime**, single shared
+      detection pass + sequential en/ar recognizers. See the superseded-notice at the top of
+      this doc. A rough re-comparison against the 9 KSA samples was run 2026-08-22 (see the
+      "Rough re-comparison run" note at the top) — modest, inconsistent accuracy change, plus a
+      newly-found vendor-extraction regression on clean digital receipts. Not yet done: a
+      rigorous graded comparison (real ground truth, not eyeballing), and investigating the
+      vendor-selection regression.
+- [ ] **PaddleOCR-VL evaluation (started 2026-08-24, not yet run/recorded)** — a vision-language
+      OCR model, benchmarked via new scripts in `backend/scripts/ocr_compare/`
+      (`paddle_vl_local.py`, `paddle_vl_extract.py`) against an isolated venv (deliberately kept
+      out of `backend/.venv`/`requirements.txt` so PaddlePaddle doesn't come back as a production
+      dependency). `paddle_vl_extract.py` documents a real limitation up front: PaddleOCR-VL gives
+      no per-word bounding boxes or confidence, only block-level layout, so several of the
+      `extraction/` pipeline's scoring signals (geometry-based candidate scoring, low-confidence/
+      handwriting flags) can't fire on its output — any comparison needs to account for that, not
+      just compare raw field accuracy.
 - [x] Dubai samples populated and run through PaddleOCR (`en` + `ar`).
       Full dump: [`backend/scripts/ocr_compare/results_dubai.md`](../../backend/scripts/ocr_compare/results_dubai.md).
 - [ ] Improve the regex amount parser so it prefers "Bill Amount" / labeled totals over
@@ -271,8 +365,20 @@ SURYA_INFERENCE_PARALLEL=1
       sample to validate, not a single-image spot check.
 
 ## Compare tooling (current)
-- `backend/scripts/ocr_compare/paddle_ocr.py`
-- `backend/scripts/ocr_compare/run_compare.py` — PaddleOCR only; writes `results_<folder>.md`
+- `backend/scripts/ocr_compare/paddle_ocr.py` — filename is a holdover; it now wraps
+  `services/ocr_service.py`'s RapidOCR shared-detection pipeline, not PaddleOCR
+- `backend/scripts/ocr_compare/run_compare.py` — writes `results_<folder>.md`
+- `backend/scripts/ocr_compare/benchmark_load.py` — latency/throughput benchmark (sequential +
+  concurrent) against the real production RapidOCR pipeline; has a pluggable, currently-skipped
+  Surya-2 section (`--surya-endpoint`) for once a self-hosted Surya-2 inference server exists
+- `backend/scripts/ocr_compare/rapidocr_single.py` — single-image, fresh-subprocess RapidOCR
+  benchmark (cold-start time + peak RSS), for apples-to-apples comparison against PaddleOCR-VL
+- `backend/scripts/ocr_compare/paddle_vl_local.py` — single-image PaddleOCR-VL-1.6 benchmark;
+  runs under an isolated venv, **not** `backend/.venv` (keeps PaddlePaddle out of the production
+  dependency set)
+- `backend/scripts/ocr_compare/paddle_vl_extract.py` — feeds PaddleOCR-VL's raw text through the
+  production `extraction/` pipeline for a structured-field comparison against RapidOCR; documents
+  which scoring signals can't fire on PaddleOCR-VL's coarser (block-level-only) output
 - `backend/scripts/ocr_compare/results_dubai.md` — last Dubai run (6 images, en + ar)
 - `backend/scripts/ocr_compare/README.md`
 - `assets/ksa/` and `assets/dubai/` — sample bill photos (moved out of `backend/scripts/ocr_compare/samples/`; re-point `run_compare.py`'s `SAMPLES_DIR` or copy them back before re-running the harness)
