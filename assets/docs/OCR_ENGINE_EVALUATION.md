@@ -32,6 +32,46 @@ regression before presenting this switch as a straightforward accuracy win.
 (commit `e1d248a`, 2026-08-24) — see "Compare tooling (current)" below for the new benchmark
 scripts. No results are recorded in this doc yet; that comparison run hasn't happened.
 
+**RunPod GPU OCR integration (2026-09-18) — wired into production with automatic CPU fallback,
+but NOT a confirmed accuracy win; see comparison below.** A GPU-hosted `pp-ocrv5-arabic`
+PaddleOCR model, served via a RunPod serverless endpoint, was tested standalone against all 9
+KSA samples plus the 6 Dubai samples (raw results/notes: `scripts/ocr_results.csv` and
+`scripts/ocr_accuracy.md` at the repo root — a separate, lighter-weight comparison than this
+doc's graded tables, done before the backend integration below).
+
+- **Direct comparison against this doc's old CPU PaddleOCR run, same 9 KSA images**: the RunPod
+  GPU model is a **net regression on handwritten fields**. Amount: old CPU always had *some*
+  digits present in raw OCR text (even if misread, e.g. "45/"→"451"); RunPod frequently drops
+  the handwritten amount from the raw text entirely (3/9 images: ksa1, ksa2, ksa6 — worse than a
+  misread, since there's nothing to even fuzzy-correct). Date: old CPU nailed 4/7 physical-bill
+  dates cleanly; RunPod nailed effectively 0/7 cleanly. Vendor was roughly a wash (one clear win,
+  one clear loss). The 2 digital Uber-screenshot samples were identical/perfect on both engines —
+  the regression is specific to handwriting, not a general model-quality drop.
+- **Backend integration**: `services/ocr_service.py`'s `_run_runpod_ocr()` is tried **first**
+  (before the existing CPU RapidOCR pipeline) whenever `RUNPOD_ENDPOINT_ID`/`RUNPOD_API_KEY` are
+  set in `backend/.env` (see `.env.example` for the var names — real values are gitignored, not
+  in this doc). It returns `None` — never raises — on: not configured, HTTP error, missing job
+  id, `FAILED` status, 45s timeout, or empty OCR text, so `OcrService.run()` falls through to the
+  unchanged CPU `_run_ocr()` path automatically. On success, RunPod's raw text is fed through the
+  *same* production `extract()` pipeline the CPU path uses (`words_from_text` →
+  `group_into_lines` → `dedupe_lines` → `extract`), so the returned dict shape (fields,
+  `field_confidence`, `low_confidence_fields`) is identical regardless of which engine served
+  the request — `transaction_service.py`/Flutter need no changes to consume either path.
+- **Verified end-to-end, live** (not just unit-level): real POST to `/api/claims/ocr` with
+  `assets/ksa/ksa6.png` against a running server (real ERP-Dev DB write, real S3 upload,
+  `receipt_id: 140`) returned HTTP 200 with RunPod actually serving the request (no
+  fallback-warning logs). Also separately verified the fallback trigger itself, by forcing an
+  invalid API key: caught the resulting `401`, logged it, returned `None` so `_run_ocr()` (CPU)
+  would take over — confirmed at the code level, not re-run through the live server.
+- **The live end-to-end test reproduced the accuracy regression, not just the plumbing working**:
+  `ksa6.png` came back with `amount: 3611.0` / `total_amount: 3611.0` (actual bill: 35) — the
+  extraction pipeline grabbed a stray number from a P.O. Box/postal-code line
+  (`ص ب 40909الرياض 3611`) because the real handwritten fare was never in RunPod's OCR text at
+  all, and `date: "05/02/26"` (actual: `05/07/26`). Vendor was correct ("Shaml Al-Doha Company").
+  **Not yet decided**: whether RunPod should stay first in the try-order given this, or whether
+  the CPU path should be primary instead with RunPod demoted to a speed optimization for
+  clean/digital receipts only — flagged as open, not resolved, in "Open items" below.
+
 **Decision (2026-08-15, superseded above): PaddleOCR only.** Google Vision, Azure Vision, and Surya have been
 removed from the repo and from `backend/.env`. Historical results below are kept for the record.
 
@@ -277,6 +317,13 @@ SURYA_INFERENCE_PARALLEL=1
 
 ## Open items / next steps
 
+- [x] **RunPod GPU OCR wired into production (2026-09-18)** — tried first in `ocr_service.py`,
+      automatic fallback to CPU RapidOCR on any failure; verified working end-to-end via a live
+      HTTP request. **Not yet decided**: whether RunPod should stay first in the try-order, since
+      it's a confirmed accuracy *regression* vs. the CPU path on handwritten amounts/dates (see
+      the "RunPod GPU OCR integration" note above) — success ≠ better data. Also not yet done:
+      deciding/implementing any smarter routing (e.g. RunPod only for digital/screenshot receipts,
+      CPU for likely-handwritten ones) instead of a flat try-RunPod-then-CPU order.
 - [x] Engine choice (historical): **PaddleOCR only** — Google / Azure / Surya tooling and keys removed.
 - [x] Engine choice (current, 2026-08-22): switched to **RapidOCR/ONNXRuntime**, single shared
       detection pass + sequential en/ar recognizers. See the superseded-notice at the top of

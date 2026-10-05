@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     s3_prefix: str = ""  # optional extra path under folder
 
     ocr_backend: str = "paddle"  # paddle | stub
+    runpod_endpoint_id: str = ""  # RunPod GPU OCR endpoint id; blank disables the GPU path entirely
+    runpod_api_key: str = ""
 
     auth_mode: str = "mock"  # mock | erp
     cors_origins: str = "*"
