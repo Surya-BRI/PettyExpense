@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from config import get_settings
+from extraction.line_items import extract_line_items
 from extraction import (
     CategoryRef,
     OcrWord,
@@ -221,6 +222,8 @@ def _run_ocr(image_bytes: bytes, mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any
     result = extract(lines, _reference_data)
     parsed = to_legacy_dict(result)
     parsed["raw_text"] = result.raw_text
+    # Item rows for the "Multiple items" flow -- a suggestion the employee reviews and edits.
+    parsed["line_items"] = [li.to_dict() for li in extract_line_items(lines, _reference_data)]
     parsed["raw_json"] = {
         "engine": "rapidocr",
         "mode": mode,
@@ -231,6 +234,7 @@ def _run_ocr(image_bytes: bytes, mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any
         "field_confidence": parsed["field_confidence"],
         "low_confidence_fields": parsed["low_confidence_fields"],
         "expense_type": parsed["expense_type"],
+        "line_items": parsed["line_items"],
     }
     return parsed
 
@@ -248,6 +252,7 @@ def _stub_ocr(filename_hint: str = "") -> dict[str, Any]:
     parsed = to_legacy_dict(result)
     parsed["raw_text"] = f"{vendor}\nBill Amount: {total_amount}\nVAT: {vat_amount}\nDate: {date.today().isoformat()}\n{filename_hint}"
     parsed["raw_json"] = {"engine": "stub", "vendor": vendor, "amount": amount, "field_confidence": parsed["field_confidence"]}
+    parsed["line_items"] = []
     return parsed
 
 

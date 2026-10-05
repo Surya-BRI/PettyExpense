@@ -44,6 +44,15 @@ def list_claims(
     )
 
 
+@router.get("/activity")
+def recent_activity(
+    limit: int = Query(50, ge=1, le=200),
+    user: CurrentUser = Depends(require_role("hod", "accountant", "finance_manager")),
+    db: Session = Depends(get_db),
+):
+    return transaction_service.recent_activity(db, limit=limit)
+
+
 @router.get("/claims/{claim_id}")
 def get_claim(
     claim_id: int,

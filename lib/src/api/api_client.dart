@@ -173,6 +173,13 @@ class ApiClient {
     return list.map((e) => ExpenseClaim.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<List<ActivityItem>> activity({int limit = 50}) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/admin/activity', {'limit': '$limit'}), headers: _headers),
+    );
+    return _decodeList(res).map((e) => ActivityItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<ExpenseClaim> markPaid(int id, {String? remarks}) async {
     final res = await _authorized(() => http.post(
           _uri('/api/admin/claims/$id/mark-paid'),

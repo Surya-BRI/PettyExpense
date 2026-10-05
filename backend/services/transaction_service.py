@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from auth.security import CurrentUser
 from database.models import (
@@ -10,6 +10,7 @@ from database.models import (
     ErpExpenseApprovalHistory,
     ErpExpenseCategory,
     ErpExpenseDocument,
+    ErpExpenseLineItem,
     ErpExpenseRegionConfig,
     ErpExpenseTransaction,
     ErpExpenseVendor,
@@ -52,6 +53,39 @@ def _resolve_vendor(db: Session, vendor_name: Optional[str]) -> Optional[ErpExpe
         return None
     vendor_name = vendor_name.strip()
     return db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_name == vendor_name).first()
+
+
+def _replace_line_items(db: Session, txn: ErpExpenseTransaction, lines: list[dict[str, Any]]) -> None:
+    """Replaces the transaction's item lines and makes its money fields consistent with them:
+    total = sum of line amounts (as printed, VAT-inclusive); amount excl. VAT = total - VAT."""
+    category_ids = {ln.get("category_id") for ln in lines if ln.get("category_id") is not None}
+    if category_ids:
+        known = {c for (c,) in db.query(ErpExpenseCategory.category_id).filter(ErpExpenseCategory.category_id.in_(category_ids)).all()}
+        missing = category_ids - known
+        if missing:
+            raise ValueError(f"Unknown category_id on line items: {sorted(missing)}")
+    cleaned = []
+    for ln in lines:
+        description = (ln.get("description") or "").strip()
+        amount = ln.get("amount")
+        if not description:
+            raise ValueError("Every line item needs a description")
+        if amount is None or amount < 0:
+            raise ValueError(f"Line item '{description}' needs an amount of 0 or more")
+        cleaned.append((description[:512], ln.get("quantity"), round(float(amount), 2), ln.get("category_id")))
+
+    txn.line_items.clear()
+    for i, (description, quantity, amount, category_id) in enumerate(cleaned, start=1):
+        txn.line_items.append(
+            ErpExpenseLineItem(line_no=i, description=description, quantity=quantity, amount=amount, category_id=category_id)
+        )
+    if cleaned:
+        total = round(sum(a for _, _, a, _ in cleaned), 2)
+        vat = round(txn.vat_amount or 0.0, 2)
+        if vat > total:
+            raise ValueError("VAT can't be more than the total of the line items")
+        txn.total_amount = total
+        txn.amount = round(total - vat, 2)
 
 
 def _resolve_region(db: Session, region_code: str) -> ErpExpenseRegionConfig:
@@ -101,6 +135,20 @@ def transaction_to_dict(
         "receipt": None,
         "duplicate_warning": None,
         "stage_sequence": [],
+        # "multiple" when the bill was itemised: total == sum of these lines.
+        "line_mode": "multiple" if txn.line_items else "single",
+        "line_items": [
+            {
+                "id": li.line_item_id,
+                "line_no": li.line_no,
+                "description": li.description,
+                "quantity": li.quantity,
+                "amount": li.amount,
+                "category_id": li.category_id,
+                "category_name": li.category.category_name if li.category else None,
+            }
+            for li in txn.line_items
+        ],
     }
     if db is not None:
         # Lazy import avoids a circular import with approval_service.py.
@@ -217,6 +265,7 @@ class TransactionService:
             "field_confidence": ocr.get("field_confidence") or {},
             "low_confidence_fields": ocr.get("low_confidence_fields") or [],
             "reconciliation_mismatch": ocr.get("reconciliation_mismatch") or False,
+            "line_items": ocr.get("line_items") or [],
             "raw_text": ocr.get("raw_text"),
             "image_hash": document.hash,
             "image_url": signed or proxy,
@@ -279,6 +328,7 @@ class TransactionService:
         receipt_id: Optional[int],
         s3_key: Optional[str],
         submit: bool = True,
+        line_items: Optional[list[dict[str, Any]]] = None,
     ) -> dict[str, Any]:
         region = _resolve_region(db, region_code)
         category = db.query(ErpExpenseCategory).filter(ErpExpenseCategory.category_id == category_id).first()
@@ -307,6 +357,9 @@ class TransactionService:
         )
         db.add(txn)
         db.flush()
+        if line_items:
+            _replace_line_items(db, txn, line_items)
+            amount = txn.amount  # duplicate check below compares the line-derived amount
 
         document = None
         if receipt_id:
@@ -331,6 +384,7 @@ class TransactionService:
                 joinedload(ErpExpenseTransaction.region),
                 joinedload(ErpExpenseTransaction.category),
                 joinedload(ErpExpenseTransaction.vendor),
+                selectinload(ErpExpenseTransaction.line_items),
             )
             .filter(ErpExpenseTransaction.transaction_id == txn.transaction_id)
             .one()
@@ -363,6 +417,9 @@ class TransactionService:
         ):
             if field in updates and updates[field] is not None:
                 setattr(txn, attr, updates[field])
+        if updates.get("line_items") is not None:
+            # An empty list turns the claim back into a single-amount bill (amount/total as sent).
+            _replace_line_items(db, txn, updates["line_items"])
         _history(db, txn.transaction_id, user.id, "employee", "edited")
         db.commit()
         return self.get_claim(db, user, transaction_id)
@@ -392,6 +449,7 @@ class TransactionService:
                 joinedload(ErpExpenseTransaction.region),
                 joinedload(ErpExpenseTransaction.category),
                 joinedload(ErpExpenseTransaction.vendor),
+                selectinload(ErpExpenseTransaction.line_items),
             )
             .filter(ErpExpenseTransaction.employee_id == user.id)
             .order_by(ErpExpenseTransaction.created_on.desc())
@@ -462,6 +520,43 @@ class TransactionService:
         db.commit()
         self._notify_employee(db, txn, "paid", remarks)
         return self.get_claim(db, user, transaction_id)
+
+    def recent_activity(self, db: Session, limit: int = 50) -> list[dict[str, Any]]:
+        """Newest-first feed of every workflow event (submit, approve, dispute, reject, paid, ...)
+        across all claims -- backs the web dashboard's activity panel."""
+        rows = (
+            db.query(ErpExpenseApprovalHistory)
+            .options(
+                joinedload(ErpExpenseApprovalHistory.transaction).joinedload(ErpExpenseTransaction.vendor),
+                joinedload(ErpExpenseApprovalHistory.transaction).joinedload(ErpExpenseTransaction.employee),
+            )
+            .order_by(ErpExpenseApprovalHistory.acted_on.desc())
+            .limit(limit)
+            .all()
+        )
+        actor_ids = {r.actor_id for r in rows}
+        actors = {
+            u.user_id: u.display_name
+            for u in db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id.in_(actor_ids)).all()
+        } if actor_ids else {}
+        result = []
+        for r in rows:
+            txn = r.transaction
+            result.append({
+                "id": r.approval_history_id,
+                "transaction_id": r.transaction_id,
+                "stage": r.stage,
+                "action": r.action,
+                "comment": r.comment,
+                "actor_id": r.actor_id,
+                "actor_name": actors.get(r.actor_id),
+                "employee_name": txn.employee.display_name if txn and txn.employee else None,
+                "vendor_name": (txn.vendor.vendor_name if txn.vendor else txn.vendor_raw_text) if txn else None,
+                "currency": txn.currency if txn else None,
+                "total_amount": txn.total_amount if txn else None,
+                "created_at": r.acted_on.isoformat() if r.acted_on else None,
+            })
+        return result
 
     def get_receipt(self, db: Session, receipt_id: int) -> ErpExpenseDocument:
         document = db.query(ErpExpenseDocument).filter(ErpExpenseDocument.document_id == receipt_id).first()

@@ -65,6 +65,7 @@ class OcrResult {
     this.duplicateWarning,
     this.ocrStatus,
     this.reconciliationMismatch = false,
+    this.lineItems = const [],
   });
 
   final int receiptId;
@@ -85,6 +86,9 @@ class OcrResult {
   final DuplicateWarning? duplicateWarning;
   final String? ocrStatus;
   final bool reconciliationMismatch;
+
+  /// Item rows the scan read off an itemised bill -- a suggestion for "Multiple items".
+  final List<OcrLineItem> lineItems;
 
   bool get isPending => ocrStatus == 'pending';
 
@@ -124,6 +128,58 @@ class OcrResult {
           : DuplicateWarning.fromJson(json['duplicate_warning'] as Map<String, dynamic>),
       ocrStatus: json['ocr_status'] as String?,
       reconciliationMismatch: json['reconciliation_mismatch'] == true,
+      lineItems: (json['line_items'] as List?)
+              ?.map((e) => OcrLineItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+class OcrLineItem {
+  const OcrLineItem({required this.description, this.quantity, this.amount, this.confidence});
+
+  final String description;
+  final double? quantity;
+  final double? amount;
+  final double? confidence;
+
+  factory OcrLineItem.fromJson(Map<String, dynamic> json) {
+    return OcrLineItem(
+      description: (json['description'] ?? '') as String,
+      quantity: (json['quantity'] as num?)?.toDouble(),
+      amount: (json['amount'] as num?)?.toDouble(),
+      confidence: (json['confidence'] as num?)?.toDouble(),
+    );
+  }
+}
+
+/// A saved item line on a "Multiple items" claim.
+class ClaimLineItem {
+  const ClaimLineItem({
+    required this.lineNo,
+    required this.description,
+    required this.amount,
+    this.quantity,
+    this.categoryId,
+    this.categoryName,
+  });
+
+  final int lineNo;
+  final String description;
+  final double? quantity;
+  final double amount;
+  final int? categoryId;
+  final String? categoryName;
+
+  factory ClaimLineItem.fromJson(Map<String, dynamic> json) {
+    return ClaimLineItem(
+      lineNo: (json['line_no'] as num?)?.toInt() ?? 0,
+      description: (json['description'] ?? '') as String,
+      quantity: (json['quantity'] as num?)?.toDouble(),
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      categoryId: (json['category_id'] as num?)?.toInt(),
+      categoryName: json['category_name'] as String?,
     );
   }
 }
@@ -245,7 +301,9 @@ class ExpenseClaim {
     this.history,
     this.duplicateWarning,
     this.vendorUnmatched = false,
+    this.duplicateFlag = false,
     this.stageSequence = const [],
+    this.lineItems = const [],
   });
 
   final int id;
@@ -278,7 +336,14 @@ class ExpenseClaim {
   /// True when the vendor text (typed or OCR'd) didn't match any known vendor —
   /// vendorId stays null and vendorName falls back to the raw, unmatched text.
   final bool vendorUnmatched;
+  /// Persisted at submission time (same employee + vendor + amount + date) -- unlike
+  /// [duplicateWarning], this is present on list endpoints too.
+  final bool duplicateFlag;
   final List<String> stageSequence;
+
+  /// Non-empty for "Multiple items" bills; the total is the sum of these.
+  final List<ClaimLineItem> lineItems;
+  bool get isMultiItem => lineItems.isNotEmpty;
 
   /// Backward-compat display helper — old UI code refers to "vendor".
   String get vendor => vendorName ?? '';
@@ -338,7 +403,12 @@ class ExpenseClaim {
           ? null
           : DuplicateWarning.fromJson(json['duplicate_warning'] as Map<String, dynamic>),
       vendorUnmatched: json['vendor_unmatched'] as bool? ?? false,
+      duplicateFlag: json['duplicate_flag'] as bool? ?? false,
       stageSequence: (json['stage_sequence'] as List?)?.map((e) => e as String).toList() ?? const [],
+      lineItems: (json['line_items'] as List?)
+              ?.map((e) => ClaimLineItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
   }
 }
@@ -385,6 +455,52 @@ class ProjectRef {
       id: (json['id'] as num).toInt(),
       name: json['name'] as String,
       opNumber: json['op_number'] as String?,
+    );
+  }
+}
+
+
+/// One workflow event from `GET /api/admin/activity` (web dashboard feed).
+class ActivityItem {
+  const ActivityItem({
+    required this.id,
+    required this.transactionId,
+    required this.action,
+    this.stage,
+    this.comment,
+    this.actorName,
+    this.employeeName,
+    this.vendorName,
+    this.currency,
+    this.totalAmount,
+    this.createdAt,
+  });
+
+  final int id;
+  final int transactionId;
+  final String action;
+  final String? stage;
+  final String? comment;
+  final String? actorName;
+  final String? employeeName;
+  final String? vendorName;
+  final String? currency;
+  final double? totalAmount;
+  final String? createdAt;
+
+  factory ActivityItem.fromJson(Map<String, dynamic> json) {
+    return ActivityItem(
+      id: (json['id'] as num).toInt(),
+      transactionId: (json['transaction_id'] as num).toInt(),
+      action: json['action'] as String? ?? '',
+      stage: json['stage'] as String?,
+      comment: json['comment'] as String?,
+      actorName: json['actor_name'] as String?,
+      employeeName: json['employee_name'] as String?,
+      vendorName: json['vendor_name'] as String?,
+      currency: json['currency'] as String?,
+      totalAmount: (json['total_amount'] as num?)?.toDouble(),
+      createdAt: json['created_at'] as String?,
     );
   }
 }

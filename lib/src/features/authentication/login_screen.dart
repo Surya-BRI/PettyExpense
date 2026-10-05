@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -146,35 +147,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _busy ? null : _login,
                         child: Text(_busy ? 'Signing in…' : 'Sign in'),
                       ),
-                      const SizedBox(height: 20),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.divider),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Demo accounts — tap to fill in', style: Theme.of(context).textTheme.labelMedium),
-                            const SizedBox(height: 4),
-                            for (final (username, password, role) in _demoAccounts)
-                              InkWell(
-                                onTap: () => setState(() {
-                                  _userCtrl.text = username;
-                                  _passCtrl.text = password;
-                                }),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  child: Text(
-                                    '$username / $password — $role',
-                                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      // Debug-only: never ships in a release build (flutter build --release / --profile),
+                      // so a real APK handed to actual users never exposes these credentials.
+                      if (kDebugMode) ...[
+                        const SizedBox(height: 20),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Demo accounts — tap to fill in', style: Theme.of(context).textTheme.labelMedium),
+                              const SizedBox(height: 4),
+                              for (final (username, password, role) in _demoAccounts)
+                                InkWell(
+                                  onTap: () => setState(() {
+                                    _userCtrl.text = username;
+                                    _passCtrl.text = password;
+                                  }),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 4),
+                                    child: Text(
+                                      '$username / $password — $role',
+                                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                       const Spacer(flex: 1),
                     ],
                   ),

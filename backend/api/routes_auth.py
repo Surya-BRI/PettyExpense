@@ -15,7 +15,7 @@ from auth.security import (
     get_user_by_id,
 )
 from config import get_settings
-from database.models import get_db
+from database.models import ErpExpenseDepartment, get_db
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
@@ -45,6 +45,7 @@ def _user_dict(user, region_code: Optional[str] = None) -> dict:
         "display_name": user.display_name,
         "role": user.role.role_code,
         "department_id": user.department_id,
+        "department_name": user.department.department_name if user.department else None,
         "email": user.email,
         "region_code": region_code,
     }
@@ -93,12 +94,19 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/me")
-def me(user: CurrentUser = Depends(get_current_user)):
+def me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Department names live behind admin-only config routes, so the profile gets its own here.
+    department = (
+        db.query(ErpExpenseDepartment).filter(ErpExpenseDepartment.department_id == user.department_id).first()
+        if user.department_id
+        else None
+    )
     return {
         "id": user.id,
         "display_name": user.display_name,
         "role": user.role,
         "department_id": user.department_id,
+        "department_name": department.department_name if department else None,
         "email": user.email,
         "region_code": user.region_code,
     }

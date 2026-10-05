@@ -32,6 +32,13 @@ def list_active_vendors(user: CurrentUser = Depends(get_current_user), db: Sessi
     return [{"id": v.vendor_id, "name": v.vendor_name} for v in vendors]
 
 
+class LineItemIn(BaseModel):
+    description: str
+    quantity: Optional[float] = None
+    amount: float  # line total as printed on the bill
+    category_id: Optional[int] = None
+
+
 class CreateClaimRequest(BaseModel):
     vendor: str
     amount: float
@@ -49,6 +56,8 @@ class CreateClaimRequest(BaseModel):
     receipt_id: Optional[int] = None
     s3_key: Optional[str] = None
     submit: bool = True
+    # "Multiple items" bills: when present, total = sum of line amounts and amount = total - vat_amount.
+    line_items: list[LineItemIn] = []
 
 
 class UpdateClaimRequest(BaseModel):
@@ -61,6 +70,7 @@ class UpdateClaimRequest(BaseModel):
     project_id: Optional[int] = None
     op_number: Optional[str] = None
     remarks: Optional[str] = None
+    line_items: Optional[list[LineItemIn]] = None
 
 
 @router.post("/ocr")
@@ -131,6 +141,7 @@ def create_claim(
             receipt_id=body.receipt_id,
             s3_key=body.s3_key,
             submit=body.submit,
+            line_items=[li.model_dump() for li in body.line_items],
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

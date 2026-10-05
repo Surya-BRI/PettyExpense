@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../authentication/auth_controller.dart';
 import '../claims/capture_receipt_sheet.dart';
 import '../notifications/notifications_screen.dart';
 import '../../theme/app_theme.dart';
+import '../web/web_shell.dart';
 
 /// Universal bottom nav on every screen (except login). Buttons depend on role.
 class MainShell extends ConsumerWidget {
@@ -17,16 +19,36 @@ class MainShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Read here, outside the LayoutBuilder callback -- go_router's state lookup is only
+    // reliable from this widget's own build.
+    final location = GoRouterState.of(context).uri.path;
+    // Wide screens (the web build on a desktop browser) get the sidebar layout instead.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth >= kWebShellBreakpoint) {
+          return WebShell(location: location, child: child);
+        }
+        return _buildMobile(context, ref, location);
+      },
+    );
+  }
+
+  Widget _buildMobile(BuildContext context, WidgetRef ref, String location) {
     final user = ref.watch(authControllerProvider).user;
     final role = UserRoleX.fromJson(user?.role);
     final isApprover = role.isApprover;
-    final location = GoRouterState.of(context).uri.path;
-
-    final claimsSelected = location == '/claims' || location == '/confirm' || location.startsWith('/claim/');
+    final homeSelected = location == '/dashboard';
+    final claimsSelected =
+        location == '/claims' ||
+        location == '/all-claims' ||
+        location == '/confirm' ||
+        location.startsWith('/claim/');
     final approvalsSelected = location.startsWith('/approvals');
     final profileSelected = location == '/profile';
     final alertsSelected = location == '/notifications';
-    final unreadCount = ref.watch(unreadNotificationCountProvider).maybeWhen(data: (n) => n, orElse: () => 0);
+    final unreadCount = ref
+        .watch(unreadNotificationCountProvider)
+        .maybeWhen(data: (n) => n, orElse: () => 0);
 
     return Scaffold(
       body: child,
@@ -43,7 +65,7 @@ class MainShell extends ConsumerWidget {
                       icon: Icons.home_outlined,
                       selectedIcon: Icons.home,
                       label: 'Home',
-                      selected: approvalsSelected,
+                      selected: kIsWeb ? homeSelected : approvalsSelected,
                       onTap: () => context.go(homeRouteFor(role)),
                     ),
                   ),
@@ -53,7 +75,8 @@ class MainShell extends ConsumerWidget {
                       selectedIcon: Icons.account_balance_wallet,
                       label: 'Claims',
                       selected: approvalsSelected,
-                      onTap: () => context.go(homeRouteFor(role)),
+                      onTap: () =>
+                          context.go('/approvals/${defaultStageFor(role)}'),
                     ),
                   ),
                   Expanded(
@@ -84,8 +107,8 @@ class MainShell extends ConsumerWidget {
                       icon: Icons.home_outlined,
                       selectedIcon: Icons.home,
                       label: 'Home',
-                      selected: claimsSelected,
-                      onTap: () => context.go('/claims'),
+                      selected: kIsWeb ? homeSelected : claimsSelected,
+                      onTap: () => context.go(homeRouteFor(role)),
                     ),
                   ),
                   Expanded(
@@ -97,16 +120,18 @@ class MainShell extends ConsumerWidget {
                       onTap: () => context.go('/claims'),
                     ),
                   ),
-                  Expanded(
-                    child: _NavItem(
-                      icon: Icons.photo_camera_outlined,
-                      selectedIcon: Icons.photo_camera,
-                      label: 'Scan',
-                      selected: false,
-                      customIcon: const _ScanIcon(),
-                      onTap: () => showCaptureReceiptSheet(context, ref),
+                  // Capture relies on dart:io files, so scanning stays a mobile-app action.
+                  if (!kIsWeb)
+                    Expanded(
+                      child: _NavItem(
+                        icon: Icons.photo_camera_outlined,
+                        selectedIcon: Icons.photo_camera,
+                        label: 'Scan',
+                        selected: false,
+                        customIcon: const _ScanIcon(),
+                        onTap: () => showCaptureReceiptSheet(context, ref),
+                      ),
                     ),
-                  ),
                   Expanded(
                     child: _NavItem(
                       icon: Icons.notifications_outlined,
@@ -156,7 +181,9 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = selected ? AppColors.darkBlue : AppColors.textSecondary;
-    final iconWidget = customIcon ?? Icon(selected ? selectedIcon : icon, color: color, size: 24);
+    final iconWidget =
+        customIcon ??
+        Icon(selected ? selectedIcon : icon, color: color, size: 24);
     // Every item gets the same fixed height + Center wrapper so all five sit at
     // exactly the same vertical level in the row, regardless of icon/label differences.
     return InkWell(
@@ -173,7 +200,10 @@ class _NavItem extends StatelessWidget {
                 backgroundColor: AppColors.orange,
                 label: Text(
                   badgeCount > 99 ? '99+' : '$badgeCount',
-                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 child: iconWidget,
               ),

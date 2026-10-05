@@ -25,7 +25,7 @@ class ExpenseApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     return MaterialApp.router(
-      title: 'PettyandExpenseTarcker',
+      title: 'Petty Cash & Expense Tracker',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: router,

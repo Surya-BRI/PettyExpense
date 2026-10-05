@@ -202,6 +202,9 @@ class ErpExpenseTransaction(Base):
     approval_history: Mapped[list["ErpExpenseApprovalHistory"]] = relationship(
         back_populates="transaction", cascade="all, delete-orphan"
     )
+    line_items: Mapped[list["ErpExpenseLineItem"]] = relationship(
+        back_populates="transaction", cascade="all, delete-orphan", order_by="ErpExpenseLineItem.line_no"
+    )
     employee: Mapped[ErpAuthExpenseUsers] = relationship()
     region: Mapped[ErpExpenseRegionConfig] = relationship()
     category: Mapped[ErpExpenseCategory] = relationship()
@@ -230,6 +233,30 @@ class ErpExpenseDocument(Base):
     uploaded_on: Mapped[datetime] = mapped_column("uploadedOn", DateTime, default=datetime.utcnow)
 
     transaction: Mapped[Optional[ErpExpenseTransaction]] = relationship(back_populates="documents")
+
+
+class ErpExpenseLineItem(Base):
+    """One item line on a "Multiple items" bill. The transaction's total is the sum of its lines.
+    A brand-new table, so init_db()'s create_all() creates it -- no ALTER on existing tables."""
+
+    __tablename__ = "ErpExpenseLineItem"
+
+    line_item_id: Mapped[int] = mapped_column("lineItemId", Integer, primary_key=True, autoincrement=True)
+    transaction_id: Mapped[int] = mapped_column(
+        "transactionId", Integer, ForeignKey("ErpExpenseTransaction.transactionId"), index=True
+    )
+    line_no: Mapped[int] = mapped_column("lineNo", Integer)
+    description: Mapped[str] = mapped_column("description", Unicode(512))
+    quantity: Mapped[Optional[float]] = mapped_column("quantity", Float, nullable=True)
+    # Line total as printed on the bill (normally VAT-inclusive).
+    amount: Mapped[float] = mapped_column("amount", Float, default=0.0)
+    category_id: Mapped[Optional[int]] = mapped_column(
+        "categoryId", Integer, ForeignKey("ErpExpenseCategory.categoryId"), nullable=True
+    )
+    created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
+
+    transaction: Mapped["ErpExpenseTransaction"] = relationship(back_populates="line_items")
+    category: Mapped[Optional[ErpExpenseCategory]] = relationship()
 
 
 class ErpExpenseHodAssignment(Base):
