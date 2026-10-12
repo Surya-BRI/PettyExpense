@@ -1,18 +1,15 @@
 """Idempotent seed data for Phase 1 (config) + Phase 2 (approval) demo gates.
 
-Call order (see main.py on_startup):
-    seed_reference_data()   -- roles, departments, region config, categories, vendors, caches
-    seed_users()            -- from auth.security; needs roles + departments to exist
-    seed_hod_assignments()  -- needs both users and departments to exist
+Called from main.py on_startup(): seed_reference_data() -- roles, departments, region
+config, categories, vendors, caches. HOD assignments are admin-managed by hand against
+real ERP users (see auth/security.py authenticate_user) rather than seeded here.
 """
 import json
 
 from database.models import (
-    ErpAuthExpenseUsers,
     ErpExpenseCategory,
     ErpExpenseDepartment,
     ErpExpenseEmployeeCache,
-    ErpExpenseHodAssignment,
     ErpExpenseProjectCache,
     ErpExpenseRegionConfig,
     ErpExpenseVendor,
@@ -159,36 +156,6 @@ def seed_reference_data() -> None:
                     region_id=region.region_id if region else None,
                 )
             )
-        db.commit()
-    finally:
-        db.close()
-
-
-def seed_hod_assignments() -> None:
-    """Run after seed_reference_data() and auth.security.seed_users()."""
-    db = SessionLocal()
-    try:
-        dept_by_name = {d.department_name: d for d in db.query(ErpExpenseDepartment).all()}
-        assignments = [
-            ("sajeesh", "Sales"),
-            ("denny", "IT"),
-        ]
-        for username, dept_name in assignments:
-            user = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_name == username).first()
-            dept = dept_by_name.get(dept_name)
-            if not user or not dept:
-                continue
-            existing = (
-                db.query(ErpExpenseHodAssignment)
-                .filter(
-                    ErpExpenseHodAssignment.user_id == user.user_id,
-                    ErpExpenseHodAssignment.department_id == dept.department_id,
-                )
-                .first()
-            )
-            if existing:
-                continue
-            db.add(ErpExpenseHodAssignment(user_id=user.user_id, department_id=dept.department_id, is_active=1))
         db.commit()
     finally:
         db.close()

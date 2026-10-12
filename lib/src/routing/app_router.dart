@@ -61,6 +61,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return homeRouteFor(role);
       }
 
+      // Dashboard and all-claims are web-only screens; redirect mobile employees away.
+      if (!kIsWeb && !approver && (loc == '/dashboard' || loc == '/all-claims')) {
+        return '/claims';
+      }
+
       return null;
     },
     routes: [

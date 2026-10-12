@@ -121,6 +121,7 @@ def transaction_to_dict(
         "vat_amount": txn.vat_amount,
         "total_amount": txn.total_amount,
         "op_number": txn.op_number,
+        "bill_number": txn.bill_number,
         "status": txn.status,
         "current_stage": txn.current_stage,
         "dispute_returned": bool(txn.dispute_returned),
@@ -265,6 +266,7 @@ class TransactionService:
             "field_confidence": ocr.get("field_confidence") or {},
             "low_confidence_fields": ocr.get("low_confidence_fields") or [],
             "reconciliation_mismatch": ocr.get("reconciliation_mismatch") or False,
+            "bill_number": ocr.get("invoice_number") or ocr.get("transaction_number") or None,
             "line_items": ocr.get("line_items") or [],
             "raw_text": ocr.get("raw_text"),
             "image_hash": document.hash,
@@ -324,6 +326,7 @@ class TransactionService:
         type: str = "reimbursement",
         project_id: Optional[int],
         op_number: Optional[str],
+        bill_number: Optional[str],
         remarks: Optional[str],
         receipt_id: Optional[int],
         s3_key: Optional[str],
@@ -351,6 +354,7 @@ class TransactionService:
             vat_amount=vat_amount,
             total_amount=total_amount if total_amount is not None else amount + vat_amount,
             op_number=op_number,
+            bill_number=bill_number,
             remarks=remarks,
             status="submitted" if submit else "draft",
             submitted_on=datetime.utcnow() if submit else None,
@@ -441,21 +445,41 @@ class TransactionService:
         self._notify_finance_on_submit(db, txn)
         return self.get_claim(db, user, transaction_id)
 
-    def list_mine(self, db: Session, user: CurrentUser) -> list[dict[str, Any]]:
-        txns = (
+    def list_mine(
+        self,
+        db: Session,
+        user: CurrentUser,
+        *,
+        limit: int = 6,
+        offset: int = 0,
+        status: Optional[str] = None,
+    ) -> dict[str, Any]:
+        q = (
             db.query(ErpExpenseTransaction)
-            .options(
+            .filter(ErpExpenseTransaction.employee_id == user.id)
+        )
+        if status:
+            q = q.filter(ErpExpenseTransaction.status == status)
+        total = q.count()
+        txns = (
+            q.options(
                 joinedload(ErpExpenseTransaction.documents),
                 joinedload(ErpExpenseTransaction.region),
                 joinedload(ErpExpenseTransaction.category),
                 joinedload(ErpExpenseTransaction.vendor),
                 selectinload(ErpExpenseTransaction.line_items),
             )
-            .filter(ErpExpenseTransaction.employee_id == user.id)
             .order_by(ErpExpenseTransaction.created_on.desc())
+            .offset(offset)
+            .limit(limit)
             .all()
         )
-        return [transaction_to_dict(t, db=db) for t in txns]
+        return {
+            "items": [transaction_to_dict(t, db=db) for t in txns],
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+        }
 
     def get_claim(self, db: Session, user: CurrentUser, transaction_id: int) -> dict[str, Any]:
         txn = (

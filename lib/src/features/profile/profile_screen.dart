@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../api/enums.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand_app_bar.dart';
@@ -38,12 +37,18 @@ class ProfileScreen extends ConsumerWidget {
     }
   }
 
+  static const _sectionLabelStyle = TextStyle(
+    color: AppColors.textSecondary,
+    fontWeight: FontWeight.w700,
+    fontSize: 13,
+    letterSpacing: 0.2,
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authControllerProvider);
     final user = auth.user;
     final role = _roleLabel(user?.role);
-    final isApprover = UserRoleX.fromJson(user?.role).isApprover;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -52,8 +57,18 @@ class ProfileScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
         children: [
+          const Text(
+            'My Profile',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'View your account information',
+            style: TextStyle(fontSize: 13.5, color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 18),
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+            padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
             decoration: BoxDecoration(
               color: AppColors.card,
               borderRadius: BorderRadius.circular(20),
@@ -67,130 +82,123 @@ class ProfileScreen extends ConsumerWidget {
               ],
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 96,
-                      height: 96,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            AppColors.lightBlue,
-                            AppColors.darkBlue.withValues(alpha: 0.18),
-                          ],
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 72,
+                          height: 72,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppColors.lightBlue,
+                                AppColors.darkBlue.withValues(alpha: 0.18),
+                              ],
+                            ),
+                            border: Border.all(color: AppColors.darkBlue, width: 2),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            _initials(user),
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.darkBlue,
+                            ),
+                          ),
                         ),
-                        border: Border.all(color: AppColors.darkBlue, width: 2.5),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        _initials(user),
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.darkBlue,
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: AppColors.card,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.divider),
+                            ),
+                            padding: const EdgeInsets.all(3),
+                            child: Image.asset(
+                              'assets/brand/logo_br_mark.png',
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: AppColors.card,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.divider),
-                        ),
-                        padding: const EdgeInsets.all(4),
-                        child: Image.asset(
-                          'assets/brand/logo_br_mark.png',
-                          fit: BoxFit.contain,
-                        ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            user?.displayName ?? 'Guest',
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            role,
+                            style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  user?.displayName ?? 'Guest',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '@${user?.username ?? user?.id ?? 'unknown'}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 14),
                 Wrap(
-                  alignment: WrapAlignment.center,
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _InfoChip(
-                      icon: isApprover ? Icons.account_balance_wallet : Icons.badge_outlined,
-                      label: role,
-                      background: AppColors.lightBlue,
-                      foreground: AppColors.darkBlue,
-                    ),
-                    const _InfoChip(
-                      icon: Icons.verified_user_outlined,
-                      label: 'Signed in',
-                      background: AppColors.successSoft,
-                      foreground: AppColors.success,
-                    ),
+                    if (user?.regionCode != null)
+                      _InfoChip(
+                        label: user!.regionCode!,
+                        background: AppColors.orange.withValues(alpha: 0.12),
+                        foreground: AppColors.orange,
+                      ),
                   ],
                 ),
-                if (user?.email != null && user!.email!.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.mail_outline, size: 16, color: AppColors.textSecondary),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          user.email!,
-                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'Account',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.3,
-                ),
+          const SizedBox(height: 26),
+          const Text('Contact Information', style: _sectionLabelStyle),
+          const SizedBox(height: 10),
+          _InfoRowCard(
+            icon: Icons.person_outline,
+            iconColor: AppColors.darkBlue,
+            label: 'Username',
+            value: user?.username ?? '—',
           ),
           const SizedBox(height: 10),
-          _ActionCard(
-            icon: Icons.swap_horiz_rounded,
-            title: 'Switch account',
-            subtitle: 'Sign in as salesman, finance, or admin',
-            iconColor: AppColors.brightBlue,
-            onTap: () => context.push('/login'),
+          _InfoRowCard(
+            icon: Icons.badge_outlined,
+            iconColor: AppColors.orange,
+            label: 'Role',
+            value: role,
           ),
+          const SizedBox(height: 10),
+          _InfoRowCard(
+            icon: Icons.location_on_outlined,
+            iconColor: AppColors.orange,
+            label: 'Region',
+            value: user?.regionCode ?? '—',
+          ),
+          const SizedBox(height: 26),
+          const Text('Account', style: _sectionLabelStyle),
           const SizedBox(height: 10),
           _ActionCard(
             icon: Icons.logout_rounded,
@@ -220,13 +228,11 @@ class ProfileScreen extends ConsumerWidget {
 
 class _InfoChip extends StatelessWidget {
   const _InfoChip({
-    required this.icon,
     required this.label,
     required this.background,
     required this.foreground,
   });
 
-  final IconData icon;
   final String label;
   final Color background;
   final Color foreground;
@@ -239,17 +245,65 @@ class _InfoChip extends StatelessWidget {
         color: background,
         borderRadius: BorderRadius.circular(999),
       ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: foreground,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+/// A labelled value row used under "Contact Information" -- icon chip on the left,
+/// small muted label above a bold value on the right.
+class _InfoRowCard extends StatelessWidget {
+  const _InfoRowCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.divider),
+      ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: foreground),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: foreground,
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary, fontSize: 15),
+                ),
+              ],
             ),
           ),
         ],
@@ -257,6 +311,7 @@ class _InfoChip extends StatelessWidget {
     );
   }
 }
+
 
 class _ActionCard extends StatelessWidget {
   const _ActionCard({

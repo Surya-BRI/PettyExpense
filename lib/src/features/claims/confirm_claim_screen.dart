@@ -47,20 +47,26 @@ class ConfirmClaimScreen extends ConsumerStatefulWidget {
 class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   late OcrResult _ocr;
   late final TextEditingController _vendor;
+  late final TextEditingController _billNumber;
   late final TextEditingController _amount;
   late final TextEditingController _vat;
   late final TextEditingController _total;
   late final TextEditingController _date;
   late final TextEditingController _remarks;
   int? _categoryId;
-  int? _projectId;
   String _type = 'reimbursement';
   String _ocrMode = 'auto';
   String? _currency;
   bool _busy = false;
   String? _error;
   List<CategoryRef> _categories = const [];
-  List<ProjectRef> _projects = const [];
+
+  // OP search
+  final TextEditingController _opCtrl = TextEditingController();
+  OpportunityResult? _selectedOp;
+  bool _opSearching = false;
+  String? _opError;
+  Timer? _opDebounce;
 
   // "Multiple items" bills: one editable draft per item line.
   final List<LineItemDraft> _lines = [];
@@ -77,6 +83,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     super.initState();
     _ocr = widget.ocr;
     _vendor = TextEditingController(text: _ocr.vendor);
+    _billNumber = TextEditingController(text: _ocr.billNumber ?? '');
     _amount = TextEditingController(text: _money(_ocr.amount));
     _vat = TextEditingController(text: _money(_ocr.vatAmount));
     _total = TextEditingController(text: _money(_ocr.totalAmount));
@@ -102,11 +109,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     try {
       final api = ref.read(apiClientProvider);
       final categories = await api.categories();
-      final projects = await api.projects();
       if (mounted) {
         setState(() {
           _categories = categories;
-          _projects = projects;
           _categoryId ??=
               _matchExpenseType(categories) ??
               (categories.isNotEmpty ? categories.first.id : null);
@@ -210,13 +215,15 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       _analyzing = false;
       _ocrFailed = true;
       _progress = 0;
-      _error = lastError?.toString();
+      final raw = lastError?.toString() ?? '';
+      _error = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
     });
   }
 
   void _applyOcr(OcrResult result) {
     _ocr = result;
     _vendor.text = result.vendor;
+    if (_billNumber.text.isEmpty) _billNumber.text = result.billNumber ?? '';
     _amount.text = _money(result.amount);
     _vat.text = _money(result.vatAmount);
     _total.text = _money(result.totalAmount);
@@ -230,7 +237,10 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _opDebounce?.cancel();
+    _opCtrl.dispose();
     _vendor.dispose();
+    _billNumber.dispose();
     _amount.dispose();
     _vat.dispose();
     _total.dispose();
@@ -292,9 +302,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       if (_date.text.trim().isEmpty) {
         throw Exception('Enter the bill date');
       }
-      final selectedProject = _projectId == null
-          ? null
-          : _projects.firstWhere((p) => p.id == _projectId);
+      if (_billNumber.text.trim().isEmpty) {
+        throw Exception('Enter the bill / invoice number');
+      }
       final api = ref.read(apiClientProvider);
       final claim = await api.createClaim({
         'vendor': _vendor.text.trim(),
@@ -309,8 +319,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         'region_code':
             ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
         'type': _type,
-        'project_id': _projectId,
-        'op_number': selectedProject?.opNumber,
+        'project_id': null,
+        'op_number': _selectedOp?.opCode,
+        'bill_number': _billNumber.text.trim(),
         'remarks': _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
         'receipt_id': _ocr.receiptId,
         's3_key': _ocr.s3Key,
@@ -325,7 +336,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       }
       context.go('/claim/${claim.id}');
     } catch (e) {
-      setState(() => _error = e.toString());
+      final msg = e.toString();
+      setState(() => _error = msg.startsWith('Exception: ') ? msg.substring(11) : msg);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -435,6 +447,15 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                         ? null
                         : _ocr.confidenceFor('vendor'),
                     allowArabic: true,
+                  ),
+                  const SizedBox(height: 12),
+                  _OcrTextField(
+                    controller: _billNumber,
+                    label: 'Bill / invoice number *',
+                    lowConfidence: !_ocrFailed && _ocr.isLow('invoice_number'),
+                    confidence: _ocrFailed
+                        ? null
+                        : (_ocr.confidenceFor('invoice_number') ?? _ocr.confidenceFor('transaction_number')),
                   ),
                   const SizedBox(height: 12),
                   _CurrencyToggle(
@@ -589,22 +610,73 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          InputDecorator(
-            decoration: const InputDecoration(labelText: 'Project / OP'),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int?>(
-                isExpanded: true,
-                value: _projectId,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('None')),
-                  ..._projects.map(
-                    (p) => DropdownMenuItem(value: p.id, child: Text(p.name)),
-                  ),
+          TextField(
+            controller: _opCtrl,
+            decoration: InputDecoration(
+              labelText: 'Project / OP code',
+              hintText: 'e.g. OP-2201',
+              suffixIcon: _opSearching
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  : _selectedOp != null
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setState(() {
+                            _opCtrl.clear();
+                            _selectedOp = null;
+                            _opError = null;
+                          }),
+                        )
+                      : null,
+              errorText: _opError,
+            ),
+            onChanged: (val) {
+              _opDebounce?.cancel();
+              if (val.trim().isEmpty) {
+                setState(() { _selectedOp = null; _opError = null; });
+                return;
+              }
+              _opDebounce = Timer(const Duration(milliseconds: 600), () async {
+                setState(() { _opSearching = true; _opError = null; });
+                try {
+                  final result = await ref.read(apiClientProvider).searchOpportunity(val.trim());
+                  if (mounted) {
+                    setState(() {
+                      _selectedOp = result;
+                      _opError = result == null ? 'OP code not found' : null;
+                    });
+                  }
+                } catch (_) {
+                  if (mounted) setState(() => _opError = 'Search failed');
+                } finally {
+                  if (mounted) setState(() => _opSearching = false);
+                }
+              });
+            },
+          ),
+          if (_selectedOp != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.successSoft,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_selectedOp!.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  if (_selectedOp!.buCode != null || _selectedOp!.salesPerson != null)
+                    Text(
+                      [_selectedOp!.buCode, _selectedOp!.salesPerson].whereType<String>().join(' · '),
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
                 ],
-                onChanged: (v) => setState(() => _projectId = v),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: _remarks,

@@ -15,7 +15,7 @@ final visibleClaimsProvider = FutureProvider.autoDispose<List<ExpenseClaim>>((re
   final user = ref.watch(authControllerProvider).user;
   final api = ref.watch(apiClientProvider);
   final approver = UserRoleX.fromJson(user?.role).isApprover;
-  return approver ? api.adminClaims() : api.myClaims();
+  return approver ? api.adminClaims() : api.myClaims().then((p) => p.items);
 });
 
 /// Company-wide workflow feed -- approvers only. Null means "not available" (employee,

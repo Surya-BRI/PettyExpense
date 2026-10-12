@@ -8,6 +8,7 @@ class AuthUser {
     this.username,
     this.email,
     this.departmentId,
+    this.departmentName,
     this.regionCode,
   });
 
@@ -17,6 +18,7 @@ class AuthUser {
   final String? username;
   final String? email;
   final int? departmentId;
+  final String? departmentName;
   final String? regionCode;
 
   UserRole get userRole => UserRoleX.fromJson(role);
@@ -30,6 +32,7 @@ class AuthUser {
       username: json['username'] as String?,
       email: json['email'] as String?,
       departmentId: (json['department_id'] as num?)?.toInt(),
+      departmentName: json['department_name'] as String?,
       regionCode: json['region_code'] as String?,
     );
   }
@@ -41,6 +44,7 @@ class AuthUser {
         'username': username,
         'email': email,
         'department_id': departmentId,
+        'department_name': departmentName,
         'region_code': regionCode,
       };
 }
@@ -66,6 +70,7 @@ class OcrResult {
     this.ocrStatus,
     this.reconciliationMismatch = false,
     this.lineItems = const [],
+    this.billNumber,
   });
 
   final int receiptId;
@@ -86,6 +91,7 @@ class OcrResult {
   final DuplicateWarning? duplicateWarning;
   final String? ocrStatus;
   final bool reconciliationMismatch;
+  final String? billNumber;
 
   /// Item rows the scan read off an itemised bill -- a suggestion for "Multiple items".
   final List<OcrLineItem> lineItems;
@@ -123,6 +129,7 @@ class OcrResult {
       rawText: json['raw_text'] as String?,
       imageUrl: json['image_url'] as String?,
       imageHash: json['image_hash'] as String?,
+      billNumber: json['bill_number'] as String?,
       duplicateWarning: json['duplicate_warning'] == null
           ? null
           : DuplicateWarning.fromJson(json['duplicate_warning'] as Map<String, dynamic>),
@@ -459,6 +466,29 @@ class ProjectRef {
   }
 }
 
+
+class OpportunityResult {
+  const OpportunityResult({
+    required this.opCode,
+    required this.name,
+    this.buCode,
+    this.salesPerson,
+  });
+
+  final String opCode;
+  final String name;
+  final String? buCode;
+  final String? salesPerson;
+
+  factory OpportunityResult.fromJson(Map<String, dynamic> json) {
+    return OpportunityResult(
+      opCode:      json['op_code'] as String,
+      name:        json['name'] as String,
+      buCode:      json['bu_code'] as String?,
+      salesPerson: json['sales_person'] as String?,
+    );
+  }
+}
 
 /// One workflow event from `GET /api/admin/activity` (web dashboard feed).
 class ActivityItem {

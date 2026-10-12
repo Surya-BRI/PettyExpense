@@ -63,6 +63,15 @@ class ApiClient {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'username': username, 'password': password, 'region_code': regionCode}),
     );
+    if (res.statusCode == 400) {
+      final body = res.body.isEmpty ? <String, dynamic>{} : jsonDecode(res.body);
+      final detail = body is Map ? body['detail'] : null;
+      if (detail is Map && detail['region_required'] == true) {
+        throw RegionSelectionRequired(
+          List<String>.from(detail['allowed_regions'] as List? ?? const []),
+        );
+      }
+    }
     return _decodeMap(res);
   }
 
@@ -138,10 +147,25 @@ class ApiClient {
     return ExpenseClaim.fromJson(_decodeMap(res));
   }
 
-  Future<List<ExpenseClaim>> myClaims() async {
-    final res = await _authorized(() => http.get(_uri('/api/claims/mine'), headers: _headers));
-    final list = _decodeList(res);
-    return list.map((e) => ExpenseClaim.fromJson(e as Map<String, dynamic>)).toList();
+  Future<ClaimsPage> myClaims({int limit = 6, int offset = 0, String? status}) async {
+    final res = await _authorized(() => http.get(
+          _uri('/api/claims/mine', {
+            'limit': '$limit',
+            'offset': '$offset',
+            if (status != null && status != 'all') 'status': status,
+          }),
+          headers: _headers,
+        ));
+    final map = _decodeMap(res);
+    final items = (map['items'] as List)
+        .map((e) => ExpenseClaim.fromJson(e as Map<String, dynamic>))
+        .toList();
+    return ClaimsPage(
+      items: items,
+      total: (map['total'] as num).toInt(),
+      offset: (map['offset'] as num).toInt(),
+      limit: (map['limit'] as num).toInt(),
+    );
   }
 
   Future<ExpenseClaim> getClaim(int id) async {
@@ -259,6 +283,17 @@ class ApiClient {
     return list.map((e) => ProjectRef.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<OpportunityResult?> searchOpportunity(String code) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/opportunities/search', {'code': code.trim()}), headers: _headers),
+    );
+    if (res.statusCode == 200 && res.body != 'null' && res.body.isNotEmpty) {
+      final map = _decodeMap(res);
+      return OpportunityResult.fromJson(map);
+    }
+    return null;
+  }
+
   // -- Notifications (email handled server-side; this is just the in-app feed) --
 
   Future<List<Map<String, dynamic>>> notifications({int limit = 20, int offset = 0}) async {
@@ -317,6 +352,26 @@ class ApiClient {
     }
     return body as List<dynamic>;
   }
+}
+
+class ClaimsPage {
+  ClaimsPage({required this.items, required this.total, required this.offset, required this.limit});
+
+  final List<ExpenseClaim> items;
+  final int total;
+  final int offset;
+  final int limit;
+
+  bool get hasMore => offset + items.length < total;
+}
+
+/// Thrown by [ApiClient.login] when the account is multi-region (see
+/// `ErpExpenseMultiRegionUserRegion`) and must pick one of [allowedRegions] before the
+/// login can complete. Single-region accounts never hit this -- their region is derived
+/// server-side from ERP data.
+class RegionSelectionRequired implements Exception {
+  RegionSelectionRequired(this.allowedRegions);
+  final List<String> allowedRegions;
 }
 
 class ApiException implements Exception {

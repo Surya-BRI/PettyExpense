@@ -41,7 +41,6 @@ class Settings(BaseSettings):
     runpod_endpoint_id: str = ""  # RunPod GPU OCR endpoint id; blank disables the GPU path entirely
     runpod_api_key: str = ""
 
-    auth_mode: str = "mock"  # mock | erp
     cors_origins: str = "*"
     public_base_url: str = "http://localhost:8000"  # used to build the "View this claim" link in HTML emails
 

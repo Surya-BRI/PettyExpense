@@ -15,10 +15,9 @@ from api.routes_config import router as config_router
 from api.routes_notifications import router as notifications_router
 from api.routes_projects import router as projects_router
 from api.routes_public import router as public_router
-from auth.security import seed_multi_region_users, seed_users
 from config import get_settings
 from database.models import init_db
-from scripts.seed_phase1_reference_data import seed_hod_assignments, seed_reference_data
+from scripts.seed_phase1_reference_data import seed_reference_data
 
 settings = get_settings()
 
@@ -47,12 +46,7 @@ app.include_router(public_router)
 def on_startup() -> None:
     settings.upload_path.mkdir(parents=True, exist_ok=True)
     init_db()
-    # Order matters: reference data (roles/departments) before users (needs role/department
-    # FKs), users before HOD assignments (needs user ids to exist).
     seed_reference_data()
-    seed_users()
-    seed_hod_assignments()
-    seed_multi_region_users()
 
 
 @app.get("/health")
@@ -60,7 +54,6 @@ def health():
     return {
         "status": "ok",
         "app": settings.app_name,
-        "auth_mode": settings.auth_mode,
         "storage_backend": settings.storage_backend,
         "aws_bucket": settings.bucket_name,
         "aws_folder": settings.aws_folder,

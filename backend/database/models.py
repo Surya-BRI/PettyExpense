@@ -188,6 +188,9 @@ class ErpExpenseTransaction(Base):
     vendor_raw_text: Mapped[Optional[str]] = mapped_column("vendorRawText", Unicode(256), nullable=True)
     ocr_confidence_json: Mapped[Optional[str]] = mapped_column("ocrConfidenceJson", Text, nullable=True)
     op_number: Mapped[Optional[str]] = mapped_column("opNumber", String(128), nullable=True)
+    # Bill/invoice number as printed on the receipt — extracted by OCR, editable by the employee.
+    # New column: create_all() won't add it; run scripts/add_bill_number_column.py once.
+    bill_number: Mapped[Optional[str]] = mapped_column("billNumber", String(128), nullable=True)
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
     modified_on: Mapped[datetime] = mapped_column(
         "modifiedOn", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

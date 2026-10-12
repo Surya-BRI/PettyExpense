@@ -55,23 +55,15 @@ Always activate `.venv` before running `pip` or `uvicorn` — the deps (FastAPI,
 
 Leave this terminal running while you use the app.
 
-### Demo users (JWT login)
+### Login (real ERP auth)
 
-Real rows in `ErpAuthExpenseUsers` on ERP-Dev, matching the dropdown in `lib/src/features/authentication/login_screen.dart`:
-
-| Username | Password | Role |
-|----------|----------|------|
-| `surya` | `surya123` | Employee · Sales |
-| `raghu` | `raghu123` | Employee · Sales |
-| `vikram` | `vikram123` | Employee · IT |
-| `denny` | `denny123` | HOD · IT |
-| `sajeesh` | `sajeesh123` | HOD · Sales |
-| `anjana` | `anjana123` | Accountant |
-| `sandeep` | `sandeep123` | Finance Manager |
-| `rajesh` | `rajesh123` | Finance Manager |
-| `teja` | `teja123` | Admin |
-
-With `AUTH_MODE=mock`, the API still accepts requests **without** a Bearer token as `salesman-001` (useful for `curl`/Swagger testing). The Flutter app itself no longer has a "Continue as mock salesman" bypass button — every user, including local dev, signs in with one of the demo users above and lands on `/login` when logged out. **Production uses `AUTH_MODE=erp`** — every request needs a real login.
+Login validates directly against the shared ERP tables (`ErpAuthUsers` / `ErpAuthUserRoleMap` /
+`ErpMasterRole` / `ErpMasterEmployee`) on ERP-Dev — sign in with a real ERP username/password.
+A user needs `ErpMasterEmployee.isAllowLogin = 1` to be let in; on first successful login a
+local `ErpAuthExpenseUsers` row is created for them (role defaults to `employee` unless their
+ERP role maps to something higher — see `ERP_ROLE_ID_TO_APP_ROLE` in `backend/auth/security.py`).
+Elevating someone to `hod`/`accountant`/`finance_manager`/`admin`, or assigning their
+department, is currently done by hand against that local row (no admin UI for it yet).
 
 ---
 
@@ -133,9 +125,9 @@ Camera / gallery need an emulator camera or a real device; gallery works with sa
 1. Start **backend** → confirm `/health` returns `"status":"ok"`.
 2. Start **emulator / device**.
 3. Start **Flutter** with the correct `API_BASE_URL`.
-4. In the app: sign in with `surya` / `surya123`.
+4. In the app: sign in with a real ERP username/password (see "Login (real ERP auth)" above).
 5. **New claim** → camera or gallery → confirm OCR fields → submit.
-6. For approvals: Profile → sign in as `denny` / `denny123` (HOD) or `sandeep` / `sandeep123` (Finance Manager) → **Approvals queue**.
+6. For approvals: sign in as a user whose role maps to `hod`/`accountant`/`finance_manager` → **Approvals queue**.
 
 ---
 
@@ -177,7 +169,6 @@ Copy from `.env.example`. Important keys:
 | `STORAGE_BACKEND` | `s3` (default) — receipts in AWS |
 | `AWS_*` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_BUCKET`, `AWS_FOLDER` (keys under `{folder}/expense-receipts/`) |
 | `OCR_BACKEND` | `paddle` (default; **name is stale** — this literal value now runs RapidOCR, not PaddleOCR, see below) — single shared PP-OCRv6 text-detection pass, then sequential English + Arabic RapidOCR/ONNXRuntime recognizer passes over the same detected regions; `stub` is a fallback if RapidOCR fails to load. PaddleOCR/PaddlePaddle are no longer used anywhere in this repo — only the config value's name wasn't updated when the engine switched (`config.py`'s `ocr_backend: str = "paddle"` and the `if settings.ocr_backend == "paddle":` check in `ocr_service.py`), so `/health` still reports `"ocr_backend":"paddle"` |
-| `AUTH_MODE` | `mock` (no token → salesman) or `erp` (JWT required) |
 | `CORS_ORIGINS` | `*` for local dev |
 | `PUBLIC_BASE_URL` | Default `http://localhost:8000` — used to build the "View this claim" link in HTML notification emails (points at the new unauthenticated `GET /claims/{id}` fallback page below) |
 | Graph email + `NOTIFY_EMAIL_ENABLED` | **Deferred** — not in current target (photo → S3 → tables) |
@@ -227,7 +218,6 @@ Status as of 2026-08-16: backend deployed and running; public HTTPS live and ver
 | Public URL | `https://expensetracker-api.app-brisigns.com` — live. Nginx (`/etc/nginx/sites-available/expensetracker-api.app-brisigns.com.conf` → `localhost:5930`) + Let's Encrypt via `certbot --nginx` (cert auto-renews, expires 2026-11-15). DNS A record (`expensetracker-api` → `3.7.128.46`) added via GoDaddy. Verified end-to-end: `curl https://expensetracker-api.app-brisigns.com/health` → `200 OK`. |
 | DB | Same `ERP-Dev` SQL Server as local dev (`13.234.241.125`) — no separate prod DB |
 | S3 | Same production bucket as local dev (`bri-erp-production`, folder `live`) |
-| `AUTH_MODE` | `erp` (real JWT login required — deliberately **not** `mock` on this deployment, unlike the local-dev default) |
 | Logs | `~/.pm2/logs/expensetracker-api-out.log` / `expensetracker-api-error.log` |
 | Deploy loop | WinSCP upload of `backend/`'s `main.py`, `api/`, `services/`, `database/`, `auth/`, `config.py`, `requirements.txt`, `scripts/` (never `.venv`, `uploads/`, `.env`) → `pip install -r requirements.txt` if deps changed → `pm2 restart expensetracker-api` |
 

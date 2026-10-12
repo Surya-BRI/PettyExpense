@@ -52,6 +52,7 @@ class CreateClaimRequest(BaseModel):
     type: str = "reimbursement"  # petty_cash | reimbursement
     project_id: Optional[int] = None
     op_number: Optional[str] = None
+    bill_number: str
     remarks: Optional[str] = None
     receipt_id: Optional[int] = None
     s3_key: Optional[str] = None
@@ -69,6 +70,7 @@ class UpdateClaimRequest(BaseModel):
     category_id: Optional[int] = None
     project_id: Optional[int] = None
     op_number: Optional[str] = None
+    bill_number: Optional[str] = None
     remarks: Optional[str] = None
     line_items: Optional[list[LineItemIn]] = None
 
@@ -137,6 +139,7 @@ def create_claim(
             type=body.type,
             project_id=body.project_id,
             op_number=body.op_number,
+            bill_number=body.bill_number,
             remarks=body.remarks,
             receipt_id=body.receipt_id,
             s3_key=body.s3_key,
@@ -148,8 +151,14 @@ def create_claim(
 
 
 @router.get("/mine")
-def my_claims(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    return transaction_service.list_mine(db, user)
+def my_claims(
+    limit: int = 6,
+    offset: int = 0,
+    status: str | None = None,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return transaction_service.list_mine(db, user, limit=limit, offset=offset, status=status)
 
 
 @router.get("/receipts/{receipt_id}/image")

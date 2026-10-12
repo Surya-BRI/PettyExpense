@@ -7,7 +7,6 @@ from auth.security import (
     require_admin,
     require_approver,
     require_role,
-    seed_users,
 )
 
 __all__ = [
@@ -19,5 +18,4 @@ __all__ = [
     "require_admin",
     "require_approver",
     "require_role",
-    "seed_users",
 ]

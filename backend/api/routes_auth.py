@@ -13,6 +13,7 @@ from auth.security import (
     create_refresh_token,
     get_current_user,
     get_user_by_id,
+    resolve_default_region_code,
 )
 from config import get_settings
 from database.models import ErpExpenseDepartment, get_db
@@ -57,14 +58,20 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    # A multi-region user must pick one of their assigned regions; a single-region user
-    # isn't restricted, so whatever (or nothing) they send is accepted as-is.
+    # A multi-region user (in ErpExpenseMultiRegionUserRegion) must pick one of their
+    # assigned regions -- the client is expected to retry with region_code once it sees
+    # region_required in the error detail. Everyone else gets their region derived from
+    # ERP (employee -> subsidiary), no prompt needed.
     allowed = allowed_regions_for(db, user)
-    region_code = body.region_code
-    if allowed and region_code not in allowed:
-        raise HTTPException(
-            status_code=400, detail=f"Choose a region to sign in with: {', '.join(allowed)}"
-        )
+    if allowed:
+        if body.region_code not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail={"region_required": True, "allowed_regions": allowed},
+            )
+        region_code = body.region_code
+    else:
+        region_code = resolve_default_region_code(db, user.user_id) or body.region_code or "UAE"
 
     return TokenResponse(
         access_token=create_access_token(user, region_code),
