@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
@@ -381,8 +382,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             child: Chip(
               avatar: Icon(
                 widget.lineMode == BillLineMode.single
-                    ? Icons.receipt_outlined
-                    : Icons.list_alt,
+                    ? PhosphorIcons.receipt()
+                    : PhosphorIcons.listBullets(),
                 size: 18,
                 color: AppColors.darkBlue,
               ),
@@ -622,7 +623,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                     )
                   : _selectedOp != null
                       ? IconButton(
-                          icon: const Icon(Icons.close, size: 18),
+                          icon: Icon(PhosphorIcons.x(), size: 18),
                           onPressed: () => setState(() {
                             _opCtrl.clear();
                             _selectedOp = null;

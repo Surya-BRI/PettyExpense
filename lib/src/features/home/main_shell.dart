@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
@@ -62,8 +63,8 @@ class MainShell extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: _NavItem(
-                      icon: Icons.home_outlined,
-                      selectedIcon: Icons.home,
+                      icon: PhosphorIcons.house(),
+                      selectedIcon: PhosphorIcons.house(PhosphorIconsStyle.fill),
                       label: 'Home',
                       selected: kIsWeb ? homeSelected : approvalsSelected,
                       onTap: () => context.go(homeRouteFor(role)),
@@ -71,8 +72,8 @@ class MainShell extends ConsumerWidget {
                   ),
                   Expanded(
                     child: _NavItem(
-                      icon: Icons.account_balance_wallet_outlined,
-                      selectedIcon: Icons.account_balance_wallet,
+                      icon: PhosphorIcons.wallet(),
+                      selectedIcon: PhosphorIcons.wallet(PhosphorIconsStyle.fill),
                       label: 'Claims',
                       selected: approvalsSelected,
                       onTap: () =>
@@ -81,8 +82,8 @@ class MainShell extends ConsumerWidget {
                   ),
                   Expanded(
                     child: _NavItem(
-                      icon: Icons.notifications_outlined,
-                      selectedIcon: Icons.notifications,
+                      icon: PhosphorIcons.bell(),
+                      selectedIcon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
                       label: 'Alerts',
                       selected: alertsSelected,
                       badgeCount: unreadCount,
@@ -91,8 +92,8 @@ class MainShell extends ConsumerWidget {
                   ),
                   Expanded(
                     child: _NavItem(
-                      icon: Icons.person_outline,
-                      selectedIcon: Icons.person,
+                      icon: PhosphorIcons.userCircle(),
+                      selectedIcon: PhosphorIcons.userCircle(PhosphorIconsStyle.fill),
                       label: 'Profile',
                       selected: profileSelected,
                       onTap: () => context.go('/profile'),
@@ -102,19 +103,23 @@ class MainShell extends ConsumerWidget {
               )
             : Row(
                 children: [
-                  Expanded(
-                    child: _NavItem(
-                      icon: Icons.home_outlined,
-                      selectedIcon: Icons.home,
-                      label: 'Home',
-                      selected: kIsWeb ? homeSelected : claimsSelected,
-                      onTap: () => context.go(homeRouteFor(role)),
+                  // On native mobile, an employee's Home route IS /claims, so showing both
+                  // would be two buttons for the same screen -- only web (whose Home is
+                  // /dashboard) needs the separate button.
+                  if (kIsWeb)
+                    Expanded(
+                      child: _NavItem(
+                        icon: PhosphorIcons.house(),
+                        selectedIcon: PhosphorIcons.house(PhosphorIconsStyle.fill),
+                        label: 'Home',
+                        selected: homeSelected,
+                        onTap: () => context.go(homeRouteFor(role)),
+                      ),
                     ),
-                  ),
                   Expanded(
                     child: _NavItem(
-                      icon: Icons.receipt_long_outlined,
-                      selectedIcon: Icons.receipt_long,
+                      icon: PhosphorIcons.receipt(),
+                      selectedIcon: PhosphorIcons.receipt(PhosphorIconsStyle.fill),
                       label: 'Claims',
                       selected: claimsSelected,
                       onTap: () => context.go('/claims'),
@@ -124,8 +129,8 @@ class MainShell extends ConsumerWidget {
                   if (!kIsWeb)
                     Expanded(
                       child: _NavItem(
-                        icon: Icons.photo_camera_outlined,
-                        selectedIcon: Icons.photo_camera,
+                        icon: PhosphorIcons.camera(),
+                        selectedIcon: PhosphorIcons.camera(PhosphorIconsStyle.fill),
                         label: 'Scan',
                         selected: false,
                         customIcon: const _ScanIcon(),
@@ -134,8 +139,8 @@ class MainShell extends ConsumerWidget {
                     ),
                   Expanded(
                     child: _NavItem(
-                      icon: Icons.notifications_outlined,
-                      selectedIcon: Icons.notifications,
+                      icon: PhosphorIcons.bell(),
+                      selectedIcon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
                       label: 'Alerts',
                       selected: alertsSelected,
                       badgeCount: unreadCount,
@@ -144,8 +149,8 @@ class MainShell extends ConsumerWidget {
                   ),
                   Expanded(
                     child: _NavItem(
-                      icon: Icons.person_outline,
-                      selectedIcon: Icons.person,
+                      icon: PhosphorIcons.userCircle(),
+                      selectedIcon: PhosphorIcons.userCircle(PhosphorIconsStyle.fill),
                       label: 'Profile',
                       selected: profileSelected,
                       onTap: () => context.go('/profile'),
@@ -183,7 +188,7 @@ class _NavItem extends StatelessWidget {
     final color = selected ? AppColors.darkBlue : AppColors.textSecondary;
     final iconWidget =
         customIcon ??
-        Icon(selected ? selectedIcon : icon, color: color, size: 24);
+        Icon(selected ? selectedIcon : icon, color: color, size: 22);
     // Every item gets the same fixed height + Center wrapper so all five sit at
     // exactly the same vertical level in the row, regardless of icon/label differences.
     return InkWell(
@@ -195,19 +200,28 @@ class _NavItem extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Badge(
-                isLabelVisible: badgeCount > 0,
-                backgroundColor: AppColors.orange,
-                label: Text(
-                  badgeCount > 99 ? '99+' : '$badgeCount',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                  ),
+              // Active state gets a filled pill behind the icon, not just a color swap,
+              // so it reads at a glance instead of blending into the row.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.lightBlue : Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
                 ),
-                child: iconWidget,
+                child: Badge(
+                  isLabelVisible: badgeCount > 0,
+                  backgroundColor: AppColors.orange,
+                  label: Text(
+                    badgeCount > 99 ? '99+' : '$badgeCount',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  child: iconWidget,
+                ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               Text(
                 label,
                 style: TextStyle(
@@ -237,7 +251,7 @@ class _ScanIcon extends StatelessWidget {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ).createShader(bounds),
-      child: const Icon(Icons.photo_camera, size: 28, color: Colors.white),
+      child: Icon(PhosphorIcons.camera(PhosphorIconsStyle.fill), size: 28, color: Colors.white),
     );
   }
 }

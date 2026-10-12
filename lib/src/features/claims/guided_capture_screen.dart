@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:doclens/doclens.dart' as doclens;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../services/document_capture/capture_state_machine.dart';
 import '../../services/document_capture/doclens_bridge.dart';
@@ -245,7 +246,7 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
                 padding: const EdgeInsets.all(8),
                 child: IconButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close, color: Colors.white),
+                  icon: Icon(PhosphorIcons.x(), color: Colors.white),
                 ),
               ),
             ),
@@ -316,8 +317,8 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Icon(
-                                  Icons.photo_camera,
+                              : Icon(
+                                  PhosphorIcons.camera(PhosphorIconsStyle.fill),
                                   color: Colors.white,
                                   size: 30,
                                 ),
@@ -466,7 +467,7 @@ class _CaptureReviewScreenState extends State<_CaptureReviewScreen> {
                   IconButton(
                     tooltip: 'Retake',
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: Icon(PhosphorIcons.arrowLeft(), color: Colors.white),
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -508,7 +509,7 @@ class _CaptureReviewScreenState extends State<_CaptureReviewScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.refresh),
+                      icon: Icon(PhosphorIcons.arrowClockwise()),
                       label: const Text('Retake'),
                       style: _outlinedOnDark,
                     ),
@@ -517,7 +518,7 @@ class _CaptureReviewScreenState extends State<_CaptureReviewScreen> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: _adjustCorners,
-                      icon: const Icon(Icons.crop),
+                      icon: Icon(PhosphorIcons.crop()),
                       label: const Text('Adjust corners'),
                       style: _outlinedOnDark,
                     ),

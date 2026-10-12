@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../api/models.dart';
 import '../theme/app_theme.dart';
@@ -145,7 +146,7 @@ class ClaimStageTracker extends StatelessWidget {
       case _StepState.done:
         dotColor = AppColors.success;
         lineColor = AppColors.success;
-        icon = Icons.check;
+        icon = PhosphorIcons.check();
         break;
       case _StepState.current:
         dotColor = AppColors.orange;
@@ -155,7 +156,7 @@ class ClaimStageTracker extends StatelessWidget {
       case _StepState.rejected:
         dotColor = AppColors.danger;
         lineColor = AppColors.divider;
-        icon = Icons.close;
+        icon = PhosphorIcons.x();
         break;
       case _StepState.upcoming:
         dotColor = AppColors.divider;

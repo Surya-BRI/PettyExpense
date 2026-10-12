@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/enums.dart';
 import '../../api/models.dart';
@@ -11,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../utils/dubai_time.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/shimmer_box.dart';
 import '../authentication/auth_controller.dart';
@@ -43,11 +45,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final role = UserRoleX.fromJson(user?.role);
 
     return Scaffold(
+      drawer: const AppNavDrawer(),
       appBar: BrandAppBar(
         title: 'Dashboard',
         showNotificationAction: false,
         actions: [
-          IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: const Icon(Icons.refresh)),
+          IconButton(tooltip: 'Refresh', onPressed: _refresh, icon: Icon(PhosphorIcons.arrowClockwise())),
         ],
       ),
       body: async.when(
@@ -250,13 +253,13 @@ class _FilterBar extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         _DropdownPill<DashboardPeriod>(
-          icon: Icons.calendar_today_outlined,
+          icon: PhosphorIcons.calendarBlank(),
           value: period,
           items: {for (final p in DashboardPeriod.values) p: p.label},
           onChanged: (v) => onPeriod(v ?? DashboardPeriod.all),
         ),
         _DropdownPill<String?>(
-          icon: Icons.public,
+          icon: PhosphorIcons.globe(),
           value: region,
           items: {null: 'All regions', for (final r in regions) r: r},
           onChanged: onRegion,
@@ -336,35 +339,35 @@ class _KpiRow extends StatelessWidget {
         label: 'Total claimed',
         value: formatMoney(currency, sum(claimed)),
         detail: '${claimed.length} claims${drafts > 0 ? ' · $drafts drafts' : ''}',
-        icon: Icons.receipt_long,
+        icon: PhosphorIcons.receipt(),
         accent: AppColors.brightBlue,
       ),
       _KpiTile(
         label: 'Pending approval',
         value: formatMoney(currency, sum(pending)),
         detail: '${pending.length} claims${disputed > 0 ? ' · $disputed disputed' : ''}',
-        icon: Icons.hourglass_top,
+        icon: PhosphorIcons.hourglass(),
         accent: AppColors.orange,
       ),
       _KpiTile(
         label: 'Approved, unpaid',
         value: formatMoney(currency, sum(approved)),
         detail: '${approved.length} claims awaiting payment',
-        icon: Icons.check_circle_outline,
+        icon: PhosphorIcons.checkCircle(),
         accent: AppColors.success,
       ),
       _KpiTile(
         label: 'Paid out',
         value: formatMoney(currency, sum(paid)),
         detail: '${paid.length} claims',
-        icon: Icons.payments_outlined,
+        icon: PhosphorIcons.money(),
         accent: AppColors.darkBlue,
       ),
       _KpiTile(
         label: 'Rejected',
         value: formatMoney(currency, sum(rejected)),
         detail: '${rejected.length} claims',
-        icon: Icons.block,
+        icon: PhosphorIcons.prohibit(),
         accent: AppColors.danger,
       ),
     ];
@@ -772,13 +775,13 @@ class _AttentionCard extends StatelessWidget {
 
     final groups = role.isApprover
         ? [
-            (Icons.content_copy, 'Possible duplicates', duplicates),
-            (Icons.storefront_outlined, 'Unmatched vendors', unmatched),
-            (Icons.undo, 'Disputed, with the employee', disputed),
+            (PhosphorIcons.copy(), 'Possible duplicates', duplicates),
+            (PhosphorIcons.storefront(), 'Unmatched vendors', unmatched),
+            (PhosphorIcons.arrowCounterClockwise(), 'Disputed, with the employee', disputed),
           ]
         : [
-            (Icons.undo, 'Sent back to you for correction', disputed),
-            (Icons.edit_note, 'Drafts not yet submitted', drafts),
+            (PhosphorIcons.arrowCounterClockwise(), 'Sent back to you for correction', disputed),
+            (PhosphorIcons.notePencil(), 'Drafts not yet submitted', drafts),
           ];
 
     final flagged = <ExpenseClaim>{for (final g in groups) ...g.$3}.toList();
@@ -846,13 +849,13 @@ class _ActivityCard extends ConsumerWidget {
   };
 
   (IconData, Color) _iconFor(String action) => switch (action) {
-        'approve' => (Icons.check_circle, AppColors.success),
-        'dispute' => (Icons.undo, AppColors.orange),
-        'reject' => (Icons.cancel, AppColors.danger),
-        'submitted' => (Icons.send, AppColors.brightBlue),
-        'paid' => (Icons.payments, AppColors.darkBlue),
-        'vendor_resolved' => (Icons.storefront, AppColors.darkBlue),
-        _ => (Icons.edit, AppColors.textSecondary),
+        'approve' => (PhosphorIcons.checkCircle(PhosphorIconsStyle.fill), AppColors.success),
+        'dispute' => (PhosphorIcons.arrowCounterClockwise(), AppColors.orange),
+        'reject' => (PhosphorIcons.xCircle(PhosphorIconsStyle.fill), AppColors.danger),
+        'submitted' => (PhosphorIcons.paperPlaneTilt(), AppColors.brightBlue),
+        'paid' => (PhosphorIcons.money(PhosphorIconsStyle.fill), AppColors.darkBlue),
+        'vendor_resolved' => (PhosphorIcons.storefront(PhosphorIconsStyle.fill), AppColors.darkBlue),
+        _ => (PhosphorIcons.pencilSimple(), AppColors.textSecondary),
       };
 
   @override

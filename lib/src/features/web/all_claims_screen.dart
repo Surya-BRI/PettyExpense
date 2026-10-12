@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/enums.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_card.dart';
+import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../authentication/auth_controller.dart';
 import '../shared/status_chip.dart';
@@ -84,6 +86,7 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
     final role = UserRoleX.fromJson(ref.watch(authControllerProvider).user?.role);
 
     return Scaffold(
+      drawer: const AppNavDrawer(),
       appBar: BrandAppBar(
         title: role.isApprover ? 'All claims' : 'My claims',
         showNotificationAction: false,
@@ -91,7 +94,7 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
           IconButton(
             tooltip: 'Refresh',
             onPressed: () => ref.invalidate(visibleClaimsProvider),
-            icon: const Icon(Icons.refresh),
+            icon: Icon(PhosphorIcons.arrowClockwise()),
           ),
         ],
       ),
@@ -127,7 +130,7 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
                       onChanged: (_) => setState(_resetPage),
                       decoration: InputDecoration(
                         isDense: true,
-                        prefixIcon: const Icon(Icons.search),
+                        prefixIcon: Icon(PhosphorIcons.magnifyingGlass()),
                         hintText: role == UserRole.employee ? 'Search vendor, category, #id' : 'Search vendor, employee, #id',
                       ),
                     ),
@@ -230,11 +233,11 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
                     const SizedBox(width: 8),
                     IconButton(
                       onPressed: page == 0 ? null : () => setState(() => _page = page - 1),
-                      icon: const Icon(Icons.chevron_left),
+                      icon: Icon(PhosphorIcons.caretLeft()),
                     ),
                     IconButton(
                       onPressed: page >= pageCount - 1 ? null : () => setState(() => _page = page + 1),
-                      icon: const Icon(Icons.chevron_right),
+                      icon: Icon(PhosphorIcons.caretRight()),
                     ),
                   ],
                 ),
@@ -311,19 +314,19 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (c.duplicateFlag)
-              const Tooltip(
+              Tooltip(
                 message: 'Possible duplicate (same employee, vendor, amount and date)',
-                child: Icon(Icons.content_copy, size: 16, color: AppColors.orange),
+                child: Icon(PhosphorIcons.copy(), size: 16, color: AppColors.orange),
               ),
             if (c.duplicateFlag && c.vendorUnmatched) const SizedBox(width: 6),
             if (c.vendorUnmatched)
-              const Tooltip(
+              Tooltip(
                 message: 'Vendor not matched yet (Accountant resolves)',
-                child: Icon(Icons.storefront_outlined, size: 16, color: AppColors.orange),
+                child: Icon(PhosphorIcons.storefront(), size: 16, color: AppColors.orange),
               ),
             if (c.type == 'petty_cash') ...[
               const SizedBox(width: 6),
-              const Tooltip(message: 'Petty cash', child: Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.darkBlue)),
+              Tooltip(message: 'Petty cash', child: Icon(PhosphorIcons.wallet(), size: 16, color: AppColors.darkBlue)),
             ],
           ],
         )),

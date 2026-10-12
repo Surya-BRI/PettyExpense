@@ -46,6 +46,7 @@ dependencies:
   google_fonts: ^6.2.1
   image: ^4.5.4
   doclens: ^0.0.12
+  phosphor_flutter: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -83,6 +84,9 @@ flutter:
     - assets/brand/Br_fulllogo.png
     - assets/brand/logo_blue_rhine.png
     - assets/brand/logo_br_mark.png
+    - assets/logos/UAE_LOGO.png
+    - assets/logos/KSA_LOGO.png
+    - assets/logos/Dubai_LOGO.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

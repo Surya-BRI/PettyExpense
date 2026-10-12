@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/api_client.dart' show RegionSelectionRequired;
 import '../../api/enums.dart';
@@ -36,6 +37,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ('dev_accountant', 'Test@1234', 'Accountant'),
     ('dev_finance',    'Test@1234', 'Finance Manager'),
     ('dev_admin',      'Test@1234', 'Admin'),
+    ('dev_uae',        'Test@1234', 'Employee · UAE region'),
+    ('dev_ksa',        'Test@1234', 'Employee · KSA region'),
+    ('dev_oman',       'Test@1234', 'Employee · OMAN region'),
   ];
 
   @override
@@ -140,7 +144,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         decoration: InputDecoration(
                           labelText: 'Password',
                           suffixIcon: IconButton(
-                            icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                            icon: Icon(_obscurePassword ? PhosphorIcons.eyeSlash() : PhosphorIcons.eye()),
                             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           ),
                         ),

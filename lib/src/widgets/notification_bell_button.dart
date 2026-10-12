@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../features/notifications/notifications_screen.dart';
 import '../theme/app_theme.dart';
@@ -24,7 +25,7 @@ class NotificationBellButton extends ConsumerWidget {
           count > 99 ? '99+' : '$count',
           style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
         ),
-        child: const Icon(Icons.notifications_outlined),
+        child: Icon(PhosphorIcons.bell()),
       ),
     );
   }

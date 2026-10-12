@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
@@ -115,7 +116,7 @@ class LineItemsEditor extends StatelessWidget {
         ],
         OutlinedButton.icon(
           onPressed: onAdd,
-          icon: const Icon(Icons.add),
+          icon: Icon(PhosphorIcons.plus()),
           label: const Text('Add item'),
         ),
       ],
@@ -187,7 +188,7 @@ class _LineCard extends StatelessWidget {
                 tooltip: 'Remove item',
                 visualDensity: VisualDensity.compact,
                 onPressed: canRemove ? onRemove : null,
-                icon: const Icon(Icons.delete_outline),
+                icon: Icon(PhosphorIcons.trash()),
               ),
             ],
           ),

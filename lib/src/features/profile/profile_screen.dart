@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../authentication/auth_controller.dart';
 
@@ -37,6 +39,17 @@ class ProfileScreen extends ConsumerWidget {
     }
   }
 
+  // Per-legal-entity branding shown on the profile (see ERP_SUBSIDIARY_TO_REGION_CODE in
+  // backend/auth/security.py for how a user's region_code is derived). OMAN/IN have no
+  // dedicated logo yet, so they fall back to the generic Blue Rhine Industries mark.
+  static const _defaultLogoAsset = 'assets/logos/Dubai_LOGO.png';
+  static const _regionLogoAssets = {
+    'UAE': 'assets/logos/UAE_LOGO.png',
+    'KSA': 'assets/logos/KSA_LOGO.png',
+  };
+
+  String _regionLogoAsset(String? regionCode) => _regionLogoAssets[regionCode] ?? _defaultLogoAsset;
+
   static const _sectionLabelStyle = TextStyle(
     color: AppColors.textSecondary,
     fontWeight: FontWeight.w700,
@@ -53,6 +66,7 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       // Every role has a dedicated Alerts tab in the bottom nav now, so the app-bar bell is redundant here.
+      drawer: const AppNavDrawer(),
       appBar: const BrandAppBar(title: 'Profile', showNotificationAction: false),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
@@ -128,7 +142,7 @@ class ProfileScreen extends ConsumerWidget {
                             ),
                             padding: const EdgeInsets.all(3),
                             child: Image.asset(
-                              'assets/brand/logo_br_mark.png',
+                              _regionLogoAsset(user?.regionCode),
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -152,6 +166,13 @@ class ProfileScreen extends ConsumerWidget {
                           Text(
                             role,
                             style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 8),
+                          Image.asset(
+                            _regionLogoAsset(user?.regionCode),
+                            height: 48,
+                            fit: BoxFit.contain,
+                            alignment: Alignment.centerLeft,
                           ),
                         ],
                       ),
@@ -178,21 +199,21 @@ class ProfileScreen extends ConsumerWidget {
           const Text('Contact Information', style: _sectionLabelStyle),
           const SizedBox(height: 10),
           _InfoRowCard(
-            icon: Icons.person_outline,
+            icon: PhosphorIcons.userCircle(),
             iconColor: AppColors.darkBlue,
             label: 'Username',
             value: user?.username ?? '—',
           ),
           const SizedBox(height: 10),
           _InfoRowCard(
-            icon: Icons.badge_outlined,
+            icon: PhosphorIcons.identificationBadge(),
             iconColor: AppColors.orange,
             label: 'Role',
             value: role,
           ),
           const SizedBox(height: 10),
           _InfoRowCard(
-            icon: Icons.location_on_outlined,
+            icon: PhosphorIcons.mapPin(),
             iconColor: AppColors.orange,
             label: 'Region',
             value: user?.regionCode ?? '—',
@@ -201,7 +222,7 @@ class ProfileScreen extends ConsumerWidget {
           const Text('Account', style: _sectionLabelStyle),
           const SizedBox(height: 10),
           _ActionCard(
-            icon: Icons.logout_rounded,
+            icon: PhosphorIcons.signOut(),
             title: 'Sign out',
             subtitle: 'Return to the sign-in screen',
             iconColor: AppColors.orange,
@@ -377,7 +398,7 @@ class _ActionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+              Icon(PhosphorIcons.caretRight(), color: AppColors.textSecondary),
             ],
           ),
         ),

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/money.dart';
+import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/claim_stage_tracker.dart';
 import '../../widgets/shimmer_box.dart';
@@ -100,7 +102,6 @@ class MyClaimsController extends StateNotifier<MyClaimsState> {
 final myClaimsControllerProvider =
     StateNotifierProvider.autoDispose<MyClaimsController, MyClaimsState>((ref) => MyClaimsController(ref));
 
-const _statusFilters = ['all', 'draft', 'submitted', 'disputed', 'approved', 'rejected', 'paid'];
 const _statusFilterLabels = {
   'all': 'All',
   'draft': 'Draft',
@@ -141,31 +142,10 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
     final state = ref.watch(myClaimsControllerProvider);
 
     return Scaffold(
-      appBar: BrandAppBar(
+      drawer: const AppNavDrawer(),
+      appBar: const BrandAppBar(
         title: 'My claims',
         showNotificationAction: false,
-        actions: [
-          PopupMenuButton<String>(
-            initialValue: state.status,
-            onSelected: (s) => ref.read(myClaimsControllerProvider.notifier).setStatus(s),
-            icon: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.filter_list),
-                if (state.status != 'all') ...[
-                  const SizedBox(width: 4),
-                  Text(
-                    _statusFilterLabels[state.status]!,
-                    style: const TextStyle(fontSize: 13, color: Colors.white),
-                  ),
-                ],
-              ],
-            ),
-            itemBuilder: (context) => _statusFilters
-                .map((s) => PopupMenuItem(value: s, child: Text(_statusFilterLabels[s]!)))
-                .toList(),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -252,7 +232,7 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                               decoration: BoxDecoration(
                                                 color: AppColors.lightBlue,
-                                                borderRadius: BorderRadius.circular(999),
+                                                borderRadius: BorderRadius.circular(6),
                                               ),
                                               child: Text(
                                                 c.category.isEmpty ? 'Other' : c.category,
@@ -291,7 +271,9 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 8),
+                                        const SizedBox(height: 10),
+                                        const Divider(height: 1, color: AppColors.divider),
+                                        const SizedBox(height: 10),
                                         Row(
                                           children: [
                                             if (stageLabel != null)
@@ -299,13 +281,13 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                 decoration: BoxDecoration(
                                                   color: AppColors.lightBlue,
-                                                  borderRadius: BorderRadius.circular(999),
+                                                  borderRadius: BorderRadius.circular(6),
                                                   border: Border.all(color: AppColors.darkBlue.withValues(alpha: 0.3)),
                                                 ),
                                                 child: Row(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    const Icon(Icons.timeline, size: 14, color: AppColors.darkBlue),
+                                                    Icon(PhosphorIcons.trendUp(), size: 14, color: AppColors.darkBlue),
                                                     const SizedBox(width: 4),
                                                     Text(
                                                       stageLabel,
@@ -376,7 +358,7 @@ class _ClaimsPager extends ConsumerWidget {
         children: [
           TextButton.icon(
             onPressed: state.hasPrevious ? notifier.previousPage : null,
-            icon: const Icon(Icons.chevron_left),
+            icon: Icon(PhosphorIcons.caretLeft()),
             label: const Text('Back'),
           ),
           const Spacer(),
@@ -387,7 +369,7 @@ class _ClaimsPager extends ConsumerWidget {
           const Spacer(),
           TextButton.icon(
             onPressed: state.hasNext ? notifier.nextPage : null,
-            icon: const Icon(Icons.chevron_right),
+            icon: Icon(PhosphorIcons.caretRight()),
             label: const Text('Next'),
           ),
         ],

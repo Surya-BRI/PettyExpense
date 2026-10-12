@@ -7,6 +7,7 @@ import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/money.dart';
+import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/shimmer_box.dart';
 import '../shared/status_chip.dart';
@@ -78,6 +79,7 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
     final async = ref.watch(approvalsQueueProvider(widget.stage));
 
     return Scaffold(
+      drawer: const AppNavDrawer(),
       appBar: BrandAppBar(title: _stageLabels[widget.stage] ?? 'Approvals', showNotificationAction: false),
       body: Column(
         children: [

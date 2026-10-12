@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import 'notification_bell_button.dart';
 
 /// App bar with Blue Rhine BR mark on the left and notifications on the right.
+///
+/// Every hub screen (one reachable straight from the bottom nav / sidebar, not pushed on
+/// top of one) gets the same menu button wired to the same AppNavDrawer here, in one
+/// place, instead of each screen wiring its own IconButton + `GlobalKey<ScaffoldState>` +
+/// Drawer. A screen opts out by setting [automaticallyImplyLeading] (back-arrow screens
+/// pushed on top of a hub, e.g. claim detail) or [showMenuAction] explicitly to false; any
+/// screen that keeps the menu button must declare `drawer: const AppNavDrawer()` on its own
+/// Scaffold for Scaffold.of(context).openDrawer() to find.
 class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
   const BrandAppBar({
     super.key,
@@ -10,12 +19,14 @@ class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions,
     this.automaticallyImplyLeading = false,
     this.showNotificationAction = true,
+    this.showMenuAction = true,
   });
 
   final String title;
   final List<Widget>? actions;
   final bool automaticallyImplyLeading;
   final bool showNotificationAction;
+  final bool showMenuAction;
 
   static const String markAsset = 'assets/brand/logo_br_mark.png';
 
@@ -27,6 +38,14 @@ class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
     final trailing = <Widget>[
       if (showNotificationAction) const NotificationBellButton(),
       ...?actions,
+      if (showMenuAction && !automaticallyImplyLeading)
+        Builder(
+          builder: (context) => IconButton(
+            tooltip: 'Menu',
+            icon: Icon(PhosphorIcons.list()),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
     ];
 
     return AppBar(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 /// Full-screen, pinch-to-zoom view of a bill photo — used both for a freshly
 /// captured local file (confirm screen) and a fetched receipt image
@@ -27,7 +28,7 @@ class ImagePreviewScreen extends StatelessWidget {
               left: 8,
               child: IconButton(
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                icon: Icon(PhosphorIcons.x(), color: Colors.white, size: 28),
                 style: IconButton.styleFrom(
                   backgroundColor: Colors.black45,
                   shape: const CircleBorder(),

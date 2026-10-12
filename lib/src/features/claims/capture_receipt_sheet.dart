@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/api_client.dart';
 import '../../theme/app_theme.dart';
@@ -188,7 +189,7 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
               ),
             FilledButton.icon(
               onPressed: _mode == null ? null : _openGuidedCapture,
-              icon: const Icon(Icons.photo_camera),
+              icon: Icon(PhosphorIcons.camera()),
               label: const Text('Open camera'),
             ),
             const SizedBox(height: 14),
@@ -196,7 +197,7 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
               onPressed: _mode == null
                   ? null
                   : () => _pick(ImageSource.gallery),
-              icon: const Icon(Icons.photo_library_outlined),
+              icon: Icon(PhosphorIcons.image()),
               label: const Text('Upload from gallery'),
             ),
             const SizedBox(height: 10),
@@ -274,8 +275,8 @@ class _ModeOption extends StatelessWidget {
                       ),
                       child: Icon(
                         mode == BillLineMode.single
-                            ? Icons.receipt_long
-                            : Icons.format_list_bulleted,
+                            ? PhosphorIcons.receipt()
+                            : PhosphorIcons.listBullets(),
                         color: accent,
                         size: 24,
                       ),
@@ -284,15 +285,15 @@ class _ModeOption extends StatelessWidget {
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 160),
                       child: selected
-                          ? const Icon(
-                              Icons.check_circle,
-                              key: ValueKey('on'),
+                          ? Icon(
+                              PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+                              key: const ValueKey('on'),
                               color: AppColors.orange,
                               size: 22,
                             )
-                          : const Icon(
-                              Icons.circle_outlined,
-                              key: ValueKey('off'),
+                          : Icon(
+                              PhosphorIcons.circle(),
+                              key: const ValueKey('off'),
                               color: AppColors.divider,
                               size: 22,
                             ),
