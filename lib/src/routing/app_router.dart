@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,11 +10,14 @@ import '../features/approvals/approval_queue_screen.dart';
 import '../features/authentication/auth_controller.dart';
 import '../features/authentication/login_screen.dart';
 import '../features/claims/claim_detail_screen.dart';
+import '../features/claims/bill_line_mode.dart';
 import '../features/claims/confirm_claim_screen.dart';
 import '../features/claims/my_claims_screen.dart';
 import '../features/home/main_shell.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/web/all_claims_screen.dart';
+import '../features/web/dashboard_screen.dart';
 import 'role_routes.dart';
 
 /// Notifies go_router when auth changes (without recreating the router).
@@ -30,7 +34,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
-    initialLocation: '/claims',
+    initialLocation: kIsWeb ? '/dashboard' : '/claims',
     refreshListenable: refresh,
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
@@ -57,6 +61,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return homeRouteFor(role);
       }
 
+      // Dashboard and all-claims are web-only screens; redirect mobile employees away.
+      if (!kIsWeb && !approver && (loc == '/dashboard' || loc == '/all-claims')) {
+        return '/claims';
+      }
+
       return null;
     },
     routes: [
@@ -64,6 +73,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),
         routes: [
+          GoRoute(
+            path: '/dashboard',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: DashboardScreen(),
+            ),
+          ),
+          GoRoute(
+            path: '/all-claims',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: AllClaimsScreen(),
+            ),
+          ),
           GoRoute(
             path: '/claims',
             pageBuilder: (context, state) => const NoTransitionPage(
@@ -89,6 +110,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   ocr: extra['ocr'] as OcrResult,
                   localPath: extra['localPath'] as String?,
                   runOcr: extra['runOcr'] == true,
+                  lineMode: extra['lineMode'] as BillLineMode? ?? BillLineMode.single,
                 );
               }
               return const Scaffold(

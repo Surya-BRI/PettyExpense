@@ -11,9 +11,94 @@ import '../../widgets/claim_stage_tracker.dart';
 import '../../widgets/shimmer_box.dart';
 import '../shared/status_chip.dart';
 
-final myClaimsProvider = FutureProvider.autoDispose<List<ExpenseClaim>>((ref) {
-  return ref.watch(apiClientProvider).myClaims();
-});
+const _pageSize = 6;
+
+class MyClaimsState {
+  const MyClaimsState({
+    this.items = const [],
+    this.status = 'all',
+    this.page = 0,
+    this.total = 0,
+    this.isLoading = true,
+    this.error,
+  });
+
+  final List<ExpenseClaim> items;
+  final String status;
+  final int page;
+  final int total;
+  final bool isLoading;
+  final Object? error;
+
+  bool get hasNext => (page + 1) * _pageSize < total;
+  bool get hasPrevious => page > 0;
+
+  MyClaimsState copyWith({
+    List<ExpenseClaim>? items,
+    String? status,
+    int? page,
+    int? total,
+    bool? isLoading,
+    Object? error,
+    bool clearError = false,
+  }) {
+    return MyClaimsState(
+      items: items ?? this.items,
+      status: status ?? this.status,
+      page: page ?? this.page,
+      total: total ?? this.total,
+      isLoading: isLoading ?? this.isLoading,
+      error: clearError ? null : (error ?? this.error),
+    );
+  }
+}
+
+class MyClaimsController extends StateNotifier<MyClaimsState> {
+  MyClaimsController(this._ref) : super(const MyClaimsState()) {
+    _fetch();
+  }
+
+  final Ref _ref;
+
+  Future<void> _fetch() async {
+    try {
+      final page = await _ref.read(apiClientProvider).myClaims(
+            limit: _pageSize,
+            offset: state.page * _pageSize,
+            status: state.status,
+          );
+      state = state.copyWith(items: page.items, total: page.total, isLoading: false, clearError: true);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e);
+    }
+  }
+
+  Future<void> refresh() async {
+    state = state.copyWith(page: 0, isLoading: true, clearError: true);
+    await _fetch();
+  }
+
+  Future<void> nextPage() async {
+    if (state.isLoading || !state.hasNext) return;
+    state = state.copyWith(page: state.page + 1, isLoading: true);
+    await _fetch();
+  }
+
+  Future<void> previousPage() async {
+    if (state.isLoading || !state.hasPrevious) return;
+    state = state.copyWith(page: state.page - 1, isLoading: true);
+    await _fetch();
+  }
+
+  void setStatus(String status) {
+    if (status == state.status) return;
+    state = MyClaimsState(status: status, isLoading: true);
+    _fetch();
+  }
+}
+
+final myClaimsControllerProvider =
+    StateNotifierProvider.autoDispose<MyClaimsController, MyClaimsState>((ref) => MyClaimsController(ref));
 
 const _statusFilters = ['all', 'draft', 'submitted', 'disputed', 'approved', 'rejected', 'paid'];
 const _statusFilterLabels = {
@@ -34,8 +119,6 @@ class MyClaimsScreen extends ConsumerStatefulWidget {
 }
 
 class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
-  String _statusFilter = 'all';
-
   Color _statusAccent(String status) {
     switch (status) {
       case 'submitted':
@@ -55,7 +138,7 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(myClaimsProvider);
+    final state = ref.watch(myClaimsControllerProvider);
 
     return Scaffold(
       appBar: BrandAppBar(
@@ -63,16 +146,16 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
         showNotificationAction: false,
         actions: [
           PopupMenuButton<String>(
-            initialValue: _statusFilter,
-            onSelected: (s) => setState(() => _statusFilter = s),
+            initialValue: state.status,
+            onSelected: (s) => ref.read(myClaimsControllerProvider.notifier).setStatus(s),
             icon: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(Icons.filter_list),
-                if (_statusFilter != 'all') ...[
+                if (state.status != 'all') ...[
                   const SizedBox(width: 4),
                   Text(
-                    _statusFilterLabels[_statusFilter]!,
+                    _statusFilterLabels[state.status]!,
                     style: const TextStyle(fontSize: 13, color: Colors.white),
                   ),
                 ],
@@ -84,27 +167,30 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
           ),
         ],
       ),
-      body: async.when(
-              loading: () => const _MyClaimsSkeleton(),
-              error: (e, _) => Center(child: Text('$e')),
-              data: (claims) {
-                final filtered =
-                    _statusFilter == 'all' ? claims : claims.where((c) => c.status == _statusFilter).toList();
-                if (claims.isEmpty) {
-                  return const Center(child: Text('No claims yet. Capture a receipt to start.'));
-                }
-                if (filtered.isEmpty) {
-                  return Center(
-                    child: Text('No ${_statusFilterLabels[_statusFilter]!.toLowerCase()} claims.'),
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                  itemCount: filtered.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 12),
-                  itemBuilder: (context, i) {
-                    final c = filtered[i];
-                    final stageLabel = (c.status == 'submitted' || c.status == 'disputed')
+      body: Column(
+        children: [
+          Expanded(
+            child: state.isLoading
+                ? const _MyClaimsSkeleton()
+                : state.error != null
+                    ? Center(child: Text('${state.error}'))
+                    : state.items.isEmpty
+                        ? Center(
+                            child: Text(
+                              state.status == 'all'
+                                  ? 'No claims yet. Capture a receipt to start.'
+                                  : 'No ${_statusFilterLabels[state.status]!.toLowerCase()} claims.',
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: () => ref.read(myClaimsControllerProvider.notifier).refresh(),
+                            child: ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                              itemCount: state.items.length,
+                              separatorBuilder: (context, index) => const SizedBox(height: 12),
+                              itemBuilder: (context, i) {
+                                final c = state.items[i];
+                                final stageLabel = (c.status == 'submitted' || c.status == 'disputed')
                         ? ClaimStageTracker.compactLabel(c)
                         : null;
                     return Material(
@@ -258,11 +344,54 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                           ),
                         ),
                       ),
-                    );
-                  },
-                );
-              },
-            ),
+                                );
+                              },
+                            ),
+                          ),
+          ),
+          if (!state.isLoading && state.error == null && state.items.isNotEmpty)
+            _ClaimsPager(state: state),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClaimsPager extends ConsumerWidget {
+  const _ClaimsPager({required this.state});
+
+  final MyClaimsState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final start = state.total == 0 ? 0 : state.page * _pageSize + 1;
+    final end = (state.page * _pageSize + state.items.length).clamp(0, state.total);
+    final notifier = ref.read(myClaimsControllerProvider.notifier);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.divider)),
+      ),
+      child: Row(
+        children: [
+          TextButton.icon(
+            onPressed: state.hasPrevious ? notifier.previousPage : null,
+            icon: const Icon(Icons.chevron_left),
+            label: const Text('Back'),
+          ),
+          const Spacer(),
+          Text(
+            '$start-$end of ${state.total}',
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: state.hasNext ? notifier.nextPage : null,
+            icon: const Icon(Icons.chevron_right),
+            label: const Text('Next'),
+          ),
+        ],
+      ),
     );
   }
 }

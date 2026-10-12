@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../api/api_client.dart' show RegionSelectionRequired;
 import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
 import '../../theme/app_theme.dart';
@@ -14,30 +16,27 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-const _regions = ['UAE', 'KSA', 'OMAN'];
 const _regionLabels = {'UAE': 'UAE', 'KSA': 'KSA', 'OMAN': 'Oman'};
-
-// Reference only -- type these into the fields above. Fatima is excluded here since her
-// region choice is restricted (UAE/KSA/Oman only) rather than free like every account below.
-const _demoAccounts = [
-  ('surya', 'surya123', 'Employee · Sales'),
-  ('raghu', 'raghu123', 'Employee · Sales'),
-  ('vikram', 'vikram123', 'Employee · IT'),
-  ('denny', 'denny123', 'HOD · IT'),
-  ('sajeesh', 'sajeesh123', 'HOD · Sales'),
-  ('anjana', 'anjana123', 'Accountant'),
-  ('sandeep', 'sandeep123', 'Finance Manager'),
-  ('rajesh', 'rajesh123', 'Finance Manager'),
-  ('teja', 'teja123', 'Admin'),
-];
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  String _selectedRegion = 'UAE';
+  // Most accounts are single-region and never need this -- their region is derived
+  // server-side from ERP data. These only get populated if /login comes back asking
+  // the user to choose (RegionSelectionRequired), i.e. a genuine multi-region account.
+  List<String>? _regionOptions;
+  String? _selectedRegion;
   String? _error;
   bool _busy = false;
   bool _obscurePassword = true;
+
+  static const _demoAccounts = [
+    ('dev_employee',   'Test@1234', 'Employee'),
+    ('dev_hod',        'Test@1234', 'HOD'),
+    ('dev_accountant', 'Test@1234', 'Accountant'),
+    ('dev_finance',    'Test@1234', 'Finance Manager'),
+    ('dev_admin',      'Test@1234', 'Admin'),
+  ];
 
   @override
   void dispose() {
@@ -60,6 +59,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final user = ref.read(authControllerProvider).user;
       if (!mounted) return;
       context.go(homeRouteFor(UserRoleX.fromJson(user?.role)));
+    } on RegionSelectionRequired catch (e) {
+      setState(() {
+        _regionOptions = e.allowedRegions;
+        _selectedRegion ??= e.allowedRegions.isNotEmpty ? e.allowedRegions.first : null;
+      });
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -106,21 +110,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const Spacer(flex: 2),
-                      Text('Sign in as region', style: Theme.of(context).textTheme.labelMedium),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          for (final region in _regions) ...[
-                            Expanded(child: _RegionPill(
-                              label: _regionLabels[region] ?? region,
-                              selected: _selectedRegion == region,
-                              onTap: () => setState(() => _selectedRegion = region),
-                            )),
-                            if (region != _regions.last) const SizedBox(width: 10),
+                      // Only shown once /login comes back asking for a region -- a genuine
+                      // multi-region account. Everyone else never sees this.
+                      if (_regionOptions != null) ...[
+                        Text('Choose a region to sign in with', style: Theme.of(context).textTheme.labelMedium),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            for (final region in _regionOptions!) ...[
+                              Expanded(child: _RegionPill(
+                                label: _regionLabels[region] ?? region,
+                                selected: _selectedRegion == region,
+                                onTap: () => setState(() => _selectedRegion = region),
+                              )),
+                              if (region != _regionOptions!.last) const SizedBox(width: 10),
+                            ],
                           ],
-                        ],
-                      ),
-                      const SizedBox(height: 20),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
                       TextField(
                         controller: _userCtrl,
                         decoration: const InputDecoration(labelText: 'Username'),
@@ -146,35 +154,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _busy ? null : _login,
                         child: Text(_busy ? 'Signing in…' : 'Sign in'),
                       ),
-                      const SizedBox(height: 20),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.divider),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Demo accounts — tap to fill in', style: Theme.of(context).textTheme.labelMedium),
-                            const SizedBox(height: 4),
-                            for (final (username, password, role) in _demoAccounts)
-                              InkWell(
-                                onTap: () => setState(() {
-                                  _userCtrl.text = username;
-                                  _passCtrl.text = password;
-                                }),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  child: Text(
-                                    '$username / $password — $role',
-                                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                  ),
+                      // Debug-only: never ships in a release build (flutter build --release / --profile),
+                      // so a real APK handed to actual users never exposes these credentials.
+                      if (kDebugMode) ...[
+                        const SizedBox(height: 20),
+                        DropdownButtonFormField<int>(
+                          decoration: InputDecoration(
+                            labelText: 'Dev account',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          hint: const Text('Select a dev account'),
+                          value: null,
+                          items: [
+                            for (var i = 0; i < _demoAccounts.length; i++)
+                              DropdownMenuItem(
+                                value: i,
+                                child: Text(
+                                  '${_demoAccounts[i].$1} — ${_demoAccounts[i].$3}',
+                                  style: const TextStyle(fontSize: 13),
                                 ),
                               ),
                           ],
+                          onChanged: (i) {
+                            if (i == null) return;
+                            setState(() {
+                              _userCtrl.text = _demoAccounts[i].$1;
+                              _passCtrl.text = _demoAccounts[i].$2;
+                            });
+                          },
                         ),
-                      ),
+                      ],
                       const Spacer(flex: 1),
                     ],
                   ),

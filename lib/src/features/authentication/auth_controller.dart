@@ -104,14 +104,19 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> login(String username, String password, {String? regionCode}) async {
     state = state.copyWith(isLoading: true);
-    final client = ApiClient(baseUrl: kDefaultApiBase);
-    final data = await client.login(username, password, regionCode: regionCode);
-    final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
-    final access = data['access_token'] as String;
-    final refresh = data['refresh_token'] as String;
-    await _storage.write(key: 'access_token', value: access);
-    await _storage.write(key: 'refresh_token', value: refresh);
-    state = AuthState(user: user, accessToken: access, refreshToken: refresh);
+    try {
+      final client = ApiClient(baseUrl: kDefaultApiBase);
+      final data = await client.login(username, password, regionCode: regionCode);
+      final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+      final access = data['access_token'] as String;
+      final refresh = data['refresh_token'] as String;
+      await _storage.write(key: 'access_token', value: access);
+      await _storage.write(key: 'refresh_token', value: refresh);
+      state = AuthState(user: user, accessToken: access, refreshToken: refresh);
+    } catch (_) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
   }
 
   Future<void> logout() async {

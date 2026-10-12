@@ -7,7 +7,7 @@ class QualityThresholds {
     this.minSharpness = 4.0,
     this.glareBrightnessThreshold = 248,
     this.glareFlatnessThreshold = 6.0,
-    this.glareAreaFraction = 0.25,
+    this.glareAreaFraction = 0.55,
     this.gridDivisions = 12,
   });
 
@@ -28,7 +28,11 @@ class QualityThresholds {
   final double glareFlatnessThreshold;
 
   /// Fraction of the crop that must be bright-and-flat before glare actually
-  /// blocks the capture. Deliberately high -- "block only when severe".
+  /// blocks the capture. Deliberately high -- "block only when severe". Blank
+  /// white paper is also bright-and-flat, so this can't be low: the real bills in
+  /// assets/dubai + assets/ksa measure up to 0.49 (wide white margins, a
+  /// white-background Uber screenshot) while being perfectly readable, and the
+  /// old 0.25 blocked 4 of those 13 -- stalling auto-capture on "Too much glare".
   final double glareAreaFraction;
 
   /// The crop is analyzed in gridDivisions x gridDivisions blocks.

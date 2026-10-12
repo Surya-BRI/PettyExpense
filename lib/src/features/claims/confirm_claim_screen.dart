@@ -12,6 +12,8 @@ import '../../theme/app_theme.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/image_preview_screen.dart';
 import '../authentication/auth_controller.dart';
+import 'bill_line_mode.dart';
+import 'line_items_editor.dart';
 
 final _arabic = RegExp(r'[\u0600-\u06FF]');
 
@@ -28,11 +30,15 @@ class ConfirmClaimScreen extends ConsumerStatefulWidget {
     required this.ocr,
     this.localPath,
     this.runOcr = false,
+    this.lineMode = BillLineMode.single,
   });
 
   final OcrResult ocr;
   final String? localPath;
   final bool runOcr;
+
+  /// Chosen on the Add receipt sheet before scanning.
+  final BillLineMode lineMode;
 
   @override
   ConsumerState<ConfirmClaimScreen> createState() => _ConfirmClaimScreenState();
@@ -41,20 +47,31 @@ class ConfirmClaimScreen extends ConsumerStatefulWidget {
 class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   late OcrResult _ocr;
   late final TextEditingController _vendor;
+  late final TextEditingController _billNumber;
   late final TextEditingController _amount;
   late final TextEditingController _vat;
   late final TextEditingController _total;
   late final TextEditingController _date;
   late final TextEditingController _remarks;
   int? _categoryId;
-  int? _projectId;
   String _type = 'reimbursement';
   String _ocrMode = 'auto';
   String? _currency;
   bool _busy = false;
   String? _error;
   List<CategoryRef> _categories = const [];
-  List<ProjectRef> _projects = const [];
+
+  // OP search
+  final TextEditingController _opCtrl = TextEditingController();
+  OpportunityResult? _selectedOp;
+  bool _opSearching = false;
+  String? _opError;
+  Timer? _opDebounce;
+
+  // "Multiple items" bills: one editable draft per item line.
+  final List<LineItemDraft> _lines = [];
+  bool _showLineProblems = false;
+  bool get _multi => widget.lineMode == BillLineMode.multiple;
 
   bool _analyzing = false;
   bool _ocrFailed = false;
@@ -66,33 +83,42 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     super.initState();
     _ocr = widget.ocr;
     _vendor = TextEditingController(text: _ocr.vendor);
+    _billNumber = TextEditingController(text: _ocr.billNumber ?? '');
     _amount = TextEditingController(text: _money(_ocr.amount));
     _vat = TextEditingController(text: _money(_ocr.vatAmount));
     _total = TextEditingController(text: _money(_ocr.totalAmount));
     _date = TextEditingController(text: _ocr.date);
     _remarks = TextEditingController();
     _currency = _normalizeCurrency(_ocr.currency);
+    if (_multi) _seedLines(_ocr.lineItems);
     _loadReferenceData();
     if (widget.runOcr || _ocr.isPending) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _analyzeWithRetries());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _analyzeWithRetries(),
+      );
     }
   }
 
   String _money(double? value) => value == null ? '' : value.toStringAsFixed(2);
 
   // Anything not recognized as AED/SAR is left unselected, never silently defaulted to AED — the employee must actively pick a currency.
-  String? _normalizeCurrency(String? value) => (value == 'AED' || value == 'SAR') ? value : null;
+  String? _normalizeCurrency(String? value) =>
+      (value == 'AED' || value == 'SAR') ? value : null;
 
   Future<void> _loadReferenceData() async {
     try {
       final api = ref.read(apiClientProvider);
       final categories = await api.categories();
-      final projects = await api.projects();
       if (mounted) {
         setState(() {
           _categories = categories;
-          _projects = projects;
-          _categoryId ??= _matchExpenseType(categories) ?? (categories.isNotEmpty ? categories.first.id : null);
+          _categoryId ??=
+              _matchExpenseType(categories) ??
+              (categories.isNotEmpty ? categories.first.id : null);
+          // Lines start in the bill's detected category; the employee can change each one.
+          for (final line in _lines) {
+            line.categoryId ??= _categoryId;
+          }
         });
       }
     } catch (_) {}
@@ -105,6 +131,37 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       if (c.name.toLowerCase() == wanted) return c.id;
     }
     return null;
+  }
+
+  /// Replaces the item drafts with what the scan read (or one empty line if it read none).
+  void _seedLines(List<OcrLineItem> items) {
+    for (final line in _lines) {
+      line.dispose();
+    }
+    _lines
+      ..clear()
+      ..addAll(
+        items.map((i) => LineItemDraft.fromOcr(i, categoryId: _categoryId)),
+      );
+    if (_lines.isEmpty) _lines.add(LineItemDraft(categoryId: _categoryId));
+  }
+
+  double get _linesTotal =>
+      _lines.fold(0.0, (sum, l) => sum + (l.amountValue ?? 0));
+
+  double get _vatValue => double.tryParse(_vat.text.trim()) ?? 0;
+
+  /// Claim-level category for a multi-item bill: the category carrying the most money.
+  int? get _mainLineCategory {
+    final byCategory = <int, double>{};
+    for (final l in _lines) {
+      final c = l.categoryId;
+      if (c != null) {
+        byCategory[c] = (byCategory[c] ?? 0) + (l.amountValue ?? 0);
+      }
+    }
+    if (byCategory.isEmpty) return null;
+    return byCategory.entries.reduce((a, b) => b.value > a.value ? b : a).key;
   }
 
   void _startTicker() {
@@ -132,7 +189,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         setState(() => _progress = 20);
       }
       try {
-        final result = await ref.read(apiClientProvider).analyzeReceipt(_ocr.receiptId, ocrMode: _ocrMode);
+        final result = await ref
+            .read(apiClientProvider)
+            .analyzeReceipt(_ocr.receiptId, ocrMode: _ocrMode);
         if (!mounted) return;
         _applyOcr(result);
         _ticker?.cancel();
@@ -156,13 +215,15 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       _analyzing = false;
       _ocrFailed = true;
       _progress = 0;
-      _error = lastError?.toString();
+      final raw = lastError?.toString() ?? '';
+      _error = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
     });
   }
 
   void _applyOcr(OcrResult result) {
     _ocr = result;
     _vendor.text = result.vendor;
+    if (_billNumber.text.isEmpty) _billNumber.text = result.billNumber ?? '';
     _amount.text = _money(result.amount);
     _vat.text = _money(result.vatAmount);
     _total.text = _money(result.totalAmount);
@@ -170,17 +231,24 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     _currency = _normalizeCurrency(result.currency);
     final matched = _matchExpenseType(_categories, result.expenseType);
     if (matched != null) _categoryId = matched;
+    if (_multi) _seedLines(result.lineItems);
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    _opDebounce?.cancel();
+    _opCtrl.dispose();
     _vendor.dispose();
+    _billNumber.dispose();
     _amount.dispose();
     _vat.dispose();
     _total.dispose();
     _date.dispose();
     _remarks.dispose();
+    for (final line in _lines) {
+      line.dispose();
+    }
     super.dispose();
   }
 
@@ -191,6 +259,26 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       _error = null;
     });
     try {
+      List<Map<String, dynamic>>? lineItems;
+      if (_multi) {
+        if (_lines.isEmpty) throw Exception('Add at least one item');
+        final incomplete = _lines.indexWhere((l) => l.problem != null);
+        if (incomplete >= 0) {
+          setState(() => _showLineProblems = true);
+          throw Exception(
+            'Item ${incomplete + 1}: ${_lines[incomplete].problem}',
+          );
+        }
+        lineItems = _lines.map((l) => l.toJson()).toList();
+        // Totals come from the lines (the backend recomputes them the same way).
+        final total = double.parse(_linesTotal.toStringAsFixed(2));
+        if (_vatValue > total) {
+          throw Exception('VAT can’t be more than the items total');
+        }
+        _total.text = total.toStringAsFixed(2);
+        _amount.text = (total - _vatValue).toStringAsFixed(2);
+        _categoryId = _mainLineCategory ?? _categoryId;
+      }
       final amount = double.tryParse(_amount.text.trim());
       if (amount == null) {
         throw Exception('Enter a valid amount');
@@ -214,8 +302,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       if (_date.text.trim().isEmpty) {
         throw Exception('Enter the bill date');
       }
-      final selectedProject =
-          _projectId == null ? null : _projects.firstWhere((p) => p.id == _projectId);
+      if (_billNumber.text.trim().isEmpty) {
+        throw Exception('Enter the bill / invoice number');
+      }
       final api = ref.read(apiClientProvider);
       final claim = await api.createClaim({
         'vendor': _vendor.text.trim(),
@@ -227,14 +316,17 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         'category_id': _categoryId,
         // The region the user signed in under (multi-region users pick one at login);
         // falls back to UAE for single-region demo users who never had a region to pick.
-        'region_code': ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
+        'region_code':
+            ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
         'type': _type,
-        'project_id': _projectId,
-        'op_number': selectedProject?.opNumber,
+        'project_id': null,
+        'op_number': _selectedOp?.opCode,
+        'bill_number': _billNumber.text.trim(),
         'remarks': _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
         'receipt_id': _ocr.receiptId,
         's3_key': _ocr.s3Key,
         'submit': !asDraft,
+        'line_items': ?lineItems,
       });
       if (!mounted) return;
       if (claim.duplicateWarning != null) {
@@ -244,7 +336,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       }
       context.go('/claim/${claim.id}');
     } catch (e) {
-      setState(() => _error = e.toString());
+      final msg = e.toString();
+      setState(() => _error = msg.startsWith('Exception: ') ? msg.substring(11) : msg);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -283,6 +376,21 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
               ),
             ),
           const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Chip(
+              avatar: Icon(
+                widget.lineMode == BillLineMode.single
+                    ? Icons.receipt_outlined
+                    : Icons.list_alt,
+                size: 18,
+                color: AppColors.darkBlue,
+              ),
+              label: Text(widget.lineMode.label),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+          const SizedBox(height: 8),
           _OcrModeSelector(
             value: _ocrMode,
             enabled: !_analyzing,
@@ -298,7 +406,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
           if (_ocrFailed) ...[
             const SizedBox(height: 12),
             _ManualEntryBanner(
-              onRetry: _analyzing ? null : () => _analyzeWithRetries(maxAttempts: 1),
+              onRetry: _analyzing
+                  ? null
+                  : () => _analyzeWithRetries(maxAttempts: 1),
             ),
           ],
           if (_ocr.duplicateWarning != null) ...[
@@ -311,13 +421,17 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
               _ocr.vatAmount != null &&
               _ocr.totalAmount != null) ...[
             const SizedBox(height: 12),
-            _notice("Amount + VAT doesn't match the total on this bill — please double-check these figures before submitting."),
+            _notice(
+              "Amount + VAT doesn't match the total on this bill — please double-check these figures before submitting.",
+            ),
           ],
           const SizedBox(height: 16),
           if (!_analyzing)
             const Padding(
               padding: EdgeInsets.only(bottom: 16),
-              child: Text('Review every field before submitting. You can edit every value.'),
+              child: Text(
+                'Review every field before submitting. You can edit every value.',
+              ),
             ),
           IgnorePointer(
             ignoring: fieldsLocked,
@@ -329,41 +443,114 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                     controller: _vendor,
                     label: 'Vendor / customer name',
                     lowConfidence: !_ocrFailed && _ocr.isLow('vendor'),
-                    confidence: _ocrFailed ? null : _ocr.confidenceFor('vendor'),
+                    confidence: _ocrFailed
+                        ? null
+                        : _ocr.confidenceFor('vendor'),
                     allowArabic: true,
+                  ),
+                  const SizedBox(height: 12),
+                  _OcrTextField(
+                    controller: _billNumber,
+                    label: 'Bill / invoice number *',
+                    lowConfidence: !_ocrFailed && _ocr.isLow('invoice_number'),
+                    confidence: _ocrFailed
+                        ? null
+                        : (_ocr.confidenceFor('invoice_number') ?? _ocr.confidenceFor('transaction_number')),
                   ),
                   const SizedBox(height: 12),
                   _CurrencyToggle(
                     value: _currency,
                     onChanged: (v) => setState(() => _currency = v),
                   ),
-                  const SizedBox(height: 12),
-                  _OcrTextField(
-                    controller: _amount,
-                    label: currency == null ? 'Amount (excl. VAT) *' : 'Amount excl. VAT ($currency) *',
-                    lowConfidence: !_ocrFailed && _ocr.isLow('amount'),
-                    confidence: _ocrFailed ? null : _ocr.confidenceFor('amount'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: _decimalInputFormatters,
-                  ),
-                  const SizedBox(height: 12),
-                  _OcrTextField(
-                    controller: _vat,
-                    label: 'VAT amount (leave blank if none)',
-                    lowConfidence: !_ocrFailed && _ocr.isLow('vat_amount'),
-                    confidence: _ocrFailed ? null : _ocr.confidenceFor('vat_amount'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: _decimalInputFormatters,
-                  ),
-                  const SizedBox(height: 12),
-                  _OcrTextField(
-                    controller: _total,
-                    label: currency == null ? 'Total amount *' : 'Total amount ($currency) *',
-                    lowConfidence: !_ocrFailed && _ocr.isLow('total_amount'),
-                    confidence: _ocrFailed ? null : _ocr.confidenceFor('total_amount'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: _decimalInputFormatters,
-                  ),
+                  if (_multi) ...[
+                    const SizedBox(height: 16),
+                    _SectionLabel(
+                      'Items on this bill',
+                      trailing:
+                          '${_lines.length} item${_lines.length == 1 ? '' : 's'}',
+                    ),
+                    const SizedBox(height: 8),
+                    LineItemsEditor(
+                      lines: _lines,
+                      categories: _categories,
+                      currency: currency,
+                      showProblems: _showLineProblems,
+                      onChanged: () => setState(() {}),
+                      onAdd: () => setState(
+                        () =>
+                            _lines.add(LineItemDraft(categoryId: _categoryId)),
+                      ),
+                      onRemove: (i) =>
+                          setState(() => _lines.removeAt(i).dispose()),
+                    ),
+                    const SizedBox(height: 12),
+                    _OcrTextField(
+                      controller: _vat,
+                      label:
+                          'VAT amount included in the items (leave blank if none)',
+                      lowConfidence: !_ocrFailed && _ocr.isLow('vat_amount'),
+                      confidence: _ocrFailed
+                          ? null
+                          : _ocr.confidenceFor('vat_amount'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: _decimalInputFormatters,
+                      onChanged: () => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    _ItemsTotals(
+                      currency: currency,
+                      itemsTotal: _linesTotal,
+                      vat: _vatValue,
+                      billTotal: _ocrFailed ? null : _ocr.totalAmount,
+                    ),
+                  ],
+                  if (!_multi) ...[
+                    const SizedBox(height: 12),
+                    _OcrTextField(
+                      controller: _amount,
+                      label: currency == null
+                          ? 'Amount (excl. VAT) *'
+                          : 'Amount excl. VAT ($currency) *',
+                      lowConfidence: !_ocrFailed && _ocr.isLow('amount'),
+                      confidence: _ocrFailed
+                          ? null
+                          : _ocr.confidenceFor('amount'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: _decimalInputFormatters,
+                    ),
+                    const SizedBox(height: 12),
+                    _OcrTextField(
+                      controller: _vat,
+                      label: 'VAT amount (leave blank if none)',
+                      lowConfidence: !_ocrFailed && _ocr.isLow('vat_amount'),
+                      confidence: _ocrFailed
+                          ? null
+                          : _ocr.confidenceFor('vat_amount'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: _decimalInputFormatters,
+                    ),
+                    const SizedBox(height: 12),
+                    _OcrTextField(
+                      controller: _total,
+                      label: currency == null
+                          ? 'Total amount *'
+                          : 'Total amount ($currency) *',
+                      lowConfidence: !_ocrFailed && _ocr.isLow('total_amount'),
+                      confidence: _ocrFailed
+                          ? null
+                          : _ocr.confidenceFor('total_amount'),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: _decimalInputFormatters,
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _OcrTextField(
                     controller: _date,
@@ -371,22 +558,32 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                     lowConfidence: !_ocrFailed && _ocr.isLow('date'),
                     confidence: _ocrFailed ? null : _ocr.confidenceFor('date'),
                   ),
-                  const SizedBox(height: 12),
-                  _flaggedDecorator(
-                    label: 'Expense type *',
-                    low: !_ocrFailed && _ocr.isLow('expense_type'),
-                    confidence: _ocrFailed ? null : _ocr.confidenceFor('expense_type'),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int>(
-                        isExpanded: true,
-                        value: _categoryId,
-                        items: _categories
-                            .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
-                            .toList(),
-                        onChanged: (v) => setState(() => _categoryId = v),
+                  // Multi-item bills carry a category per line instead of one for the whole bill.
+                  if (!_multi) ...[
+                    const SizedBox(height: 12),
+                    _flaggedDecorator(
+                      label: 'Expense type *',
+                      low: !_ocrFailed && _ocr.isLow('expense_type'),
+                      confidence: _ocrFailed
+                          ? null
+                          : _ocr.confidenceFor('expense_type'),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          isExpanded: true,
+                          value: _categoryId,
+                          items: _categories
+                              .map(
+                                (c) => DropdownMenuItem(
+                                  value: c.id,
+                                  child: Text(c.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() => _categoryId = v),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -399,28 +596,87 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                 isExpanded: true,
                 value: _type,
                 items: const [
-                  DropdownMenuItem(value: 'reimbursement', child: Text('Reimbursement')),
-                  DropdownMenuItem(value: 'petty_cash', child: Text('Petty cash')),
+                  DropdownMenuItem(
+                    value: 'reimbursement',
+                    child: Text('Reimbursement'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'petty_cash',
+                    child: Text('Petty cash'),
+                  ),
                 ],
                 onChanged: (v) => setState(() => _type = v ?? 'reimbursement'),
               ),
             ),
           ),
           const SizedBox(height: 12),
-          InputDecorator(
-            decoration: const InputDecoration(labelText: 'Project / OP'),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int?>(
-                isExpanded: true,
-                value: _projectId,
-                items: [
-                  const DropdownMenuItem(value: null, child: Text('None')),
-                  ..._projects.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))),
+          TextField(
+            controller: _opCtrl,
+            decoration: InputDecoration(
+              labelText: 'Project / OP code',
+              hintText: 'e.g. OP-2201',
+              suffixIcon: _opSearching
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                    )
+                  : _selectedOp != null
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => setState(() {
+                            _opCtrl.clear();
+                            _selectedOp = null;
+                            _opError = null;
+                          }),
+                        )
+                      : null,
+              errorText: _opError,
+            ),
+            onChanged: (val) {
+              _opDebounce?.cancel();
+              if (val.trim().isEmpty) {
+                setState(() { _selectedOp = null; _opError = null; });
+                return;
+              }
+              _opDebounce = Timer(const Duration(milliseconds: 600), () async {
+                setState(() { _opSearching = true; _opError = null; });
+                try {
+                  final result = await ref.read(apiClientProvider).searchOpportunity(val.trim());
+                  if (mounted) {
+                    setState(() {
+                      _selectedOp = result;
+                      _opError = result == null ? 'OP code not found' : null;
+                    });
+                  }
+                } catch (_) {
+                  if (mounted) setState(() => _opError = 'Search failed');
+                } finally {
+                  if (mounted) setState(() => _opSearching = false);
+                }
+              });
+            },
+          ),
+          if (_selectedOp != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.successSoft,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_selectedOp!.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                  if (_selectedOp!.buCode != null || _selectedOp!.salesPerson != null)
+                    Text(
+                      [_selectedOp!.buCode, _selectedOp!.salesPerson].whereType<String>().join(' · '),
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
                 ],
-                onChanged: (v) => setState(() => _projectId = v),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: 12),
           TextField(
             controller: _remarks,
@@ -433,12 +689,22 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
           ],
           const SizedBox(height: 20),
           FilledButton(
-            onPressed: (_busy || _analyzing) ? null : () => _submit(asDraft: false),
-            child: Text(_busy ? 'Submitting…' : _analyzing ? 'Waiting for bill reading…' : 'Submit for approval'),
+            onPressed: (_busy || _analyzing)
+                ? null
+                : () => _submit(asDraft: false),
+            child: Text(
+              _busy
+                  ? 'Submitting…'
+                  : _analyzing
+                  ? 'Waiting for bill reading…'
+                  : 'Submit for approval',
+            ),
           ),
           const SizedBox(height: 10),
           OutlinedButton(
-            onPressed: (_busy || _analyzing) ? null : () => _submit(asDraft: true),
+            onPressed: (_busy || _analyzing)
+                ? null
+                : () => _submit(asDraft: true),
             child: const Text('Save as draft'),
           ),
         ],
@@ -454,10 +720,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     return Material(
       color: AppColors.warningSoft,
       borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Text(text),
-      ),
+      child: Padding(padding: const EdgeInsets.all(12), child: Text(text)),
     );
   }
 }
@@ -483,7 +746,10 @@ class _OcrProgress extends StatelessWidget {
               const SizedBox(width: 10),
               Text(
                 '$progress%',
-                style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.darkBlue),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.darkBlue,
+                ),
               ),
             ],
           ),
@@ -531,12 +797,18 @@ class _ManualEntryBanner extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.darkBlue,
                   side: const BorderSide(color: AppColors.darkBlue),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   visualDensity: VisualDensity.compact,
                 ),
-                child: const Text('Recheck once more', style: TextStyle(fontSize: 12)),
+                child: const Text(
+                  'Recheck once more',
+                  style: TextStyle(fontSize: 12),
+                ),
               ),
             ],
           ],
@@ -555,11 +827,17 @@ InputDecoration _ocrDecoration({
     labelText: label,
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: low ? AppColors.orange : AppColors.divider, width: low ? 1.6 : 1),
+      borderSide: BorderSide(
+        color: low ? AppColors.orange : AppColors.divider,
+        width: low ? 1.6 : 1,
+      ),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: low ? AppColors.orange : AppColors.darkBlue, width: 1.5),
+      borderSide: BorderSide(
+        color: low ? AppColors.orange : AppColors.darkBlue,
+        width: 1.5,
+      ),
     ),
     filled: true,
     fillColor: low ? AppColors.warningSoft : AppColors.card,
@@ -575,6 +853,7 @@ class _OcrTextField extends StatefulWidget {
     this.keyboardType,
     this.allowArabic = false,
     this.inputFormatters,
+    this.onChanged,
   });
 
   final TextEditingController controller;
@@ -584,6 +863,7 @@ class _OcrTextField extends StatefulWidget {
   final TextInputType? keyboardType;
   final bool allowArabic;
   final List<TextInputFormatter>? inputFormatters;
+  final VoidCallback? onChanged;
 
   @override
   State<_OcrTextField> createState() => _OcrTextFieldState();
@@ -592,14 +872,20 @@ class _OcrTextField extends StatefulWidget {
 class _OcrTextFieldState extends State<_OcrTextField> {
   @override
   Widget build(BuildContext context) {
-    final arabic = widget.allowArabic && _arabic.hasMatch(widget.controller.text);
+    final arabic =
+        widget.allowArabic && _arabic.hasMatch(widget.controller.text);
     return TextField(
       controller: widget.controller,
       keyboardType: widget.keyboardType ?? TextInputType.text,
-      textCapitalization: widget.allowArabic ? TextCapitalization.sentences : TextCapitalization.none,
+      textCapitalization: widget.allowArabic
+          ? TextCapitalization.sentences
+          : TextCapitalization.none,
       textDirection: arabic ? TextDirection.rtl : TextDirection.ltr,
       inputFormatters: widget.inputFormatters,
-      onChanged: widget.allowArabic ? (_) => setState(() {}) : null,
+      onChanged: (_) {
+        if (widget.allowArabic) setState(() {});
+        widget.onChanged?.call();
+      },
       decoration: _ocrDecoration(
         label: widget.label,
         low: widget.lowConfidence,
@@ -610,7 +896,11 @@ class _OcrTextFieldState extends State<_OcrTextField> {
 }
 
 class _OcrModeSelector extends StatelessWidget {
-  const _OcrModeSelector({required this.value, required this.enabled, required this.onChanged});
+  const _OcrModeSelector({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
 
   final String value; // 'auto' | 'en' | 'ar'
   final bool enabled;
@@ -625,7 +915,10 @@ class _OcrModeSelector extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(bottom: 4),
-            child: Text('Bill language', style: TextStyle(fontSize: 12, color: AppColors.darkBlue)),
+            child: Text(
+              'Bill language',
+              style: TextStyle(fontSize: 12, color: AppColors.darkBlue),
+            ),
           ),
           SegmentedButton<String>(
             segments: const [
@@ -634,7 +927,9 @@ class _OcrModeSelector extends StatelessWidget {
               ButtonSegment(value: 'ar', label: Text('Arabic')),
             ],
             selected: {value},
-            onSelectionChanged: enabled ? (selection) => onChanged(selection.first) : null,
+            onSelectionChanged: enabled
+                ? (selection) => onChanged(selection.first)
+                : null,
           ),
         ],
       ),
@@ -691,3 +986,107 @@ Widget _flaggedDecorator({
   );
 }
 
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text, {this.trailing});
+
+  final String text;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          text,
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const Spacer(),
+        if (trailing != null)
+          Text(
+            trailing!,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Totals computed from the item lines, compared with the total printed on the bill.
+class _ItemsTotals extends StatelessWidget {
+  const _ItemsTotals({
+    required this.currency,
+    required this.itemsTotal,
+    required this.vat,
+    this.billTotal,
+  });
+
+  final String? currency;
+  final double itemsTotal;
+  final double vat;
+  final double? billTotal;
+
+  String _m(double v) => '${currency ?? ''} ${v.toStringAsFixed(2)}'.trim();
+
+  @override
+  Widget build(BuildContext context) {
+    final mismatch =
+        billTotal != null && (billTotal! - itemsTotal).abs() > 0.01;
+    Widget row(String label, String value, {bool bold = false}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: bold ? AppColors.textPrimary : AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+              fontSize: bold ? 16 : 14,
+            ),
+          ),
+        ],
+      ),
+    );
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.lightBlue,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          row('Amount excl. VAT', _m(itemsTotal - vat)),
+          row('VAT', _m(vat)),
+          const Divider(height: 14),
+          row('Total (sum of items)', _m(itemsTotal), bold: true),
+          if (mismatch) ...[
+            const SizedBox(height: 8),
+            Text(
+              'The bill’s printed total is ${_m(billTotal!)}, which differs by ${_m((billTotal! - itemsTotal).abs())}. '
+              'Check the items: one may be missing or misread.',
+              style: const TextStyle(
+                color: AppColors.orange,
+                fontSize: 12.5,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

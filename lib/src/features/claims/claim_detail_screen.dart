@@ -14,10 +14,10 @@ import '../../widgets/claim_ui_helpers.dart';
 import '../../widgets/shimmer_box.dart';
 import '../shared/status_chip.dart';
 
-final claimDetailProvider =
-    FutureProvider.autoDispose.family<ExpenseClaim, int>((ref, id) {
-  return ref.watch(apiClientProvider).getClaim(id);
-});
+final claimDetailProvider = FutureProvider.autoDispose
+    .family<ExpenseClaim, int>((ref, id) {
+      return ref.watch(apiClientProvider).getClaim(id);
+    });
 
 class ClaimDetailScreen extends ConsumerStatefulWidget {
   const ClaimDetailScreen({super.key, required this.claimId});
@@ -59,9 +59,8 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                         Expanded(
                           child: Text(
                             claim.vendor,
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
                         StatusChip(status: claim.status),
@@ -70,17 +69,31 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                     const SizedBox(height: 8),
                     ClaimTypeTag(type: claim.type),
                     const SizedBox(height: 16),
-                    MoneyBreakdownRow('Amount excl. VAT', formatMoney(claim.currency, claim.amount)),
+                    MoneyBreakdownRow(
+                      'Amount excl. VAT',
+                      formatMoney(claim.currency, claim.amount),
+                    ),
                     const SizedBox(height: 6),
-                    MoneyBreakdownRow('VAT', formatMoney(claim.currency, claim.vatAmount)),
+                    MoneyBreakdownRow(
+                      'VAT',
+                      formatMoney(claim.currency, claim.vatAmount),
+                    ),
                     const Divider(height: 20),
-                    MoneyBreakdownRow('Total', formatMoney(claim.currency, total), emphasize: true),
+                    MoneyBreakdownRow(
+                      'Total',
+                      formatMoney(claim.currency, total),
+                      emphasize: true,
+                    ),
                   ],
                 ),
               ),
               if (claim.stageSequence.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 AppCard(child: ClaimStageTracker(claim: claim)),
+              ],
+              if (claim.isMultiItem) ...[
+                const SizedBox(height: 16),
+                AppCard(child: ClaimLineItemsList(claim: claim)),
               ],
               if (imagePath != null && imagePath.isNotEmpty) ...[
                 const SizedBox(height: 16),
@@ -89,7 +102,10 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Receipt', style: Theme.of(context).textTheme.titleSmall),
+                      Text(
+                        'Receipt',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
                       const SizedBox(height: 10),
                       AuthenticatedImage(
                         path: imagePath,
@@ -116,12 +132,24 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    KeyValueRow('Type', claim.type == 'petty_cash' ? 'Petty cash' : 'Reimbursement'),
+                    KeyValueRow(
+                      'Type',
+                      claim.type == 'petty_cash'
+                          ? 'Petty cash'
+                          : 'Reimbursement',
+                    ),
                     KeyValueRow('Category', claim.category),
                     KeyValueRow('Bill date', claim.billDate ?? 'None'),
-                    KeyValueRow('Project', claim.projectId?.toString() ?? 'None'),
+                    KeyValueRow(
+                      'Project',
+                      claim.projectId?.toString() ?? 'None',
+                    ),
                     KeyValueRow('OP', claim.opNumber ?? 'None'),
-                    KeyValueRow('Remarks', claim.remarks ?? 'None', isLast: true),
+                    KeyValueRow(
+                      'Remarks',
+                      claim.remarks ?? 'None',
+                      isLast: true,
+                    ),
                   ],
                 ),
               ),
@@ -163,8 +191,14 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: (claim.history ?? []).isEmpty
                     ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                        child: Text('None', style: TextStyle(color: AppColors.textSecondary)),
+                        padding: EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 8,
+                        ),
+                        child: Text(
+                          'None',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
                       )
                     : Column(
                         // Most recent activity first -- the backend returns oldest-first for
@@ -174,10 +208,16 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                             ListTile(
                               dense: true,
                               title: Text('${h.stage ?? 'None'} · ${h.action}'),
-                              subtitle: h.remarks != null && h.remarks!.isNotEmpty ? Text(h.remarks!) : null,
+                              subtitle:
+                                  h.remarks != null && h.remarks!.isNotEmpty
+                                  ? Text(h.remarks!)
+                                  : null,
                               trailing: Text(
                                 formatDubaiTime(h.createdAt),
-                                style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                         ],
@@ -189,7 +229,6 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
       ),
     );
   }
-
 }
 
 /// Mirrors the loaded layout's shape (header card, image card, details card,
@@ -210,13 +249,23 @@ class _ClaimDetailSkeleton extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Expanded(child: ShimmerBox(height: 24, widthFraction: 0.55)),
+                  const Expanded(
+                    child: ShimmerBox(height: 24, widthFraction: 0.55),
+                  ),
                   const SizedBox(width: 12),
-                  ShimmerBox(height: 22, width: 80, borderRadius: BorderRadius.circular(999)),
+                  ShimmerBox(
+                    height: 22,
+                    width: 80,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ],
               ),
               const SizedBox(height: 10),
-              ShimmerBox(height: 18, width: 100, borderRadius: BorderRadius.circular(999)),
+              ShimmerBox(
+                height: 18,
+                width: 100,
+                borderRadius: BorderRadius.circular(999),
+              ),
               const SizedBox(height: 20),
               const ShimmerBox(height: 14, widthFraction: 1),
               const SizedBox(height: 10),
@@ -270,6 +319,92 @@ class _ClaimDetailSkeleton extends StatelessWidget {
         AppCard(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           child: const ShimmerBox(height: 40, widthFraction: 1),
+        ),
+      ],
+    );
+  }
+}
+
+/// The item lines of a "Multiple items" claim, with their categories and the total.
+class ClaimLineItemsList extends StatelessWidget {
+  const ClaimLineItemsList({super.key, required this.claim});
+
+  final ExpenseClaim claim;
+
+  String _qty(double q) =>
+      q == q.roundToDouble() ? q.toStringAsFixed(0) : q.toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = claim.lineItems;
+    final total = lines.fold(0.0, (sum, l) => sum + l.amount);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Text('Items', style: Theme.of(context).textTheme.titleSmall),
+            const Spacer(),
+            Text(
+              '${lines.length} item${lines.length == 1 ? '' : 's'}',
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        for (final l in lines)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l.description,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [
+                          if (l.quantity != null) 'Qty ${_qty(l.quantity!)}',
+                          if (l.categoryName != null) l.categoryName!,
+                        ].join(' · '),
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  formatMoney(claim.currency, l.amount),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        const Divider(height: 18),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Total',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            Text(
+              formatMoney(claim.currency, total),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+          ],
         ),
       ],
     );
