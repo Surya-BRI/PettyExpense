@@ -4,6 +4,11 @@
 Works on the same OcrLines the field pipeline uses. Generic, layout-based rules
 only -- no vendor-specific matching:
 
+0. group_into_lines() (shared with the single-field pipeline) splits a wide table
+   row into several OcrLines whenever a column gap exceeds its page-wide threshold
+   -- correct for unrelated side-by-side blocks, wrong inside an item table. Those
+   fragments are chained back into one row by y-proximity first (_merge_row_fragments),
+   rebuilding each row's text by re-sorting all of its words by x.
 1. The item table starts after a header row ("Qty", "Description", "Item", ...)
    and ends at the first totals row ("Total", "Net Total", "Bill Amount", "VAT", ...).
 2. Inside it, each row's money values are its decimal numbers; the LAST one is the
@@ -50,12 +55,15 @@ _HEADER_WORDS = re.compile(
 _SUMMARY_ROW = re.compile(r"^\W*(q[tl]y|items?|no\.?\s*of\s*items?)\s*[:=]", re.IGNORECASE)
 # Totals rows the vocabulary deliberately doesn't map to TOTAL ("Total Qty") or that OCR garbled
 # ("B111 Amount" for "Bill Amount"): item names on a bill practically never contain these words.
-_END_WORDS = re.compile(r"\b(total|subtotal|grand|amount|balance|payable|rounding)\b", re.IGNORECASE)
+# "vat" is included directly because the concept matcher misses a bare percentage-suffixed
+# reading like "VAT 5%" (vs. a standalone "VAT" line, which it does catch).
+_END_WORDS = re.compile(r"\b(total|subtotal|grand|amount|balance|payable|rounding|vat)\b", re.IGNORECASE)
 
-# OCR reads "0.00" / "38.00" as "0 00" / "38 00": rejoin a 1-4 digit group followed by exactly two digits.
-_SPLIT_DECIMAL = re.compile(r"(?<![\d.,])(\d{1,4})\s(\d{2})(?![\d.,%])")
-# Money values: 2-decimal numbers that are not glued to letters ("1.25CMX5M" is a size, not a price).
-_DECIMAL = re.compile(r"(?<![\d.,A-Za-z])\d{1,6}[.,]\d{2}(?![\dA-Za-z])")
+# OCR reads "0.00" / "38.00" as "0 00" / "38 00": rejoin a 1-4 digit group followed by two or three digits
+# (some Gulf invoices print 3-decimal fils/baisa amounts, e.g. "480.000").
+_SPLIT_DECIMAL = re.compile(r"(?<![\d.,])(\d{1,4})\s(\d{2,3})(?![\d.,%])")
+# Money values: 2- or 3-decimal numbers that are not glued to letters ("1.25CMX5M" is a size, not a price).
+_DECIMAL = re.compile(r"(?<![\d.,A-Za-z])\d{1,6}[.,]\d{2,3}(?![\dA-Za-z])")
 # OCR sometimes drops the last digit of the row's final amount ("14.3"); accepted only as the last token.
 _TRAILING_ONE_DECIMAL = re.compile(r"(?<![\d.,A-Za-z])(\d{1,6}[.,]\d)\s*$")
 _INTEGER = re.compile(r"(?<![\d.,])\d+(?![\d.,])")
@@ -150,6 +158,72 @@ def _parse_row(line: OcrLine, y: float) -> _Row:
     return _Row(y=y, text=text, decimals=decimals, description=description, confidence=line.confidence)
 
 
+def _x0(bbox: Optional[tuple[float, float, float, float]]) -> float:
+    return bbox[0] if bbox else 0.0
+
+
+def _merge_row_fragments(lines: list[OcrLine], threshold: float) -> list[OcrLine]:
+    """Chains lines back into one row whenever a line sits close enough vertically to the
+    row being built (within about one row-height) AND starts to the right of everything
+    read into that row so far -- the left-to-right column order one printed row reads in.
+    A line that restarts near the left margin never merges by this rule, whether it's
+    really the next row or a wrapped second line of the row above's description -- the
+    pair-rejoin step below (matching by nearest-y, not reading order) already handles
+    gluing those back to a row, and blindly chaining on y-gap alone would instead bridge
+    two unrelated complete rows together through that left-restarting line in between."""
+    if not lines:
+        return []
+    ordered = sorted(enumerate(lines), key=lambda p: (_y(p[1], p[0]), p[0]))
+
+    bands: list[list[OcrLine]] = []
+    prev_y: Optional[float] = None
+    band_right: Optional[float] = None
+    for idx, ln in ordered:
+        if ln.bounding_box is None:
+            # No geometry to merge on (e.g. a geometry-less plain-text OCR source) -- each
+            # line already represents one full printed row; leave it untouched rather than
+            # falling back to a shared coordinate that would make every such line collide.
+            bands.append([ln])
+            prev_y = None
+            band_right = None
+            continue
+        y = ln.bounding_box[1]
+        x0 = ln.bounding_box[0]
+        x1 = ln.bounding_box[2]
+        if prev_y is not None and y - prev_y <= threshold and band_right is not None and x0 >= band_right:
+            bands[-1].append(ln)
+            band_right = max(band_right, x1)
+        else:
+            bands.append([ln])
+            band_right = x1
+        prev_y = y
+
+    merged: list[OcrLine] = []
+    for band in bands:
+        if len(band) == 1:
+            merged.append(band[0])
+            continue
+        words = sorted((w for ln in band for w in ln.words), key=lambda w: _x0(w.bounding_box))
+        text = " ".join(w.text for w in words if w.text)
+        boxes = [ln.bounding_box for ln in band if ln.bounding_box]
+        bbox = (
+            (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+            if boxes
+            else None
+        )
+        merged.append(
+            OcrLine(
+                text=text,
+                words=tuple(words),
+                confidence=min(ln.confidence for ln in band),
+                bounding_box=bbox,
+                page=band[0].page,
+                reading_order=min(ln.reading_order for ln in band),
+            )
+        )
+    return merged
+
+
 def _amount_and_qty(decimals: list[float]) -> tuple[Optional[float], Optional[float]]:
     if not decimals:
         return None, None
@@ -175,6 +249,8 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
     pair_gap = max(line_h * 1.1, 6.0)
 
     # 1. Find the table: after the last header row of the first header cluster, before the first end row.
+    #    Header/end detection runs on the UNMERGED lines so a header's own text fragments can't
+    #    accidentally chain-merge with unrelated page content above the table.
     start = None
     for idx, (_, ln) in enumerate(ordered):
         if _is_header(ln.text, reference_data):
@@ -186,12 +262,24 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
     if start is None:
         return []
 
-    body: list[_Row] = []
+    body_lines: list[OcrLine] = []
+    seen_item = False
     for idx in range(start + 1, len(ordered)):
         _, ln = ordered[idx]
-        if _is_end(ln.text, reference_data):
+        # A wrapped multi-row header often has its own stray "VAT"/"Total" column label
+        # (e.g. "Incl.VAT(AED) Total"), which otherwise reads as an end-of-table marker
+        # before any item has actually been seen -- an end marker can't appear before item 1.
+        if _is_end(ln.text, reference_data) and seen_item:
             break
-        body.append(_parse_row(ln, ys[idx]))
+        body_lines.append(ln)
+        if not seen_item and _parse_row(ln, ys[idx]).has_numbers:
+            seen_item = True
+
+    # group_into_lines() splits a wide row into several lines whenever a column gap exceeds its
+    # page-wide threshold -- wrong inside a table. Chain fragments back into rows by y-proximity,
+    # scoped to this already-bounded body so it can't bleed into page content above the header.
+    merged_body = sorted(_merge_row_fragments(body_lines, max(line_h * 0.9, 4.0)), key=lambda ln: _y(ln, 0))
+    body: list[_Row] = [_parse_row(ln, _y(ln, 0)) for ln in merged_body]
 
     # 2. Rejoin split rows: a numbers-only row takes the nearest unused names-only row within pair_gap.
     items: list[tuple[float, LineItem]] = []

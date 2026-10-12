@@ -170,6 +170,7 @@ class ClaimLineItem {
     this.quantity,
     this.categoryId,
     this.categoryName,
+    this.opNumber,
   });
 
   final int lineNo;
@@ -178,6 +179,7 @@ class ClaimLineItem {
   final double amount;
   final int? categoryId;
   final String? categoryName;
+  final String? opNumber;
 
   factory ClaimLineItem.fromJson(Map<String, dynamic> json) {
     return ClaimLineItem(
@@ -187,6 +189,7 @@ class ClaimLineItem {
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
       categoryId: (json['category_id'] as num?)?.toInt(),
       categoryName: json['category_name'] as String?,
+      opNumber: json['op_number'] as String?,
     );
   }
 }

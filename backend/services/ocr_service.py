@@ -296,6 +296,13 @@ def _run_runpod_ocr(image_bytes: bytes, mode: str) -> dict[str, Any] | None:
                 result = extract(lines, _reference_data)
                 parsed = to_legacy_dict(result)
                 parsed["raw_text"] = result.raw_text
+                # RunPod returns plain text with no bounding boxes -- each "line" here is often
+                # one table CELL, not one row (no geometry to tell them apart), so
+                # extract_line_items() can't safely reconstruct rows from it; leave line_items
+                # empty rather than emit wrong-looking suggestions the employee has to notice
+                # and delete one by one. See extract_line_items()'s docstring for the real,
+                # geometry-based reconstruction this intentionally skips here.
+                parsed["line_items"] = []
                 parsed["raw_json"] = {
                     "engine": "runpod_paddleocr",
                     "mode": mode,

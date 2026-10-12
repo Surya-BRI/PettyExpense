@@ -12,6 +12,7 @@ import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/image_preview_screen.dart';
+import '../../widgets/op_code_field.dart';
 import '../authentication/auth_controller.dart';
 import 'bill_line_mode.dart';
 import 'line_items_editor.dart';
@@ -62,12 +63,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   String? _error;
   List<CategoryRef> _categories = const [];
 
-  // OP search
-  final TextEditingController _opCtrl = TextEditingController();
+  // Claim-level OP; also the default new line items start from (see onAdd below).
   OpportunityResult? _selectedOp;
-  bool _opSearching = false;
-  String? _opError;
-  Timer? _opDebounce;
 
   // "Multiple items" bills: one editable draft per item line.
   final List<LineItemDraft> _lines = [];
@@ -238,8 +235,6 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
-    _opDebounce?.cancel();
-    _opCtrl.dispose();
     _vendor.dispose();
     _billNumber.dispose();
     _amount.dispose();
@@ -478,8 +473,17 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                       showProblems: _showLineProblems,
                       onChanged: () => setState(() {}),
                       onAdd: () => setState(
-                        () =>
-                            _lines.add(LineItemDraft(categoryId: _categoryId)),
+                        () => _lines.add(
+                          LineItemDraft(
+                            categoryId: _categoryId,
+                            // Defaults to the line above it, falling back to the
+                            // claim-level OP, so splitting one item off a mostly
+                            // one-project bill is the only line that needs editing.
+                            opResult: _lines.isNotEmpty
+                                ? _lines.last.opResult ?? _selectedOp
+                                : _selectedOp,
+                          ),
+                        ),
                       ),
                       onRemove: (i) =>
                           setState(() => _lines.removeAt(i).dispose()),
@@ -611,73 +615,11 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _opCtrl,
-            decoration: InputDecoration(
-              labelText: 'Project / OP code',
-              hintText: 'e.g. OP-2201',
-              suffixIcon: _opSearching
-                  ? const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                    )
-                  : _selectedOp != null
-                      ? IconButton(
-                          icon: Icon(PhosphorIcons.x(), size: 18),
-                          onPressed: () => setState(() {
-                            _opCtrl.clear();
-                            _selectedOp = null;
-                            _opError = null;
-                          }),
-                        )
-                      : null,
-              errorText: _opError,
-            ),
-            onChanged: (val) {
-              _opDebounce?.cancel();
-              if (val.trim().isEmpty) {
-                setState(() { _selectedOp = null; _opError = null; });
-                return;
-              }
-              _opDebounce = Timer(const Duration(milliseconds: 600), () async {
-                setState(() { _opSearching = true; _opError = null; });
-                try {
-                  final result = await ref.read(apiClientProvider).searchOpportunity(val.trim());
-                  if (mounted) {
-                    setState(() {
-                      _selectedOp = result;
-                      _opError = result == null ? 'OP code not found' : null;
-                    });
-                  }
-                } catch (_) {
-                  if (mounted) setState(() => _opError = 'Search failed');
-                } finally {
-                  if (mounted) setState(() => _opSearching = false);
-                }
-              });
-            },
+          OpCodeField(
+            label: 'Project / OP code',
+            initial: _selectedOp,
+            onResolved: (v) => setState(() => _selectedOp = v),
           ),
-          if (_selectedOp != null) ...[
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.successSoft,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_selectedOp!.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  if (_selectedOp!.buCode != null || _selectedOp!.salesPerson != null)
-                    Text(
-                      [_selectedOp!.buCode, _selectedOp!.salesPerson].whereType<String>().join(' · '),
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                ],
-              ),
-            ),
-          ],
           const SizedBox(height: 12),
           TextField(
             controller: _remarks,

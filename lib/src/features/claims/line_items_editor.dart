@@ -4,6 +4,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/op_code_field.dart';
 
 final _amountFormatters = <TextInputFormatter>[
   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
@@ -27,6 +28,7 @@ class LineItemDraft {
     double? quantity,
     double? amount,
     this.categoryId,
+    this.opResult,
   }) : description = TextEditingController(text: description),
        quantity = TextEditingController(text: _fmt(quantity, digits: 3)),
        amount = TextEditingController(text: _fmt(amount));
@@ -43,6 +45,10 @@ class LineItemDraft {
   final TextEditingController quantity;
   final TextEditingController amount;
   int? categoryId;
+  // The project/OP this item is allocated to -- null means "use the claim-level OP".
+  // Kept as the resolved search result (not just the code) so a new line can copy it
+  // straight into its own OpCodeField without re-hitting the search API.
+  OpportunityResult? opResult;
 
   double? get amountValue => double.tryParse(amount.text.trim());
   double? get quantityValue => quantity.text.trim().isEmpty
@@ -62,6 +68,7 @@ class LineItemDraft {
     'quantity': quantityValue,
     'amount': amountValue,
     'category_id': categoryId,
+    'op_number': opResult?.opCode,
   };
 
   void dispose() {
@@ -268,6 +275,17 @@ class _LineCard extends StatelessWidget {
                       },
                     ),
                   ),
+                ),
+                const SizedBox(height: 10),
+                OpCodeField(
+                  key: ValueKey(line),
+                  label: 'Project / OP code (optional)',
+                  dense: true,
+                  initial: line.opResult,
+                  onResolved: (v) {
+                    line.opResult = v;
+                    onChanged();
+                  },
                 ),
               ],
             ),

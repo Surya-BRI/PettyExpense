@@ -239,8 +239,7 @@ class ErpExpenseDocument(Base):
 
 
 class ErpExpenseLineItem(Base):
-    """One item line on a "Multiple items" bill. The transaction's total is the sum of its lines.
-    A brand-new table, so init_db()'s create_all() creates it -- no ALTER on existing tables."""
+    """One item line on a "Multiple items" bill. The transaction's total is the sum of its lines."""
 
     __tablename__ = "ErpExpenseLineItem"
 
@@ -256,6 +255,9 @@ class ErpExpenseLineItem(Base):
     category_id: Mapped[Optional[int]] = mapped_column(
         "categoryId", Integer, ForeignKey("ErpExpenseCategory.categoryId"), nullable=True
     )
+    # Per-line project/OP override -- when null, the item belongs to the claim-level op_number.
+    # New column on an existing table -- create_all() won't add it, see scripts/add_line_item_op_number_column.py.
+    op_number: Mapped[Optional[str]] = mapped_column("opNumber", String(128), nullable=True)
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
 
     transaction: Mapped["ErpExpenseTransaction"] = relationship(back_populates="line_items")
