@@ -78,6 +78,16 @@ _QTY_UNIT = re.compile(
     r"(?<![\d.,])(\d{1,3}(?:,\d{3})*)\s+(" + "|".join(_UNIT_WORDS) + r")\b", re.IGNORECASE
 )
 
+# A dense invoice table (Qty / Unit Rate / Unit Discount / Net Rate / Taxable Amount / VAT% /
+# Tax Amount / Total Amount, 8 numeric columns) breaks the decimals[0]/decimals[-1] positional
+# guess above -- there's no single "first"/"last" rule that holds for 5+ numeric columns. When
+# real word geometry is available, the header row's own cell positions tell us exactly which
+# x-band is Qty and which is the row's real Total, so a body row's matching number can be read
+# directly off its position instead of guessed from reading order.
+_QTY_HEADER_WORD = re.compile(r"^qty$|^quantity$", re.IGNORECASE)
+_AMOUNT_HEADER_WORD = re.compile(r"total|amount", re.IGNORECASE)
+_WORD_NUMBER = re.compile(r"^\(?\d{1,3}(?:,\d{3})*(?:[.,]\d{1,3})?\)?$")
+
 
 @dataclass(frozen=True)
 class LineItem:
@@ -103,6 +113,8 @@ class _Row:
     description: str
     confidence: float
     int_qty: Optional[float] = None
+    x_qty: Optional[float] = None
+    x_amount: Optional[float] = None
     used: bool = False
 
     @property
@@ -152,6 +164,48 @@ def _is_end_concept_match(text: str, match: LabelMatch) -> bool:
     return not prefix_words
 
 
+def _header_column_x(header_words: list, pattern: re.Pattern, pick_rightmost: bool) -> Optional[float]:
+    # Returns the x-center of the header cell matching `pattern` -- the leftmost match for a
+    # single-meaning column word (Qty), the rightmost for a word that repeats across several
+    # columns (every money column's header can contain "Amount"; the row's own grand total is
+    # always the rightmost one, "Total Amount"/"Total Incl VAT").
+    best: Optional[float] = None
+    for w in header_words:
+        if not w.bounding_box:
+            continue
+        token = w.text.strip(" :.()")
+        if not pattern.search(token):
+            continue
+        cx = (w.bounding_box[0] + w.bounding_box[2]) / 2
+        if best is None or (pick_rightmost and cx > best) or (not pick_rightmost and cx < best):
+            best = cx
+    return best
+
+
+def _nearest_column_number(line: OcrLine, col_x: Optional[float], tolerance: float) -> Optional[float]:
+    # The number whose own word-level x-center falls closest to a known column position --
+    # read directly off the table's real geometry instead of guessed from reading order.
+    if col_x is None:
+        return None
+    best_val: Optional[float] = None
+    best_dist: Optional[float] = None
+    for w in line.words:
+        if not w.bounding_box:
+            continue
+        token = w.text.strip().strip("()")
+        if not _WORD_NUMBER.match(token):
+            continue
+        cx = (w.bounding_box[0] + w.bounding_box[2]) / 2
+        dist = abs(cx - col_x)
+        if dist > tolerance or (best_dist is not None and dist >= best_dist):
+            continue
+        try:
+            best_val, best_dist = float(token.strip("()").replace(",", "")), dist
+        except ValueError:
+            continue
+    return best_val
+
+
 def _leading_qty_match(text: str) -> Optional[re.Match]:
     # A real quantity cell leads its row ("50 Pcs 4.73 ...", optionally after a leading SI
     # number); "400 PCS" buried inside a wrapped packing note a row or two below the real
@@ -164,7 +218,9 @@ def _leading_qty_match(text: str) -> Optional[re.Match]:
     return None
 
 
-def _parse_row(line: OcrLine, y: float) -> _Row:
+def _parse_row(
+    line: OcrLine, y: float, qty_col_x: Optional[float] = None, amount_col_x: Optional[float] = None, col_tolerance: float = 0.0
+) -> _Row:
     text = _SPLIT_DECIMAL.sub(r"\1.\2", line.text)
     decimals = [float(m.group(0).replace(",", ".")) for m in _DECIMAL.finditer(text)]
     trailing = _TRAILING_ONE_DECIMAL.search(text)
@@ -172,6 +228,8 @@ def _parse_row(line: OcrLine, y: float) -> _Row:
         decimals.append(float(trailing.group(1).replace(",", ".")))
     qty_match = _leading_qty_match(text)
     int_qty = float(qty_match.group(1).replace(",", "")) if qty_match else None
+    x_qty = _nearest_column_number(line, qty_col_x, col_tolerance)
+    x_amount = _nearest_column_number(line, amount_col_x, col_tolerance)
     # Description: the words that carry letters, up to the first money value.
     money_positions = [m.start() for m in _DECIMAL.finditer(text)] + ([trailing.start(1)] if trailing else [])
     first_money_at = min(money_positions) if money_positions else None
@@ -195,7 +253,10 @@ def _parse_row(line: OcrLine, y: float) -> _Row:
     # description on an adjacent line instead of keeping this as the final name.
     if int_qty is not None and description.strip().lower() in _UNIT_WORDS:
         description = ""
-    return _Row(y=y, text=text, decimals=decimals, description=description, confidence=line.confidence, int_qty=int_qty)
+    return _Row(
+        y=y, text=text, decimals=decimals, description=description, confidence=line.confidence,
+        int_qty=int_qty, x_qty=x_qty, x_amount=x_amount,
+    )
 
 
 def _x0(bbox: Optional[tuple[float, float, float, float]]) -> float:
@@ -301,9 +362,10 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
     #    Header/end detection runs on the UNMERGED lines so a header's own text fragments can't
     #    accidentally chain-merge with unrelated page content above the table.
     start = None
+    header_start = None
     for idx, (_, ln) in enumerate(ordered):
         if _is_header(ln.text, reference_data):
-            start = idx
+            start = header_start = idx
             # Header rows can wrap onto several OCR lines ("Qty Amount" / "Description").
             while start + 1 < len(ordered) and ys[start + 1] - ys[idx] <= line_h * 2.5 and _is_header(ordered[start + 1][1].text, reference_data):
                 start += 1
@@ -313,6 +375,7 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
 
     body_lines: list[OcrLine] = []
     seen_item = False
+    first_item_idx = len(ordered)
     for idx in range(start + 1, len(ordered)):
         _, ln = ordered[idx]
         # A wrapped multi-row header often has its own stray "VAT"/"Total" column label
@@ -323,12 +386,23 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
         body_lines.append(ln)
         if not seen_item and _parse_row(ln, ys[idx]).has_numbers:
             seen_item = True
+            first_item_idx = idx
+
+    # A dense table's header can wrap across several OCR fragments that don't all look like a
+    # header by themselves (a stray "AMOUNT"/"TOTAL" column label with no qty/rate word of its
+    # own doesn't match _is_header and ends up as a body_lines fragment before the first real
+    # item) -- scan the whole header-to-first-item span, not just the recognized header cluster,
+    # for the Qty/Total column's own x-position. Only meaningful with real word geometry.
+    header_words = [w for i in range(header_start, first_item_idx) for w in ordered[i][1].words]
+    qty_col_x = _header_column_x(header_words, _QTY_HEADER_WORD, pick_rightmost=False)
+    amount_col_x = _header_column_x(header_words, _AMOUNT_HEADER_WORD, pick_rightmost=True)
+    col_tolerance = max(line_h * 3, 60.0)
 
     # group_into_lines() splits a wide row into several lines whenever a column gap exceeds its
     # page-wide threshold -- wrong inside a table. Chain fragments back into rows by y-proximity,
     # scoped to this already-bounded body so it can't bleed into page content above the header.
     merged_body = sorted(_merge_row_fragments(body_lines, max(line_h * 0.9, 4.0)), key=lambda ln: _y(ln, 0))
-    body: list[_Row] = [_parse_row(ln, _y(ln, 0)) for ln in merged_body]
+    body: list[_Row] = [_parse_row(ln, _y(ln, 0), qty_col_x, amount_col_x, col_tolerance) for ln in merged_body]
 
     # 2. Rejoin split rows: a numbers-only row takes the nearest unused names-only row within pair_gap.
     # A bill with no printed totals/VAT row at all (a pure delivery note) never trips _is_end,
@@ -362,6 +436,14 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
         amount, qty = _amount_and_qty(row.decimals)
         if row.int_qty is not None:
             qty = row.int_qty
+        # Real column position beats both the reading-order guesses above when we have it --
+        # the only one of the three that still works once a table has more than 2-3 numeric
+        # columns (a bare decimals[0]/decimals[-1] guess has no way to know which of 8 columns
+        # is actually Qty vs. Total).
+        if row.x_qty is not None:
+            qty = row.x_qty
+        if row.x_amount is not None:
+            amount = row.x_amount
         if len(description) < 2:
             continue
         items.append((row.y, LineItem(description=description, quantity=qty, amount=amount, confidence=confidence)))

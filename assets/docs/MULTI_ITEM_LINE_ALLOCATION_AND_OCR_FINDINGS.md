@@ -385,17 +385,49 @@ Both confirmed fixed via direct re-test against the specific bills that produced
 regressions in the full test suite (155 passed / 5 skipped, same 8 pre-existing unrelated
 failures throughout all of this session's changes).
 
-## 7. Still open after this session
+## 7. Column/x-band number selection for dense multi-column invoices (implemented, bounded win)
 
-- **Row-shift on dense multi-column invoices** (`img23.png`, `img24.png`, `img 25.png`'s 9-column
-  table): values from one item occasionally land under the adjacent item's description. Same
-  underlying gap as §4's `img2.jpeg` issue and §5.2's VAT-breakdown-row issue — `_merge_row_fragments`
-  has no real concept of table columns, only y-proximity + left-to-right reading order. A proper
-  fix needs column/x-band detection: cluster the table's money-value x-positions (from the header
-  row's cell boundaries, or the decimal tokens themselves) to learn where each column actually
-  sits, then assign fragments to rows by x-band membership, not just reading order. Scoped out of
-  this session — real rewrite risk to the simple 3-column bills that already work well
-  (`img27.png` at 83% fully-correct), needs the full fixture suite plus all sample bills re-checked
-  before trusting it.
-- **Quantity is the weakest extracted field** (~40-55% correct vs ~70-80% for amount) — mostly a
-  downstream symptom of the row-shift issue above on complex layouts.
+Real word-level geometry on `img 25.png`'s 9-column table (dumped and inspected directly) turned
+out very clean: each column's x-position clusters within ~15px across all 4 rows. That makes
+column-band detection viable without a full table-layout rewrite -- implemented a bounded version
+scoped to just the two fields the API actually needs (`quantity`, `amount`), not a general column
+parser:
+
+- `_header_column_x()` scans the header row's own word geometry for the Qty cell (leftmost match)
+  and the row's real Total cell (rightmost "total"/"amount" match -- a wrapped header like this
+  one has several "...Amount" columns; the grand total is reliably the rightmost). Scans the full
+  header-to-first-item span, not just the recognized header cluster, since a stray column label
+  with no qty/rate word of its own (a lone "AMOUNT"/"TOTAL" fragment) doesn't match `_is_header`
+  by itself and would otherwise be missed.
+- `_nearest_column_number()` then picks, per body row, whichever of that row's own words sits
+  closest (within `3x` the median line height) to each learned column x -- read directly off
+  geometry instead of guessed from decimals[0]/decimals[-1] reading order.
+- Only engages when real word bounding boxes exist (same guard the existing merge logic already
+  uses); geometry-less sources (plain-text fixtures) are unaffected -- confirmed via the full test
+  suite, unchanged at 155 passed / 5 skipped / same 8 pre-existing failures.
+
+**Result: net positive, not a clean sweep.** Four confirmed fixes against real bills: `img23.png`
+item 1 amount `3.75` -> `3750.60` (was reading the VAT% column); `img 25.png` item 1 amount
+`1.449` -> `1449.00` (a factor-of-1000 decimal bug); `img26.png` quantity on all 4 items
+`None` -> correct (previously the real value only appeared, mislabeled, in `amount`); `img 27.png`
+item 3 quantity `None` -> `5.0` (now fully correct, was amount-only before). Two new wrong-pairings
+appeared alongside these (`img23.png` item 5's amount pulled in a neighboring row's value;
+`img 27.png`'s item 6/7 merged row kept a wrong description against a now-different, also-wrong
+number) -- both are the *same already-broken row* as before, just wrong in a different way, not a
+new failure mode; no item count regressed anywhere. Kept rather than tightening the x-tolerance to
+suppress them, since that would trade back genuine wins to patch cases that stay wrong either way.
+
+## 8. Still open after this session
+
+- **Row description/number pairing on dense multi-column invoices** is the real remaining gap
+  behind both of §7's new mismatches and the original row-shift problem (`img23.png`, `img24.png`):
+  `_merge_row_fragments` still has no real concept of table columns for deciding which OCR
+  fragments belong to the *same row* -- only y-proximity + left-to-right reading order. §7's fix
+  only chooses the right number once a row's boundary is already (possibly wrongly) decided; it
+  doesn't fix the boundary decision itself. A proper fix needs column-aware row reconstruction:
+  assign every fragment to a row by both its y-band and which x-band its pieces fall in, not just
+  reading order. Bigger rewrite than §7, real regression risk to the simple 3-column bills that
+  already work well (`img27.png` at 83% fully-correct) -- needs the full fixture suite plus all
+  sample bills re-checked before trusting it. Scoped out of this session.
+- **Quantity is still the weaker extracted field relative to amount** overall, though §7 narrowed
+  the gap on the specific dense-table case it targeted.
