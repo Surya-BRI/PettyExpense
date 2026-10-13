@@ -87,7 +87,9 @@ async def ocr_receipt(
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     content_type = file.content_type or "image/jpeg"
-    return transaction_service.run_ocr(db, data, content_type, file.filename or "receipt.jpg", employee_id=user.id)
+    return transaction_service.run_ocr(
+        db, data, content_type, file.filename or "receipt.jpg", employee_id=user.id, region_code=user.region_code,
+    )
 
 
 @router.post("/ocr/upload")
@@ -113,7 +115,9 @@ def analyze_receipt(
 ):
     """Run OCR on an already-stored receipt."""
     try:
-        return transaction_service.analyze_receipt(db, receipt_id, mode=mode, employee_id=user.id)
+        return transaction_service.analyze_receipt(
+            db, receipt_id, mode=mode, employee_id=user.id, region_code=user.region_code,
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

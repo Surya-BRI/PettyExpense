@@ -28,7 +28,7 @@ import statistics
 from dataclasses import dataclass
 from typing import Optional
 
-from extraction.labels import LabelConcept, match_label_concepts
+from extraction.labels import LabelConcept, LabelMatch, match_label_concepts
 from extraction.reference_data import ReferenceData
 from extraction.types import OcrLine
 
@@ -69,6 +69,15 @@ _TRAILING_ONE_DECIMAL = re.compile(r"(?<![\d.,A-Za-z])(\d{1,6}[.,]\d)\s*$")
 _INTEGER = re.compile(r"(?<![\d.,])\d+(?![\d.,])")
 _LETTERS = re.compile(r"[A-Za-z؀-ۿ]")
 
+# Some invoices print the item quantity as a bare integer with a unit suffix ("50 Pcs",
+# "1,000 Pc") rather than a decimal -- invisible to _DECIMAL above, which only sees the
+# Rate/Amount columns' decimal values and otherwise leaves decimals[0] (the Rate) mistaken
+# for the quantity. Matched separately so it can't collide with those money values.
+_UNIT_WORDS = {"pcs", "pc", "nos", "mtr", "mtrs", "kg", "kgs", "ctn", "ctns", "box", "boxes", "unit", "units", "ea", "ltr", "ltrs"}
+_QTY_UNIT = re.compile(
+    r"(?<![\d.,])(\d{1,3}(?:,\d{3})*)\s+(" + "|".join(_UNIT_WORDS) + r")\b", re.IGNORECASE
+)
+
 
 @dataclass(frozen=True)
 class LineItem:
@@ -93,11 +102,12 @@ class _Row:
     decimals: list[float]
     description: str
     confidence: float
+    int_qty: Optional[float] = None
     used: bool = False
 
     @property
     def has_numbers(self) -> bool:
-        return bool(self.decimals)
+        return bool(self.decimals) or self.int_qty is not None
 
     @property
     def has_text(self) -> bool:
@@ -128,7 +138,30 @@ def _is_header(text: str, reference_data: ReferenceData) -> bool:
 def _is_end(text: str, reference_data: ReferenceData) -> bool:
     if _SUMMARY_ROW.search(text) or _END_WORDS.search(text):
         return True
-    return bool(_concepts(text, reference_data) & _END_CONCEPTS)
+    matches = match_label_concepts(text, reference_data.label_vocabulary, reference_data.label_exclusions)
+    return any(_is_end_concept_match(text, m) for m in matches if m.concept in _END_CONCEPTS)
+
+
+def _is_end_concept_match(text: str, match: LabelMatch) -> bool:
+    # A genuine summary/footer row leads with its own label ("CASH 49.25", "VAT@ 5%",
+    # optionally after a leading SI number); a concept word first appearing after real
+    # product text ("2 Receiving Card FS-LCE", "ADV MED GUIDANCE CARD...", a tax-code
+    # column literally printing "VAT_AE:S" on every item row) is the word occurring
+    # inside real item data, not a table-end marker -- don't let it end the table early.
+    prefix_words = [w for w in text[: match.span[0]].split() if _LETTERS.search(w)]
+    return not prefix_words
+
+
+def _leading_qty_match(text: str) -> Optional[re.Match]:
+    # A real quantity cell leads its row ("50 Pcs 4.73 ...", optionally after a leading SI
+    # number); "400 PCS" buried inside a wrapped packing note a row or two below the real
+    # item ("1 PKT PER 400 PCS", "75 PKT X 400 PCS = 30000 PCS") is that note's own text,
+    # not a second item's quantity -- skip any match with real words ahead of it.
+    for m in _QTY_UNIT.finditer(text):
+        prefix_words = [w for w in text[: m.start()].split() if _LETTERS.search(w)]
+        if not prefix_words:
+            return m
+    return None
 
 
 def _parse_row(line: OcrLine, y: float) -> _Row:
@@ -137,6 +170,8 @@ def _parse_row(line: OcrLine, y: float) -> _Row:
     trailing = _TRAILING_ONE_DECIMAL.search(text)
     if trailing:
         decimals.append(float(trailing.group(1).replace(",", ".")))
+    qty_match = _leading_qty_match(text)
+    int_qty = float(qty_match.group(1).replace(",", "")) if qty_match else None
     # Description: the words that carry letters, up to the first money value.
     money_positions = [m.start() for m in _DECIMAL.finditer(text)] + ([trailing.start(1)] if trailing else [])
     first_money_at = min(money_positions) if money_positions else None
@@ -155,7 +190,12 @@ def _parse_row(line: OcrLine, y: float) -> _Row:
     # OCR noise like "0 oo" or "Le pi" is not a product name: require a few real letters.
     if len(_LETTERS.findall(description)) < 3:
         description = ""
-    return _Row(y=y, text=text, decimals=decimals, description=description, confidence=line.confidence)
+    # A bare unit word ("Pcs") picked up as "the description" because it has >=3 letters
+    # isn't a product name either -- clear it so the row can rejoin with its real
+    # description on an adjacent line instead of keeping this as the final name.
+    if int_qty is not None and description.strip().lower() in _UNIT_WORDS:
+        description = ""
+    return _Row(y=y, text=text, decimals=decimals, description=description, confidence=line.confidence, int_qty=int_qty)
 
 
 def _x0(bbox: Optional[tuple[float, float, float, float]]) -> float:
@@ -170,7 +210,16 @@ def _merge_row_fragments(lines: list[OcrLine], threshold: float) -> list[OcrLine
     really the next row or a wrapped second line of the row above's description -- the
     pair-rejoin step below (matching by nearest-y, not reading order) already handles
     gluing those back to a row, and blindly chaining on y-gap alone would instead bridge
-    two unrelated complete rows together through that left-restarting line in between."""
+    two unrelated complete rows together through that left-restarting line in between.
+
+    Tried and reverted: letting two lines merge purely on an extremely small y-gap,
+    regardless of x, to handle a row's right-side columns legitimately landing at a
+    smaller y than its own left-side description (confirmed on one real bill via its
+    RunPod OCR reading). That broke two already-passing real-bill fixtures
+    (tests/fixtures/line_item_bills.py) whose "numbers line, name a few px below" layout
+    has gaps of the same 1-6px magnitude -- there is no threshold that catches one without
+    the other by y-gap alone; doing this properly needs real column/x-band detection, not
+    a y-gap exception. See assets/docs/MULTI_ITEM_LINE_ALLOCATION_AND_OCR_FINDINGS.md."""
     if not lines:
         return []
     ordered = sorted(enumerate(lines), key=lambda p: (_y(p[1], p[0]), p[0]))
@@ -282,10 +331,20 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
     body: list[_Row] = [_parse_row(ln, _y(ln, 0)) for ln in merged_body]
 
     # 2. Rejoin split rows: a numbers-only row takes the nearest unused names-only row within pair_gap.
+    # A bill with no printed totals/VAT row at all (a pure delivery note) never trips _is_end,
+    # so body_lines runs to the bottom of the page -- a stray OCR misread anywhere in the
+    # signature/footer block below (e.g. a date glued into one decimal, "2026 12:56" ->
+    # "2026.12") would otherwise surface as a trailing phantom item. Real table rows never
+    # have a large vertical gap between them, so once a huge gap opens up after the last
+    # real item, the rest of the body is footer, not more items.
+    max_item_gap = max(line_h * 5, 80.0)
     items: list[tuple[float, LineItem]] = []
+    last_item_y: Optional[float] = None
     for row in body:
         if row.used or not row.has_numbers:
             continue
+        if last_item_y is not None and row.y - last_item_y > max_item_gap:
+            break
         description = row.description
         confidence = row.confidence
         if not description:
@@ -301,9 +360,12 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
             confidence = min(confidence, partner.confidence)
         row.used = True
         amount, qty = _amount_and_qty(row.decimals)
+        if row.int_qty is not None:
+            qty = row.int_qty
         if len(description) < 2:
             continue
         items.append((row.y, LineItem(description=description, quantity=qty, amount=amount, confidence=confidence)))
+        last_item_y = row.y
 
     # 3. A names-only row with a numbers row just below it that already had its own name
     #    is a wrapped description -- left alone; the user can merge it if needed.

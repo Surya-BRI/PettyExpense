@@ -14,6 +14,7 @@ from extraction import (
     CategoryRef,
     OcrWord,
     ReferenceData,
+    default_currency_for_region,
     default_tax_rules_for_region,
     dedupe_lines,
     extract,
@@ -287,28 +288,44 @@ def _run_runpod_ocr(image_bytes: bytes, mode: str) -> dict[str, Any] | None:
             status = status_data.get("status")
 
             if status == "COMPLETED":
-                text = (status_data.get("output") or {}).get("text", "") or ""
+                output = status_data.get("output") or {}
+                text = output.get("text", "") or ""
                 if not text.strip():
                     logger.warning("RunPod OCR: COMPLETED with empty text, falling back to CPU OCR")
                     return None
-                words = words_from_text(text)
+                # The worker also returns per-line boxes ({text, x, y, w, h}) alongside the plain
+                # text -- real geometry, so line-item table reconstruction can run here too instead
+                # of only on the CPU fallback. No per-box confidence is returned, so each word gets
+                # a flat 1.0 (matches the precedent in the geometry-less branch below).
+                boxes = output.get("boxes") or []
+                if boxes:
+                    words = [
+                        OcrWord(
+                            text=b.get("text", ""), confidence=1.0, lang="en",
+                            bounding_box=(
+                                float(b["x"]), float(b["y"]),
+                                float(b["x"]) + float(b["w"]), float(b["y"]) + float(b["h"]),
+                            ),
+                            page=1, reading_order=i,
+                        )
+                        for i, b in enumerate(boxes)
+                        if (b.get("text") or "").strip()
+                    ]
+                else:
+                    words = words_from_text(text)
                 lines = dedupe_lines(group_into_lines(words))
                 result = extract(lines, _reference_data)
                 parsed = to_legacy_dict(result)
                 parsed["raw_text"] = result.raw_text
-                # RunPod returns plain text with no bounding boxes -- each "line" here is often
-                # one table CELL, not one row (no geometry to tell them apart), so
-                # extract_line_items() can't safely reconstruct rows from it; leave line_items
-                # empty rather than emit wrong-looking suggestions the employee has to notice
-                # and delete one by one. See extract_line_items()'s docstring for the real,
-                # geometry-based reconstruction this intentionally skips here.
-                parsed["line_items"] = []
+                # Item rows for the "Multiple items" flow -- a suggestion the employee reviews and edits.
+                parsed["line_items"] = [li.to_dict() for li in extract_line_items(lines, _reference_data)]
                 parsed["raw_json"] = {
                     "engine": "runpod_paddleocr",
                     "mode": mode,
                     "field_confidence": parsed["field_confidence"],
                     "low_confidence_fields": parsed["low_confidence_fields"],
                     "expense_type": parsed["expense_type"],
+                    "line_items": parsed["line_items"],
                 }
                 return parsed
 
@@ -342,8 +359,22 @@ def _stub_ocr(filename_hint: str = "") -> dict[str, Any]:
     return parsed
 
 
+def _apply_currency_fallback(result: dict[str, Any], region_code: Optional[str]) -> dict[str, Any]:
+    # Many receipts never print a currency code at all (local currency assumed obvious), so
+    # OCR legitimately finds no marker to read -- not a bug. Default to the employee's own
+    # region's native currency in that case instead of leaving the field blank.
+    if not result.get("currency"):
+        fallback = default_currency_for_region(region_code)
+        if fallback:
+            result["currency"] = fallback
+    return result
+
+
 class OcrService:
-    def run(self, image_bytes: bytes, filename: str = "receipt.jpg", mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any]:
+    def run(
+        self, image_bytes: bytes, filename: str = "receipt.jpg", mode: str = _DEFAULT_OCR_MODE,
+        region_code: Optional[str] = None,
+    ) -> dict[str, Any]:
         settings = get_settings()
         # "paddle" predates this engine rewrite; it now just means "run the real OCR pipeline".
         if settings.ocr_backend == "paddle":
@@ -351,11 +382,11 @@ class OcrService:
             # CPU RapidOCR pipeline below rather than surfacing a RunPod-specific error.
             runpod_result = _run_runpod_ocr(image_bytes, mode)
             if runpod_result:
-                return runpod_result
+                return _apply_currency_fallback(runpod_result, region_code)
 
             real = _run_ocr(image_bytes, mode)
             if real:
-                return real
+                return _apply_currency_fallback(real, region_code)
             # Both engines failed (already logged) — must NOT fall through to fake stub data; raise so the app's "enter manually" UX takes over.
             raise RuntimeError(
                 "OCR pipeline failed to process this receipt — see server logs for the underlying exception."

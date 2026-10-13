@@ -3,6 +3,13 @@
 # produces a candidate — it simply scores slightly lower. Region-code overrides
 # key off ErpExpenseRegionConfig.region_code; unknown/missing region codes fall
 # back to "default".
+#
+# default_currency is different: it's not a scoring prior, it's a fallback value
+# OcrService.run() applies when OCR found no currency marker anywhere in the bill's
+# text at all (common on receipts that never print a currency code, assuming local
+# currency is obvious) -- see default_currency_for_region() in reference_data.py.
+# No default_currency under "default" on purpose: an unrecognized/missing region
+# code should leave currency unset rather than silently guessing one.
 default:
   valid_currency_codes:
     - AED
@@ -21,7 +28,12 @@ default:
 regions:
   UAE:
     plausible_vat_rates: [0, 5]
+    default_currency: AED
   KSA:
     plausible_vat_rates: [0, 5, 15]
+    default_currency: SAR
+  OMAN:
+    default_currency: OMR
   IN:
     plausible_vat_rates: [0, 5, 12, 18, 28]
+    default_currency: INR

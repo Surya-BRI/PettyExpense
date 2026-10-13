@@ -49,6 +49,16 @@ def default_tax_rules_for_region(region_code: Optional[str] = None) -> tuple[tup
     return currencies, rates
 
 
+def default_currency_for_region(region_code: Optional[str]) -> Optional[str]:
+    """The region's native currency, used only as a fallback when OCR found no currency
+    marker anywhere in the bill's text (see tax_rules.yaml's comment). None for an
+    unrecognized/missing region code -- never silently guesses one."""
+    if not region_code:
+        return None
+    rules = _load_tax_rules()
+    return rules.get("regions", {}).get(region_code, {}).get("default_currency")
+
+
 DEFAULT_CURRENCIES, DEFAULT_VAT_RATES = default_tax_rules_for_region(None)
 
 

@@ -217,13 +217,16 @@ class TransactionService:
         db.refresh(document)
         return self._receipt_payload(document, ocr=None, duplicate=None, ocr_status="pending")
 
-    def analyze_receipt(self, db: Session, receipt_id: int, mode: str = "auto", employee_id: Optional[int] = None) -> dict[str, Any]:
+    def analyze_receipt(
+        self, db: Session, receipt_id: int, mode: str = "auto", employee_id: Optional[int] = None,
+        region_code: Optional[str] = None,
+    ) -> dict[str, Any]:
         document = self.get_receipt(db, receipt_id)
         image_bytes = storage_service.read_bytes(document.s3_key)
         if not image_bytes:
             raise LookupError("Receipt image not found in storage")
         refresh_reference_data(db)
-        ocr = ocr_service.run(image_bytes, "receipt.jpg", mode=mode)
+        ocr = ocr_service.run(image_bytes, "receipt.jpg", mode=mode, region_code=region_code)
         document.ocr_raw_json = (
             ocr.get("raw_json") if isinstance(ocr.get("raw_json"), str) else json.dumps(ocr.get("raw_json"))
         )
@@ -241,9 +244,12 @@ class TransactionService:
         )
         return self._receipt_payload(document, ocr=ocr, duplicate=duplicate, ocr_status="done")
 
-    def run_ocr(self, db: Session, image_bytes: bytes, content_type: str, filename: str, employee_id: Optional[int] = None) -> dict[str, Any]:
+    def run_ocr(
+        self, db: Session, image_bytes: bytes, content_type: str, filename: str, employee_id: Optional[int] = None,
+        region_code: Optional[str] = None,
+    ) -> dict[str, Any]:
         stored = self.store_receipt(db, image_bytes, content_type, filename)
-        return self.analyze_receipt(db, stored["receipt_id"], employee_id=employee_id)
+        return self.analyze_receipt(db, stored["receipt_id"], employee_id=employee_id, region_code=region_code)
 
     def _receipt_payload(
         self,
