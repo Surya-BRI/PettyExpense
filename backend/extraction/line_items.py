@@ -88,6 +88,11 @@ _QTY_HEADER_WORD = re.compile(r"^qty$|^quantity$", re.IGNORECASE)
 _AMOUNT_HEADER_WORD = re.compile(r"total|amount", re.IGNORECASE)
 _WORD_NUMBER = re.compile(r"^\(?\d{1,3}(?:,\d{3})*(?:[.,]\d{1,3})?\)?$")
 
+# A bill's VAT% column ("5 %", "5.00%") -- distinct from the Disc.%/other percentage columns some
+# invoices also have, so only taken when it's the row's one percentage figure (ambiguous with two
+# real percentages on a row; none of the sample bills so far print more than one).
+_VAT_PERCENT = re.compile(r"(?<![\d.,])(\d{1,2}(?:\.\d{1,2})?)\s*%")
+
 
 @dataclass(frozen=True)
 class LineItem:
@@ -95,6 +100,7 @@ class LineItem:
     quantity: Optional[float]
     amount: Optional[float]
     confidence: float
+    vat_percent: Optional[float] = None
 
     def to_dict(self) -> dict:
         return {
@@ -102,6 +108,7 @@ class LineItem:
             "quantity": self.quantity,
             "amount": self.amount,
             "confidence": round(self.confidence, 2),
+            "vat_percent": self.vat_percent,
         }
 
 
@@ -115,6 +122,7 @@ class _Row:
     int_qty: Optional[float] = None
     x_qty: Optional[float] = None
     x_amount: Optional[float] = None
+    vat_percent: Optional[float] = None
     used: bool = False
 
     @property
@@ -230,6 +238,8 @@ def _parse_row(
     int_qty = float(qty_match.group(1).replace(",", "")) if qty_match else None
     x_qty = _nearest_column_number(line, qty_col_x, col_tolerance)
     x_amount = _nearest_column_number(line, amount_col_x, col_tolerance)
+    vat_match = _VAT_PERCENT.search(text)
+    vat_percent = float(vat_match.group(1)) if vat_match else None
     # Description: the words that carry letters, up to the first money value.
     money_positions = [m.start() for m in _DECIMAL.finditer(text)] + ([trailing.start(1)] if trailing else [])
     first_money_at = min(money_positions) if money_positions else None
@@ -255,7 +265,7 @@ def _parse_row(
         description = ""
     return _Row(
         y=y, text=text, decimals=decimals, description=description, confidence=line.confidence,
-        int_qty=int_qty, x_qty=x_qty, x_amount=x_amount,
+        int_qty=int_qty, x_qty=x_qty, x_amount=x_amount, vat_percent=vat_percent,
     )
 
 
@@ -446,7 +456,10 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
             amount = row.x_amount
         if len(description) < 2:
             continue
-        items.append((row.y, LineItem(description=description, quantity=qty, amount=amount, confidence=confidence)))
+        items.append((
+            row.y,
+            LineItem(description=description, quantity=qty, amount=amount, confidence=confidence, vat_percent=row.vat_percent),
+        ))
         last_item_y = row.y
 
     # 3. A names-only row with a numbers row just below it that already had its own name
