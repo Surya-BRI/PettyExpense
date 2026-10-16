@@ -296,7 +296,7 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
             content = email_templates.approval_pending_email(email_templates.build_context(txn))
             for next_approver in next_approvers:
                 notification_service.send(
-                    db, next_approver, "approval", txn.transaction_id,
+                    db, next_approver, "approval_pending", txn.transaction_id,
                     f"Claim awaiting your approval ({vendor_name})", f"مطالبة نفقات في انتظار موافقتك ({vendor_name})",
                     f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is now at your stage ({txn.current_stage}).",
                     f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} وصلت إلى مرحلتك ({txn.current_stage}).",

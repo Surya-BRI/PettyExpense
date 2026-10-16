@@ -5,12 +5,16 @@ from sqlalchemy.orm import Session
 
 from auth.security import CurrentUser, get_current_user
 from database.models import ErpExpenseTransaction, get_db
-from services import notification_service
+from services import approval_service, notification_service
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
+# Types that originally pointed the recipient at an approval action (as opposed to 'approval' /
+# 'rejection' / 'dispute' / 'paid', which always just inform the employee about their own claim).
+_APPROVER_FACING_TYPES = {"submission", "approval_pending", "resubmit"}
 
-def _to_dict(row, txn: Optional[ErpExpenseTransaction]) -> dict:
+
+def _to_dict(row, txn: Optional[ErpExpenseTransaction], actionable: bool) -> dict:
     return {
         "id": row.notification_id,
         "transaction_id": row.transaction_id,
@@ -18,9 +22,14 @@ def _to_dict(row, txn: Optional[ErpExpenseTransaction]) -> dict:
         "status": row.status,
         "message": row.message,
         "sent_at": row.sent_at.isoformat() if row.sent_at else None,
-        # current_stage lets the client route approver-facing notifications straight to the right approval queue.
         "current_stage": txn.current_stage if txn else None,
         "claim_status": txn.status if txn else None,
+        # Whether the recipient is STILL a genuine current approver for this claim right now --
+        # current_stage/claim_status above reflect the transaction's live state, not the state at
+        # send time, so an approver's own already-actioned notification (e.g. an HOD who approved
+        # and moved the claim on to Accountant) would otherwise be mistaken for one still awaiting
+        # their action. The client only deep-links into the approval-action screen when this is true.
+        "actionable": actionable,
     }
 
 
@@ -37,7 +46,23 @@ def list_notifications(
     if txn_ids:
         for t in db.query(ErpExpenseTransaction).filter(ErpExpenseTransaction.transaction_id.in_(txn_ids)).all():
             txns[t.transaction_id] = t
-    return [_to_dict(r, txns.get(r.transaction_id)) for r in rows]
+
+    actionable_by_txn: dict[int, bool] = {}
+
+    def _is_actionable(txn: Optional[ErpExpenseTransaction]) -> bool:
+        if txn is None:
+            return False
+        if txn.transaction_id not in actionable_by_txn:
+            approvers = approval_service.resolve_current_approvers(db, txn)
+            actionable_by_txn[txn.transaction_id] = user.id in {a.user_id for a in approvers}
+        return actionable_by_txn[txn.transaction_id]
+
+    result = []
+    for r in rows:
+        txn = txns.get(r.transaction_id)
+        actionable = r.type in _APPROVER_FACING_TYPES and _is_actionable(txn)
+        result.append(_to_dict(r, txn, actionable))
+    return result
 
 
 @router.get("/unread-count")

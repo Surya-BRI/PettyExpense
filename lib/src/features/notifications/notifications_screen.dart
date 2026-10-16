@@ -34,6 +34,8 @@ class AppNotification {
 const _titleByType = {
   'submission': 'New claim to review',
   'approval': 'Claim approved',
+  'approval_pending': 'Claim awaiting your approval',
+  'resubmit': 'Corrected claim resubmitted',
   'rejection': 'Claim rejected',
   'dispute': 'Claim disputed — correction needed',
   'paid': 'Claim paid',
@@ -43,6 +45,8 @@ const _titleByType = {
 const _kindByType = {
   'submission': 'submitted',
   'approval': 'approved',
+  'approval_pending': 'submitted',
+  'resubmit': 'submitted',
   'rejection': 'rejected',
   'dispute': 'rejected',
   'paid': 'paid',
@@ -54,19 +58,22 @@ String _bodyOf(String message) {
   return parts.length > 1 ? parts.sublist(1).join('\n\n') : message;
 }
 
+// 'approval' is always employee-facing (your claim was fully approved); 'submission' and
+// 'approval_pending'/'resubmit' are approver-facing, but only deep-link into the approval-action
+// screen while 'actionable' (server-computed: are you still a genuine current approver for this
+// claim right now). Once you've already acted and the claim has moved on, your own old
+// notification falls back to the read-only claim view instead of a stage you no longer own.
+const _approverFacingTypes = {'submission', 'approval_pending', 'resubmit'};
+
 String? _routeFor(Map<String, dynamic> row, UserRole role) {
   final txnId = row['transaction_id'];
   if (txnId == null) return null;
   final type = row['type'] as String?;
-  final claimStatus = row['claim_status'] as String?;
-  final isFinalApproval = type == 'approval' && claimStatus == 'approved';
-  final approverFacing =
-      type == 'submission' || (type == 'approval' && !isFinalApproval);
-  if (approverFacing) {
+  if (type == 'test') return null;
+  if (_approverFacingTypes.contains(type) && row['actionable'] == true) {
     final stage = (row['current_stage'] as String?) ?? defaultStageFor(role);
     return '/approvals/$stage/$txnId';
   }
-  if (type == 'test') return null;
   return '/claim/$txnId';
 }
 
