@@ -32,14 +32,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
 
   static const _demoAccounts = [
-    ('dev_employee',   'Test@1234', 'Employee'),
-    ('dev_hod',        'Test@1234', 'HOD'),
-    ('dev_accountant', 'Test@1234', 'Accountant'),
-    ('dev_finance',    'Test@1234', 'Finance Manager'),
-    ('dev_admin',      'Test@1234', 'Admin'),
-    ('dev_uae',        'Test@1234', 'Employee · UAE region'),
-    ('dev_ksa',        'Test@1234', 'Employee · KSA region'),
-    ('dev_oman',       'Test@1234', 'Employee · OMAN region'),
+    ('surya_sales_emp',    'Test@1234', 'Employee · Sales'),
+    ('priya_sales_hod',    'Test@1234', 'HOD · Sales'),
+    ('anjana_it_emp',      'Test@1234', 'Employee · IT'),
+    ('vikram_it_hod',      'Test@1234', 'HOD · IT'),
+    ('deepa_accounts_emp', 'Test@1234', 'Employee · Accounts'),
+    ('ravi_accountant',    'Test@1234', 'Accountant'),
+    ('meera_finance_mgr',  'Test@1234', 'Finance Manager'),
+    ('arjun_admin',        'Test@1234', 'Admin'),
+    ('dev_uae',            'Test@1234', 'Employee · UAE region'),
+    ('dev_ksa',            'Test@1234', 'Employee · KSA region'),
+    ('dev_oman',           'Test@1234', 'Employee · OMAN region'),
   ];
 
   @override

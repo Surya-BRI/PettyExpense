@@ -113,8 +113,9 @@ def fake_email(monkeypatch):
 
 def test_submit_notifies_only_the_current_stage_approver_not_everyone(db, scenario, fake_email):
     txn = scenario["txn"]
-    approver = approval_service.resolve_current_approver(db, txn)
-    assert approver.user_id == scenario["hod"].user_id  # the bug this fixes: finance must not hear about a claim at hod stage
+    approvers = approval_service.resolve_current_approvers(db, txn)
+    assert [a.user_id for a in approvers] == [scenario["hod"].user_id]  # the bug this fixes: finance must not hear about a claim at hod stage
+    approver = approvers[0]
     notification_service.send(db, approver, "submission", txn.transaction_id, "s-en", "s-ar", "b-en", "b-ar")
     assert len(fake_email) == 1
     assert fake_email[0][0] == "hod@example.com"
@@ -126,8 +127,8 @@ def test_approve_advances_to_next_stage_approver(db, scenario, fake_email):
     txn = scenario["txn"]
     hod_user = CurrentUser(scenario["hod"].user_id, "hod", "hod", "hod@example.com", scenario["hod"].department_id)
     approval_service.advance(db, hod_user, txn.transaction_id, "approve", None)
-    next_approver = approval_service.resolve_current_approver(db, txn)
-    assert next_approver.user_id == scenario["finance"].user_id
+    next_approvers = approval_service.resolve_current_approvers(db, txn)
+    assert [a.user_id for a in next_approvers] == [scenario["finance"].user_id]
 
 
 def test_approve_on_last_stage_notifies_employee_not_an_approver(db, scenario, fake_email):
@@ -188,8 +189,8 @@ def test_delegation_redirects_to_backup(db, scenario, fake_email):
         )
     )
     db.commit()
-    approver = approval_service.resolve_current_approver(db, scenario["txn"])
-    assert approver.user_id == backup.user_id
+    approvers = approval_service.resolve_current_approvers(db, scenario["txn"])
+    assert [a.user_id for a in approvers] == [backup.user_id]
 
 
 def test_idempotent_send_does_not_duplicate(db, scenario, fake_email):
@@ -254,3 +255,52 @@ def test_send_test_bypasses_idempotency(db, scenario, fake_email):
     notification_service.send_test(db, hod, "email", "subject", "body")
     notification_service.send_test(db, hod, "email", "subject", "body")
     assert len(fake_email) == 2  # unlike send(), a test send always attempts delivery
+
+
+# ── Multiple active HODs for the same department ──────────────────────────────────────
+# A department genuinely having more than one active HOD (co-HODs, a handover overlap) used
+# to be resolved arbitrarily by a bare .first() -- only one of them could see or act on the
+# queue, and the other's assignment was silently dead. These confirm both are real approvers.
+
+
+def _add_second_hod(db, scenario, email="hod2@example.com"):
+    hod2 = _user(db, scenario["hod"].role, email, department_id=scenario["hod"].department_id)
+    from database.models import ErpExpenseHodAssignment
+
+    db.add(ErpExpenseHodAssignment(user_id=hod2.user_id, department_id=scenario["hod"].department_id))
+    db.commit()
+    return hod2
+
+
+def test_both_active_hods_are_returned_as_approvers(db, scenario):
+    hod2 = _add_second_hod(db, scenario)
+    approvers = approval_service.resolve_current_approvers(db, scenario["txn"])
+    assert {a.user_id for a in approvers} == {scenario["hod"].user_id, hod2.user_id}
+
+
+def test_both_hods_see_the_claim_in_their_queue(db, scenario):
+    hod2 = _add_second_hod(db, scenario)
+    from auth.security import CurrentUser
+
+    hod1_user = CurrentUser(scenario["hod"].user_id, "hod1", "hod", department_id=scenario["hod"].department_id)
+    hod2_user = CurrentUser(hod2.user_id, "hod2", "hod", department_id=hod2.department_id)
+    assert len(approval_service.list_queue(db, hod1_user, "hod")) == 1
+    assert len(approval_service.list_queue(db, hod2_user, "hod")) == 1
+
+
+def test_either_hod_can_approve_first_action_wins(db, scenario):
+    hod2 = _add_second_hod(db, scenario)
+    from auth.security import CurrentUser
+
+    hod2_user = CurrentUser(hod2.user_id, "hod2", "hod", department_id=hod2.department_id)
+    result = approval_service.advance(db, hod2_user, scenario["txn"].transaction_id, "approve", None)
+    assert result["current_stage"] == "finance_manager"  # the other co-HOD's own approval isn't separately required
+
+
+def test_submission_notifies_both_active_hods(db, scenario, fake_email):
+    hod2 = _add_second_hod(db, scenario)
+    from services.transaction_service import transaction_service
+
+    transaction_service._notify_finance_on_submit(db, scenario["txn"])
+    notified = {row[0] for row in fake_email}
+    assert notified == {"hod@example.com", hod2.email}
