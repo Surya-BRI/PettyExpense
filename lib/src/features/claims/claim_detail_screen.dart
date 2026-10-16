@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
@@ -30,6 +31,7 @@ class ClaimDetailScreen extends ConsumerStatefulWidget {
 
 class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
   bool _busy = false;
+  String? _error;
 
   @override
   Widget build(BuildContext context) {
@@ -155,17 +157,36 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
               ),
               if (claim.status == 'draft') ...[
                 const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: () => context.push('/claim/${claim.id}/edit'),
+                  child: const Text('Edit draft'),
+                ),
+                const SizedBox(height: 10),
                 FilledButton(
                   onPressed: _busy
                       ? null
                       : () async {
-                          setState(() => _busy = true);
-                          await api.submitClaim(claim.id);
-                          ref.invalidate(claimDetailProvider(widget.claimId));
-                          if (mounted) setState(() => _busy = false);
+                          setState(() {
+                            _busy = true;
+                            _error = null;
+                          });
+                          try {
+                            await api.submitClaim(claim.id);
+                            ref.invalidate(claimDetailProvider(widget.claimId));
+                          } catch (e) {
+                            final msg = e.toString();
+                            setState(() => _error =
+                                msg.startsWith('Exception: ') ? msg.substring(11) : msg);
+                          } finally {
+                            if (mounted) setState(() => _busy = false);
+                          }
                         },
                   child: const Text('Submit draft'),
                 ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                ],
               ],
               if (claim.status == 'disputed') ...[
                 const SizedBox(height: 16),

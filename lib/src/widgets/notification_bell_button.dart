@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
+import '../features/claims/confirm_claim_screen.dart' show navigateGuarded;
 import '../features/notifications/notifications_screen.dart';
 import '../theme/app_theme.dart';
 
@@ -17,7 +18,7 @@ class NotificationBellButton extends ConsumerWidget {
 
     return IconButton(
       tooltip: 'Notifications',
-      onPressed: () => context.push('/notifications'),
+      onPressed: () => navigateGuarded(ref, () => context.push('/notifications')),
       icon: Badge(
         isLabelVisible: count > 0,
         backgroundColor: AppColors.orange,

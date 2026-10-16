@@ -179,7 +179,9 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                       borderRadius: BorderRadius.circular(12),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        onTap: () => context.push('/claim/${c.id}'),
+                        onTap: () => context.push(
+                          c.status == 'draft' ? '/claim/${c.id}/edit' : '/claim/${c.id}',
+                        ),
                         child: Ink(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
@@ -309,7 +311,11 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                                 visualDensity: VisualDensity.compact,
                                               ),
-                                              onPressed: () => context.push('/claim/${c.id}'),
+                                              onPressed: () => context.push(
+                                                c.status == 'draft'
+                                                    ? '/claim/${c.id}/edit'
+                                                    : '/claim/${c.id}',
+                                              ),
                                               child: const Text(
                                                 'View claim',
                                                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),

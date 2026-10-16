@@ -277,7 +277,11 @@ class TransactionService:
             "field_confidence": ocr.get("field_confidence") or {},
             "low_confidence_fields": ocr.get("low_confidence_fields") or [],
             "reconciliation_mismatch": ocr.get("reconciliation_mismatch") or False,
-            "bill_number": ocr.get("invoice_number") or ocr.get("transaction_number") or None,
+            "bill_number": (
+                (ocr.get("fields", {}).get("invoice_number") or {}).get("value")
+                or (ocr.get("fields", {}).get("transaction_number") or {}).get("value")
+                or None
+            ),
             "line_items": ocr.get("line_items") or [],
             "raw_text": ocr.get("raw_text"),
             "image_hash": document.hash,
@@ -424,10 +428,14 @@ class TransactionService:
             ("amount", "amount"),
             ("vat_amount", "vat_amount"),
             ("total_amount", "total_amount"),
+            ("currency", "currency"),
+            ("exchange_rate", "exchange_rate"),
             ("bill_date", "bill_date"),
             ("category_id", "category_id"),
             ("project_id", "project_cache_id"),
+            ("type", "type"),
             ("op_number", "op_number"),
+            ("bill_number", "bill_number"),
             ("remarks", "remarks"),
         ):
             if field in updates and updates[field] is not None:
@@ -443,6 +451,26 @@ class TransactionService:
         txn = self._owned_transaction(db, user, transaction_id)
         if txn.status not in ("draft",):
             raise ValueError("Only draft claims can be submitted")
+        # A draft is deliberately allowed to be incomplete while saved (see update_draft) -- but
+        # actually submitting for approval needs these filled in. Checked here, not just client
+        # side, so an incomplete draft can never reach Finance regardless of which UI path (or a
+        # future API consumer) triggers the submit.
+        vendor_present = bool(txn.vendor_id or (txn.vendor_raw_text and txn.vendor_raw_text.strip()))
+        missing = []
+        if not vendor_present:
+            missing.append("vendor")
+        if not txn.currency:
+            missing.append("currency")
+        if not txn.bill_date:
+            missing.append("bill date")
+        if not txn.bill_number:
+            missing.append("bill number")
+        if not txn.total_amount:
+            missing.append("total amount")
+        if not txn.amount:
+            missing.append("amount")
+        if missing:
+            raise ValueError(f"Finish these fields before submitting: {', '.join(missing)}")
         txn.status = "submitted"
         txn.submitted_on = datetime.utcnow()
         # Re-check for duplicates at submission time — draft edits can change vendor/amount/date after the initial check, making it stale.
@@ -612,19 +640,20 @@ class TransactionService:
         return txn
 
     def _notify_finance_on_submit(self, db: Session, txn: ErpExpenseTransaction) -> None:
-        # Notify only the CURRENT stage's approver, not every approver-capable user — the chain is sequential.
+        # Notify only the CURRENT stage's approver(s), not every approver-capable user — the chain is sequential.
         from services import approval_service, email_templates, notification_service
 
-        approver = approval_service.resolve_current_approver(db, txn)
+        approvers = approval_service.resolve_current_approvers(db, txn)
         vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
         content = email_templates.submission_email(email_templates.build_context(txn))
-        notification_service.send(
-            db, approver, "submission", txn.transaction_id,
-            f"New expense claim submitted ({vendor_name})", f"تم تقديم مطالبة نفقات جديدة ({vendor_name})",
-            f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is awaiting your review.",
-            f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} في انتظار مراجعتك.",
-            html_body_en=content.html,
-        )
+        for approver in approvers:
+            notification_service.send(
+                db, approver, "submission", txn.transaction_id,
+                f"New expense claim submitted ({vendor_name})", f"تم تقديم مطالبة نفقات جديدة ({vendor_name})",
+                f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is awaiting your review.",
+                f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} في انتظار مراجعتك.",
+                html_body_en=content.html,
+            )
 
     def _notify_employee(self, db: Session, txn: ErpExpenseTransaction, action: str, remarks: Optional[str]) -> None:
         from services import email_templates, notification_service

@@ -55,6 +55,16 @@ class LineItemDraft {
       ? null
       : double.tryParse(quantity.text.trim());
 
+  /// A real counted quantity (pieces, boxes, units) is almost always a whole number --
+  /// a fractional one ("16.01", "151.062") is a strong tell that OCR actually read a
+  /// Rate/VAT% column into this field instead of the real Qty column, a bug this app has
+  /// hit repeatedly on dense multi-column invoices. Non-blocking: just a nudge to double
+  /// check, since genuinely fractional quantities (metres, kilos) do exist.
+  bool get quantityLooksOff {
+    final q = quantityValue;
+    return q != null && q != q.roundToDouble();
+  }
+
   /// Why this line can't be submitted yet, or null if it's complete.
   String? get problem {
     if (description.text.trim().isEmpty) return 'Add the item name';
@@ -80,7 +90,10 @@ class LineItemDraft {
 
 /// Editable list of item lines: name, quantity, amount and category per line, plus
 /// add / remove. The parent owns the drafts and recomputes totals in [onChanged].
-class LineItemsEditor extends StatelessWidget {
+/// Shows one item card at a time with Previous/Next navigation -- a bill with a
+/// dozen-plus items (common on pharmacy/hardware receipts) made a stacked list of
+/// cards an unreasonably long scroll.
+class LineItemsEditor extends StatefulWidget {
   const LineItemsEditor({
     super.key,
     required this.lines,
@@ -103,26 +116,76 @@ class LineItemsEditor extends StatelessWidget {
   final bool showProblems;
 
   @override
+  State<LineItemsEditor> createState() => _LineItemsEditorState();
+}
+
+class _LineItemsEditorState extends State<LineItemsEditor> {
+  int _index = 0;
+
+  void _goTo(int i) =>
+      setState(() => _index = i.clamp(0, widget.lines.length - 1));
+
+  @override
   Widget build(BuildContext context) {
+    final lines = widget.lines;
+    final index = _index.clamp(0, lines.length - 1);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < lines.length; i++) ...[
-          _LineCard(
-            key: ObjectKey(lines[i]),
-            index: i,
-            line: lines[i],
-            categories: categories,
-            currency: currency,
-            canRemove: lines.length > 1,
-            showProblem: showProblems,
-            onChanged: onChanged,
-            onRemove: () => onRemove(i),
-          ),
-          const SizedBox(height: 10),
-        ],
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Previous item',
+              visualDensity: VisualDensity.compact,
+              onPressed: index > 0 ? () => _goTo(index - 1) : null,
+              icon: Icon(PhosphorIcons.caretLeft()),
+            ),
+            Expanded(
+              child: Center(
+                child: Text(
+                  'Item ${index + 1} of ${lines.length}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.darkBlue,
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Next item',
+              visualDensity: VisualDensity.compact,
+              onPressed: index < lines.length - 1
+                  ? () => _goTo(index + 1)
+                  : null,
+              icon: Icon(PhosphorIcons.caretRight()),
+            ),
+          ],
+        ),
+        _LineCard(
+          key: ObjectKey(lines[index]),
+          index: index,
+          line: lines[index],
+          categories: widget.categories,
+          currency: widget.currency,
+          canRemove: lines.length > 1,
+          showProblem: widget.showProblems,
+          onChanged: widget.onChanged,
+          onRemove: () {
+            widget.onRemove(index);
+            // `lines` is the same List instance the parent mutates in place, so its
+            // length already reflects the removal here -- land on the item that
+            // slid into this slot, or step back if the last item was removed.
+            if (lines.isNotEmpty) _goTo(index);
+          },
+        ),
+        const SizedBox(height: 10),
         OutlinedButton.icon(
-          onPressed: onAdd,
+          onPressed: () {
+            widget.onAdd();
+            // Same in-place-mutation reasoning as above: lines.length already
+            // includes the new line by the time onAdd() returns.
+            _goTo(lines.length - 1);
+          },
           icon: Icon(PhosphorIcons.plus()),
           label: const Text('Add item'),
         ),
@@ -224,9 +287,20 @@ class _LineCard extends StatelessWidget {
                           decimal: true,
                         ),
                         inputFormatters: _qtyFormatters,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Qty',
                           isDense: true,
+                          filled: line.quantityLooksOff,
+                          fillColor: AppColors.warningSoft,
+                          enabledBorder: line.quantityLooksOff
+                              ? OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.orange,
+                                    width: 1.6,
+                                  ),
+                                )
+                              : null,
                         ),
                         onChanged: (_) => onChanged(),
                       ),
@@ -251,6 +325,13 @@ class _LineCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (line.quantityLooksOff) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'This quantity looks unusual -- double-check it against the bill.',
+                    style: TextStyle(color: AppColors.orange, fontSize: 11.5),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 InputDecorator(
                   decoration: const InputDecoration(

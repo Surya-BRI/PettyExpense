@@ -67,9 +67,12 @@ class UpdateClaimRequest(BaseModel):
     amount: Optional[float] = None
     vat_amount: Optional[float] = None
     total_amount: Optional[float] = None
+    currency: Optional[str] = None
+    exchange_rate: Optional[float] = None
     bill_date: Optional[str] = None
     category_id: Optional[int] = None
     project_id: Optional[int] = None
+    type: Optional[str] = None
     op_number: Optional[str] = None
     bill_number: Optional[str] = None
     remarks: Optional[str] = None

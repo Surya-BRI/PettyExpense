@@ -7,6 +7,7 @@ import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
 import '../../theme/app_theme.dart';
 import '../authentication/auth_controller.dart';
+import '../claims/confirm_claim_screen.dart' show navigateGuarded;
 import '../notifications/notifications_screen.dart';
 
 /// Screens at or above this width get the sidebar layout instead of the bottom nav.
@@ -103,7 +104,7 @@ class _Sidebar extends ConsumerWidget {
               _SidebarTile(
                 entry: item,
                 selected: item.matches(location),
-                onTap: () => context.go(item.path),
+                onTap: () => navigateGuarded(ref, () => context.go(item.path)),
               ),
             const Spacer(),
             if (!role.isApprover)

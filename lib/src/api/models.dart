@@ -299,6 +299,7 @@ class ExpenseClaim {
     this.billDate,
     this.projectId,
     this.opNumber,
+    this.billNumber,
     this.remarks,
     this.currentStage,
     this.disputeReturned = false,
@@ -331,6 +332,7 @@ class ExpenseClaim {
   final String? categoryName;
   final int? projectId;
   final String? opNumber;
+  final String? billNumber;
   final String status;
   final String? currentStage;
   final bool disputeReturned;
@@ -394,6 +396,7 @@ class ExpenseClaim {
       categoryName: json['category_name'] as String?,
       projectId: (json['project_id'] as num?)?.toInt(),
       opNumber: json['op_number'] as String?,
+      billNumber: json['bill_number'] as String?,
       status: json['status'] as String? ?? 'draft',
       currentStage: json['current_stage'] as String?,
       disputeReturned: json['dispute_returned'] as bool? ?? false,

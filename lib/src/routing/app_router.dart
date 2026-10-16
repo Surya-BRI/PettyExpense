@@ -124,6 +124,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 ClaimDetailScreen(claimId: int.parse(state.pathParameters['id']!)),
           ),
           GoRoute(
+            path: '/claim/:id/edit',
+            builder: (context, state) => ConfirmClaimScreen(
+              existingClaimId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
             path: '/approvals/:stage',
             pageBuilder: (context, state) => NoTransitionPage(
               child: ApprovalQueueScreen(stage: state.pathParameters['stage']!),

@@ -10,14 +10,53 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/authenticated_image.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/image_preview_screen.dart';
 import '../../widgets/op_code_field.dart';
 import '../authentication/auth_controller.dart';
 import 'bill_line_mode.dart';
+import 'claim_field_validation.dart';
 import 'line_items_editor.dart';
 
 final _arabic = RegExp(r'[\u0600-\u06FF]');
+final _latin = RegExp(r'[A-Za-z]');
+
+/// Set by ConfirmClaimScreen while it's mounted, so any navigation trigger outside its own
+/// widget tree (a bottom-nav tab tap in MainShell, which replaces the route directly instead
+/// of going through a Navigator pop) can ask it to confirm before leaving -- otherwise an
+/// accidental tap silently discards an OCR'd claim the employee never got to save.
+/// Returns true if the caller may go ahead with the navigation it wanted (including after a
+/// successful "Save as draft" -- the claim is saved in the background, not shown); false if the
+/// user chose to keep editing, or if the save failed and the error needs to stay visible.
+final confirmClaimLeaveGuardProvider = StateProvider<Future<bool> Function()?>((ref) => null);
+
+/// Every navigation trigger that can fire while ConfirmClaimScreen is open -- bottom-nav tabs,
+/// the drawer, the notification bell, any app-bar nav action -- must route through this instead
+/// of calling `context.go`/`context.push` directly, or it silently discards an unsaved,
+/// OCR'd-from-the-bill claim with no warning at all.
+void navigateGuarded(WidgetRef ref, void Function() navigate) {
+  final guard = ref.read(confirmClaimLeaveGuardProvider);
+  if (guard == null) {
+    navigate();
+    return;
+  }
+  guard().then((shouldProceed) {
+    if (shouldProceed) navigate();
+  });
+}
+
+enum _LeaveAction { cancel, discard, saveDraft }
+
+/// True only when Arabic characters outnumber Latin ones, so mixed
+/// OCR reads (e.g. an English name followed by its Arabic translation)
+/// don't flip the whole field RTL over a single Arabic word.
+bool _isArabicDominant(String text) {
+  final arabicCount = _arabic.allMatches(text).length;
+  if (arabicCount == 0) return false;
+  final latinCount = _latin.allMatches(text).length;
+  return arabicCount > latinCount;
+}
 
 const _maxOcrAttempts = 2;
 
@@ -29,18 +68,27 @@ final _decimalInputFormatters = <TextInputFormatter>[
 class ConfirmClaimScreen extends ConsumerStatefulWidget {
   const ConfirmClaimScreen({
     super.key,
-    required this.ocr,
+    this.ocr,
     this.localPath,
     this.runOcr = false,
     this.lineMode = BillLineMode.single,
-  });
+    this.existingClaimId,
+  }) : assert(
+         ocr != null || existingClaimId != null,
+         'Provide either a freshly-OCRd ocr result or an existingClaimId to edit',
+       );
 
-  final OcrResult ocr;
+  final OcrResult? ocr;
   final String? localPath;
   final bool runOcr;
 
   /// Chosen on the Add receipt sheet before scanning.
   final BillLineMode lineMode;
+
+  /// Set instead of [ocr] when opening this screen to edit a previously-saved draft --
+  /// fetches and seeds the form from the server instead of from a fresh OCR read, and
+  /// "Save"/"Submit" update that existing claim instead of creating a new one.
+  final int? existingClaimId;
 
   @override
   ConsumerState<ConfirmClaimScreen> createState() => _ConfirmClaimScreenState();
@@ -60,7 +108,14 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   String _ocrMode = 'auto';
   String? _currency;
   bool _busy = false;
+  // null when idle; true/false says which of Submit/Save-as-draft is the one in flight, so
+  // only that button's label changes -- see _submit().
+  bool? _busyAsDraft;
   String? _error;
+  // Guards against a second leave-attempt (another nav tap, or the system back button) firing
+  // while the "Leave without saving?" dialog from a first attempt is still up -- without this, a
+  // quick double-tap across two different exits could open the dialog twice.
+  bool _leaveAttemptInProgress = false;
   List<CategoryRef> _categories = const [];
 
   // Claim-level OP; also the default new line items start from (see onAdd below).
@@ -69,31 +124,96 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   // "Multiple items" bills: one editable draft per item line.
   final List<LineItemDraft> _lines = [];
   bool _showLineProblems = false;
-  bool get _multi => widget.lineMode == BillLineMode.multiple;
+  // When editing an existing claim there's no pre-chosen BillLineMode -- single vs multi is
+  // whatever the claim itself already is, set once it loads (see _loadExistingClaim).
+  bool _editingMulti = false;
+  bool get _multi => widget.existingClaimId != null
+      ? _editingMulti
+      : widget.lineMode == BillLineMode.multiple;
 
   bool _analyzing = false;
   bool _ocrFailed = false;
+  // Set once an existing draft loads -- the server-hosted receipt image to show instead of a
+  // freshly-captured local file (there isn't one when editing, only when capturing).
+  String? _existingReceiptImageUrl;
   int _progress = 0;
   Timer? _ticker;
 
   @override
   void initState() {
     super.initState();
-    _ocr = widget.ocr;
-    _vendor = TextEditingController(text: _ocr.vendor);
-    _billNumber = TextEditingController(text: _ocr.billNumber ?? '');
-    _amount = TextEditingController(text: _money(_ocr.amount));
-    _vat = TextEditingController(text: _money(_ocr.vatAmount));
-    _total = TextEditingController(text: _money(_ocr.totalAmount));
-    _date = TextEditingController(text: _ocr.date);
+    _vendor = TextEditingController();
+    _billNumber = TextEditingController();
+    _amount = TextEditingController();
+    _vat = TextEditingController();
+    _total = TextEditingController();
+    _date = TextEditingController();
     _remarks = TextEditingController();
-    _currency = _normalizeCurrency(_ocr.currency);
-    if (_multi) _seedLines(_ocr.lineItems);
     _loadReferenceData();
-    if (widget.runOcr || _ocr.isPending) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _analyzeWithRetries(),
-      );
+    if (widget.existingClaimId != null) {
+      // No fresh OCR data to seed from when editing a saved draft -- an inert placeholder so
+      // every other `_ocr.` reference in this file (confidence badges, the duplicate/
+      // reconciliation banners, the OCR-retry path) reads as "nothing to show" rather than
+      // needing its own edit-mode branch everywhere it's used.
+      _ocr = const OcrResult(receiptId: 0, s3Key: '', vendor: '', date: '');
+      _analyzing = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadExistingClaim());
+    } else {
+      _ocr = widget.ocr!;
+      _vendor.text = _ocr.vendor.trim();
+      _billNumber.text = _ocr.billNumber ?? '';
+      _amount.text = _money(_ocr.amount);
+      _vat.text = _money(_ocr.vatAmount);
+      _total.text = _money(_ocr.totalAmount);
+      _date.text = _ocr.date;
+      _currency = _normalizeCurrency(_ocr.currency);
+      if (_multi) _seedLines(_ocr.lineItems);
+      if (widget.runOcr || _ocr.isPending) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _analyzeWithRetries(),
+        );
+      }
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(confirmClaimLeaveGuardProvider.notifier).state =
+            _handleLeaveAttempt;
+      }
+    });
+  }
+
+  /// Fetches a saved draft and seeds every field from it -- the edit-mode counterpart to the
+  /// OCR-seeding branch above. Direct `=` assignment throughout (not `??=`), so it always wins
+  /// over whatever _loadReferenceData's category fallback already set, regardless of which
+  /// async call happens to resolve first.
+  Future<void> _loadExistingClaim() async {
+    try {
+      final claim = await ref.read(apiClientProvider).getClaim(widget.existingClaimId!);
+      if (!mounted) return;
+      _vendor.text = claim.vendorName ?? '';
+      _billNumber.text = claim.billNumber ?? '';
+      _amount.text = _money(claim.amount);
+      _vat.text = _money(claim.vatAmount);
+      _total.text = _money(claim.totalAmount);
+      _date.text = claim.billDate ?? '';
+      _remarks.text = claim.remarks ?? '';
+      _currency = _normalizeCurrency(claim.currency);
+      _categoryId = claim.categoryId;
+      _type = claim.type;
+      _selectedOp = claim.opNumber == null
+          ? null
+          : OpportunityResult(opCode: claim.opNumber!, name: claim.opNumber!);
+      _editingMulti = claim.isMultiItem;
+      if (_editingMulti) _seedLinesFromClaim(claim.lineItems);
+      _existingReceiptImageUrl = claim.receipt?.imageUrl;
+      setState(() => _analyzing = false);
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString();
+      setState(() {
+        _analyzing = false;
+        _error = msg.startsWith('Exception: ') ? msg.substring(11) : msg;
+      });
     }
   }
 
@@ -144,10 +264,41 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     if (_lines.isEmpty) _lines.add(LineItemDraft(categoryId: _categoryId));
   }
 
+  /// Edit-mode counterpart to [_seedLines] -- same shape, seeded from the claim's own saved
+  /// lines instead of a fresh OCR read.
+  void _seedLinesFromClaim(List<ClaimLineItem> items) {
+    for (final line in _lines) {
+      line.dispose();
+    }
+    _lines
+      ..clear()
+      ..addAll(
+        items.map(
+          (i) => LineItemDraft(
+            description: i.description,
+            quantity: i.quantity,
+            amount: i.amount,
+            categoryId: i.categoryId,
+          ),
+        ),
+      );
+    if (_lines.isEmpty) _lines.add(LineItemDraft(categoryId: _categoryId));
+  }
+
   double get _linesTotal =>
       _lines.fold(0.0, (sum, l) => sum + (l.amountValue ?? 0));
 
   double get _vatValue => double.tryParse(_vat.text.trim()) ?? 0;
+
+  /// Live, not just after a save -- lets the employee see what's still blocking a real submit
+  /// while they're still editing a draft.
+  List<String> get _stillMissingForSubmit => missingForSubmit(
+    total: double.tryParse(_total.text.trim()),
+    currency: _currency,
+    vendorText: _vendor.text,
+    billDateText: _date.text,
+    billNumberText: _billNumber.text,
+  );
 
   /// Claim-level category for a multi-item bill: the category carrying the most money.
   int? get _mainLineCategory {
@@ -220,7 +371,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
 
   void _applyOcr(OcrResult result) {
     _ocr = result;
-    _vendor.text = result.vendor;
+    _vendor.text = result.vendor.trim();
     if (_billNumber.text.isEmpty) _billNumber.text = result.billNumber ?? '';
     _amount.text = _money(result.amount);
     _vat.text = _money(result.vatAmount);
@@ -234,6 +385,10 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
 
   @override
   void dispose() {
+    // Not cleared here: using `ref` during dispose isn't safe (Riverpod asserts against it once
+    // the element is unmounting). A stale reference left in the provider is harmless -- the
+    // first line of _handleLeaveAttempt checks `mounted` and treats a disposed screen as nothing
+    // left to protect, and the next ConfirmClaimScreen that mounts overwrites it anyway.
     _ticker?.cancel();
     _vendor.dispose();
     _billNumber.dispose();
@@ -248,10 +403,14 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     super.dispose();
   }
 
-  Future<void> _submit({required bool asDraft}) async {
+  Future<void> _submit({required bool asDraft, bool navigateOnSuccess = true}) async {
     if (_analyzing) return;
     setState(() {
       _busy = true;
+      // Which button's label/spinner should reflect the busy state -- _busy alone doesn't say
+      // whether this is a Submit or a Save as draft in flight, which previously made the
+      // Submit button flash "Submitting…" even when Save as draft was the one pressed.
+      _busyAsDraft = asDraft;
       _error = null;
     });
     try {
@@ -276,66 +435,315 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         _categoryId = _mainLineCategory ?? _categoryId;
       }
       final amount = double.tryParse(_amount.text.trim());
-      if (amount == null) {
-        throw Exception('Enter a valid amount');
-      }
-      // A blank VAT field means "no VAT" (the backend reports a confident 0, not blank) — only a non-empty but unparseable value is an error.
       final vatText = _vat.text.trim();
       final vat = vatText.isEmpty ? 0.0 : double.tryParse(vatText);
-      if (vat == null) {
-        throw Exception('Enter a valid VAT amount');
+      final totalText = _total.text.trim();
+      double? total = totalText.isEmpty ? null : double.tryParse(totalText);
+      if (totalText.isNotEmpty && total == null) {
+        throw ClaimFieldError('Enter a valid total amount');
       }
-      final total = double.tryParse(_total.text.trim());
-      if (total == null) {
-        throw Exception('Enter a valid total amount');
-      }
-      if (_currency == null) {
-        throw Exception('Select a currency (AED or SAR)');
-      }
-      if (_categoryId == null) {
-        throw Exception('Select a category / expense type');
-      }
-      if (_date.text.trim().isEmpty) {
-        throw Exception('Enter the bill date');
-      }
-      if (_billNumber.text.trim().isEmpty) {
-        throw Exception('Enter the bill / invoice number');
+      validateClaimFields(
+        asDraft: asDraft,
+        amount: amount,
+        categoryId: _categoryId,
+        vat: vat,
+        total: total,
+        currency: _currency,
+        vendorText: _vendor.text,
+        billDateText: _date.text,
+        billNumberText: _billNumber.text,
+      );
+      if (!asDraft &&
+          !await _confirmBeforeSubmit(amount: amount!, vat: vat!, total: total!)) {
+        return;
       }
       final api = ref.read(apiClientProvider);
-      final claim = await api.createClaim({
+      final body = {
         'vendor': _vendor.text.trim(),
         'amount': amount,
         'vat_amount': vat,
-        'total_amount': total,
-        'currency': _currency,
-        'bill_date': _date.text.trim(),
+        'total_amount': ?total,
+        'currency': ?_currency,
+        'bill_date': _date.text.trim().isEmpty ? null : _date.text.trim(),
         'category_id': _categoryId,
-        // The region the user signed in under (multi-region users pick one at login);
-        // falls back to UAE for single-region demo users who never had a region to pick.
-        'region_code':
-            ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
         'type': _type,
         'project_id': null,
         'op_number': _selectedOp?.opCode,
+        // bill_number is a required field server-side, but has no length constraint -- an empty
+        // string is a valid "not filled in yet" draft value; only a real submit forces it above.
         'bill_number': _billNumber.text.trim(),
         'remarks': _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
-        'receipt_id': _ocr.receiptId,
-        's3_key': _ocr.s3Key,
-        'submit': !asDraft,
         'line_items': ?lineItems,
-      });
+      };
+      ExpenseClaim claim;
+      if (widget.existingClaimId != null) {
+        final id = widget.existingClaimId!;
+        await api.updateDraft(id, body);
+        try {
+          claim = asDraft ? await api.getClaim(id) : await api.submitClaim(id);
+        } catch (e) {
+          // The edit itself is already saved server-side at this point -- only the submit step
+          // failed (e.g. the backend's own completeness check). Don't lose that: reload the
+          // persisted (updated) state and stay here so the employee can fix whatever's missing,
+          // instead of bouncing to the read-only detail screen as if nothing happened.
+          if (mounted) {
+            final msg = e.toString();
+            setState(() => _error = msg.startsWith('Exception: ') ? msg.substring(11) : msg);
+          }
+          return;
+        }
+      } else {
+        claim = await api.createClaim({
+          ...body,
+          // The region the user signed in under (multi-region users pick one at login);
+          // falls back to UAE for single-region demo users who never had a region to pick.
+          'region_code': ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
+          'receipt_id': _ocr.receiptId,
+          's3_key': _ocr.s3Key,
+          'submit': !asDraft,
+        });
+      }
       if (!mounted) return;
       if (claim.duplicateWarning != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(claim.duplicateWarning!.message)),
         );
       }
-      context.go('/claim/${claim.id}');
+      if (navigateOnSuccess) {
+        context.go('/claim/${claim.id}');
+      }
     } catch (e) {
       final msg = e.toString();
       setState(() => _error = msg.startsWith('Exception: ') ? msg.substring(11) : msg);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _busyAsDraft = null;
+        });
+      }
+    }
+  }
+
+  /// "Please cross-check" box shown on Submit for approval: the key figures the employee is about to
+  /// send, plus anything that looks off (items don't add up to the printed total, odd quantities,
+  /// amount + VAT not equal to total). Returns true only if they confirm.
+  Future<bool> _confirmBeforeSubmit({
+    required double amount,
+    required double vat,
+    required double total,
+  }) async {
+    final cur = _currency ?? '';
+    String m(double v) => '$cur ${v.toStringAsFixed(2)}'.trim();
+    final printed = _ocrFailed ? null : _ocr.totalAmount;
+    final warnings = <String>[];
+    if (_multi) {
+      if (printed != null && (printed - total).abs() > 0.01) {
+        warnings.add(
+          'Items add up to ${m(total)} but the bill’s printed total is ${m(printed)} '
+          '(difference ${m((printed - total).abs())}). An item may be missing or misread.',
+        );
+      }
+      final oddQty = _lines.where((l) => l.quantityLooksOff).length;
+      if (oddQty > 0) {
+        warnings.add(
+          '$oddQty item${oddQty == 1 ? ' has' : 's have'} a decimal quantity. '
+          'Check it isn’t a rate or VAT % read as the quantity.',
+        );
+      }
+    } else if ((amount + vat - total).abs() > 0.01) {
+      warnings.add(
+        'Amount (${m(amount)}) + VAT (${m(vat)}) doesn’t equal the total (${m(total)}).',
+      );
+    }
+
+    Widget row(String label, String value) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 104,
+            child: Text(
+              label,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '—' : value,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Please cross-check before submitting'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'These details were read from the bill automatically and can contain mistakes. '
+                'Compare them with the bill before you send it for approval.',
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.lightBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    row('Vendor', _vendor.text.trim()),
+                    row('Bill no.', _billNumber.text.trim()),
+                    row('Date', _date.text.trim()),
+                    if (_multi) row('Items', '${_lines.length}'),
+                    row('Amount excl. VAT', m(amount)),
+                    row('VAT', m(vat)),
+                    row('Total', m(total)),
+                  ],
+                ),
+              ),
+              for (final w in warnings) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.warningSoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.orange),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        PhosphorIcons.warning(),
+                        size: 18,
+                        color: AppColors.orange,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(w)),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(
+              backgroundColor: AppColors.lightBlue,
+              foregroundColor: AppColors.darkBlue,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Go back and check'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Looks right, submit'),
+          ),
+        ],
+      ),
+    );
+    return ok ?? false;
+  }
+
+  /// Shown before leaving this screen by any route -- the system/app-bar back button, or a
+  /// bottom-nav tab tap routed through [confirmClaimLeaveGuardProvider] -- so an employee never
+  /// accidentally loses a claim the app already spent OCR work reading off the bill.
+  /// Returns true if the caller should go ahead with its own navigation -- including after a
+  /// successful "Save as draft", which saves silently and lets the original navigation (the tab
+  /// tap, or the back press) continue to where it was actually headed; false if the user chose
+  /// to keep editing, or if the save failed and this screen needs to stay up to show the error.
+  Future<bool> _handleLeaveAttempt() async {
+    // A stale registration from an already-disposed screen (see dispose() above) -- nothing
+    // left here to protect, so let the navigation that triggered this proceed.
+    if (!mounted) return true;
+    if (_busy) return false;
+    // A second exit attempt (another nav tap, or the back button) while the dialog from a first
+    // one is still resolving -- don't stack a second dialog on top of it. The first attempt is
+    // already deciding this screen's fate, so this one just declines to navigate.
+    if (_leaveAttemptInProgress) return false;
+    _leaveAttemptInProgress = true;
+    try {
+      return await _resolveLeaveAttempt();
+    } finally {
+      if (mounted) _leaveAttemptInProgress = false;
+    }
+  }
+
+  Future<bool> _resolveLeaveAttempt() async {
+    final action = await showDialog<_LeaveAction>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave without saving?'),
+        content: const Text('Leaving now without saving will lose these changes.'),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(
+              backgroundColor: AppColors.lightBlue,
+              foregroundColor: AppColors.darkBlue,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => Navigator.pop(ctx, _LeaveAction.cancel),
+            child: const Text('Keep editing'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            onPressed: () => Navigator.pop(ctx, _LeaveAction.discard),
+            child: const Text('Discard'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, _LeaveAction.saveDraft),
+            child: const Text('Save as draft'),
+          ),
+        ],
+      ),
+    );
+    switch (action) {
+      case _LeaveAction.saveDraft:
+        await _submit(asDraft: true, navigateOnSuccess: false);
+        // On failure _submit() sets _error and the screen must stay put so it's visible.
+        if (_error != null) return false;
+        _clearLeaveGuard();
+        // On success there's nothing left to protect -- let the navigation that triggered
+        // this guard (the tab tap, or the back press) continue to where it was actually headed,
+        // instead of redirecting to the claim detail screen nobody asked to see.
+        return true;
+      case _LeaveAction.discard:
+        _clearLeaveGuard();
+        return true;
+      case _LeaveAction.cancel:
+      case null:
+        return false;
+    }
+  }
+
+  /// Some destinations this guard protects against (e.g. the notification bell, which
+  /// `context.push`es on top instead of replacing this route) never actually pop/dispose this
+  /// screen -- it stays mounted underneath, so the `mounted`-check at the top of
+  /// [_handleLeaveAttempt] alone can't tell a resolved leave apart from a fresh one. Once the
+  /// employee has explicitly discarded or saved, clear this screen's own registration so a
+  /// second navigation attempt from the same still-mounted instance doesn't re-ask about a claim
+  /// that's already been dealt with.
+  void _clearLeaveGuard() {
+    if (ref.read(confirmClaimLeaveGuardProvider) == _handleLeaveAttempt) {
+      ref.read(confirmClaimLeaveGuardProvider.notifier).state = null;
     }
   }
 
@@ -344,9 +752,18 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     final currency = _currency;
     final fieldsLocked = _analyzing;
 
-    return Scaffold(
-      appBar: const BrandAppBar(
-        title: 'Confirm claim',
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldLeave = await _handleLeaveAttempt();
+        if (shouldLeave && mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+      appBar: BrandAppBar(
+        title: widget.existingClaimId != null ? 'Edit draft' : 'Confirm claim',
         automaticallyImplyLeading: true,
       ),
       body: ListView(
@@ -370,34 +787,44 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                   ),
                 ),
               ),
+            )
+          else if (_existingReceiptImageUrl != null)
+            AuthenticatedImage(
+              path: _existingReceiptImageUrl!,
+              height: 200,
+              width: double.infinity,
             ),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
             child: Chip(
               avatar: Icon(
-                widget.lineMode == BillLineMode.single
-                    ? PhosphorIcons.receipt()
-                    : PhosphorIcons.listBullets(),
+                _multi ? PhosphorIcons.listBullets() : PhosphorIcons.receipt(),
                 size: 18,
                 color: AppColors.darkBlue,
               ),
-              label: Text(widget.lineMode.label),
+              label: Text(_multi ? BillLineMode.multiple.label : BillLineMode.single.label),
               visualDensity: VisualDensity.compact,
             ),
           ),
-          const SizedBox(height: 8),
-          _OcrModeSelector(
-            value: _ocrMode,
-            enabled: !_analyzing,
-            onChanged: (mode) {
-              setState(() => _ocrMode = mode);
-              _analyzeWithRetries();
-            },
-          ),
+          // No bill-language mode to pick when editing a saved claim -- there's no fresh OCR
+          // read happening at all, just a plain data fetch.
+          if (widget.existingClaimId == null) ...[
+            const SizedBox(height: 8),
+            _OcrModeSelector(
+              value: _ocrMode,
+              enabled: !_analyzing,
+              onChanged: (mode) {
+                setState(() => _ocrMode = mode);
+                _analyzeWithRetries();
+              },
+            ),
+          ],
           if (_analyzing) ...[
             const SizedBox(height: 12),
-            _OcrProgress(progress: _progress),
+            widget.existingClaimId != null
+                ? const _LoadingDraftIndicator()
+                : _OcrProgress(progress: _progress),
           ],
           if (_ocrFailed) ...[
             const SizedBox(height: 12),
@@ -626,6 +1053,13 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             maxLines: 2,
             decoration: const InputDecoration(labelText: 'Remarks (optional)'),
           ),
+          if (_stillMissingForSubmit.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Still needed to submit: ${_stillMissingForSubmit.join(', ')}.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ],
           if (_error != null && !_ocrFailed) ...[
             const SizedBox(height: 12),
             Text(_error!, style: const TextStyle(color: Colors.red)),
@@ -636,7 +1070,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                 ? null
                 : () => _submit(asDraft: false),
             child: Text(
-              _busy
+              _busyAsDraft == false
                   ? 'Submitting…'
                   : _analyzing
                   ? 'Waiting for bill reading…'
@@ -648,9 +1082,10 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             onPressed: (_busy || _analyzing)
                 ? null
                 : () => _submit(asDraft: true),
-            child: const Text('Save as draft'),
+            child: Text(_busyAsDraft == true ? 'Saving…' : 'Save as draft'),
           ),
         ],
+      ),
       ),
     );
   }
@@ -664,6 +1099,34 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       color: AppColors.warningSoft,
       borderRadius: BorderRadius.circular(12),
       child: Padding(padding: const EdgeInsets.all(12), child: Text(text)),
+    );
+  }
+}
+
+/// Shown while an existing draft is being fetched -- the edit-mode counterpart to
+/// [_OcrProgress], deliberately plain (no percentage, no "reading the bill" framing) since
+/// nothing is being read off the bill again, just loaded from what's already saved.
+class _LoadingDraftIndicator extends StatelessWidget {
+  const _LoadingDraftIndicator();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 10),
+          Text(
+            'Loading draft…',
+            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.darkBlue),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -816,7 +1279,7 @@ class _OcrTextFieldState extends State<_OcrTextField> {
   @override
   Widget build(BuildContext context) {
     final arabic =
-        widget.allowArabic && _arabic.hasMatch(widget.controller.text);
+        widget.allowArabic && _isArabicDominant(widget.controller.text);
     return TextField(
       controller: widget.controller,
       keyboardType: widget.keyboardType ?? TextInputType.text,
@@ -1017,14 +1480,28 @@ class _ItemsTotals extends StatelessWidget {
           const Divider(height: 14),
           row('Total (sum of items)', _m(itemsTotal), bold: true),
           if (mismatch) ...[
-            const SizedBox(height: 8),
-            Text(
-              'The bill’s printed total is ${_m(billTotal!)}, which differs by ${_m((billTotal! - itemsTotal).abs())}. '
-              'Check the items: one may be missing or misread.',
-              style: const TextStyle(
-                color: AppColors.orange,
-                fontSize: 12.5,
-                height: 1.35,
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.warningSoft,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.orange),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(PhosphorIcons.warning(), size: 18, color: AppColors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Items don’t match the bill. The printed total is ${_m(billTotal!)}, '
+                      'the items add up to ${_m(itemsTotal)} (difference ${_m((billTotal! - itemsTotal).abs())}). '
+                      'Check the items: one may be missing or misread.',
+                      style: const TextStyle(fontSize: 12.5, height: 1.35),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

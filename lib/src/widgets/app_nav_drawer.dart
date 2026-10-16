@@ -5,6 +5,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../api/enums.dart';
 import '../features/authentication/auth_controller.dart';
+import '../features/claims/confirm_claim_screen.dart' show navigateGuarded;
 import '../features/notifications/notifications_screen.dart';
 import '../routing/role_routes.dart';
 import '../theme/app_theme.dart';
@@ -24,8 +25,10 @@ class AppNavDrawer extends ConsumerWidget {
     final unreadCount = ref.watch(unreadNotificationCountProvider).maybeWhen(data: (n) => n, orElse: () => 0);
 
     void go(String path) {
-      Navigator.of(context).pop();
-      context.go(path);
+      navigateGuarded(ref, () {
+        Navigator.of(context).pop();
+        context.go(path);
+      });
     }
 
     // For an employee, Home and Claims are the same screen (homeRouteFor == '/claims'),
@@ -65,10 +68,10 @@ class AppNavDrawer extends ConsumerWidget {
         label: 'Alerts',
         selected: location == '/notifications',
         badgeCount: unreadCount,
-        onTap: () {
+        onTap: () => navigateGuarded(ref, () {
           Navigator.of(context).pop();
           context.push('/notifications');
-        },
+        }),
       ),
       _DrawerItem(
         icon: PhosphorIcons.userCircle(),

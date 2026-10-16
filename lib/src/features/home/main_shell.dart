@@ -8,6 +8,7 @@ import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
 import '../authentication/auth_controller.dart';
 import '../claims/capture_receipt_sheet.dart';
+import '../claims/confirm_claim_screen.dart' show navigateGuarded;
 import '../notifications/notifications_screen.dart';
 import '../../theme/app_theme.dart';
 import '../web/web_shell.dart';
@@ -113,7 +114,10 @@ class MainShell extends ConsumerWidget {
                         selectedIcon: PhosphorIcons.house(PhosphorIconsStyle.fill),
                         label: 'Home',
                         selected: homeSelected,
-                        onTap: () => context.go(homeRouteFor(role)),
+                        onTap: () => navigateGuarded(
+                          ref,
+                          () => context.go(homeRouteFor(role)),
+                        ),
                       ),
                     ),
                   Expanded(
@@ -122,7 +126,8 @@ class MainShell extends ConsumerWidget {
                       selectedIcon: PhosphorIcons.receipt(PhosphorIconsStyle.fill),
                       label: 'Claims',
                       selected: claimsSelected,
-                      onTap: () => context.go('/claims'),
+                      onTap: () =>
+                          navigateGuarded(ref, () => context.go('/claims')),
                     ),
                   ),
                   // Capture relies on dart:io files, so scanning stays a mobile-app action.
@@ -134,7 +139,10 @@ class MainShell extends ConsumerWidget {
                         label: 'Scan',
                         selected: false,
                         customIcon: const _ScanIcon(),
-                        onTap: () => showCaptureReceiptSheet(context, ref),
+                        onTap: () => navigateGuarded(
+                          ref,
+                          () => showCaptureReceiptSheet(context, ref),
+                        ),
                       ),
                     ),
                   Expanded(
@@ -144,7 +152,8 @@ class MainShell extends ConsumerWidget {
                       label: 'Alerts',
                       selected: alertsSelected,
                       badgeCount: unreadCount,
-                      onTap: () => context.push('/notifications'),
+                      onTap: () =>
+                          navigateGuarded(ref, () => context.push('/notifications')),
                     ),
                   ),
                   Expanded(
@@ -153,7 +162,8 @@ class MainShell extends ConsumerWidget {
                       selectedIcon: PhosphorIcons.userCircle(PhosphorIconsStyle.fill),
                       label: 'Profile',
                       selected: profileSelected,
-                      onTap: () => context.go('/profile'),
+                      onTap: () =>
+                          navigateGuarded(ref, () => context.go('/profile')),
                     ),
                   ),
                 ],
