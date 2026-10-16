@@ -60,8 +60,8 @@ def normalize_text(s: str) -> str:
     s = unicodedata.normalize("NFKC", s)
     s = s.translate(_DIGIT_TRANSLATION)
     s = _normalize_percent_signs(s)
-    # A '0' misread as 'O' right after a currency code ("AED0.29" -> "AEDO.29") — repaired only in that specific letter-then-decimal position.
-    s = re.sub(r"(?<=[A-Za-z])[Oo](?=\.\s*\d)", "0", s)
+    # A '0' misread as 'O' right after a currency code ("AED0.29" -> "AEDO.29") — repaired only for an uppercase O after 2+ uppercase letters, so the word "No." in "No. 22860" is left alone.
+    s = re.sub(r"(?<=[A-Z]{2})O(?=\.\s*\d)", "0", s)
     # Stray space around a decimal point ("0. 29" -> "0.29").
     s = re.sub(r"(\d)\.\s+(\d{1,2})(?!\d)", r"\1.\2", s)
     # Stray space around a date separator ("25 / 06 / 26" -> "25/06/26") so the date regexes still match.

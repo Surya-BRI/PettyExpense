@@ -41,6 +41,7 @@ class LabelConcept(str, Enum):
     DATE = "date"
     INVOICE_NUMBER = "invoice_number"
     TRANSACTION_NUMBER = "transaction_number"
+    DELIVERY_NOTE_NUMBER = "delivery_note_number"
     ITEM_TABLE_HEADER = "item_table_header"
     TAX_REGISTRATION_NUMBER = "tax_registration_number"
     DOCUMENT_TYPE_HEADER = "document_type_header"
@@ -58,14 +59,42 @@ class LabelMatch:
     fuzzy: bool
 
 
+# OCR often reads a letter as a digit inside a short label word ("Bi11" for "Bill", "B11 No"); matching is
+# also tried on a copy of the text with those digits turned back into letters (same length, so spans line up).
+_FOLDABLE_WORD = re.compile(r"^[a-z][a-z01589]{1,5}[:.]?$")
+_FOLD_TABLE = str.maketrans({"1": "l", "0": "o", "5": "s", "8": "b"})
+
+
+def _ocr_fold(lowered: str) -> str:
+    def fold(m: re.Match) -> str:
+        word = m.group(0)
+        if _FOLDABLE_WORD.match(word) and any(c.isdigit() for c in word):
+            return word.translate(_FOLD_TABLE)
+        return word
+
+    return re.sub(r"\S+", fold, lowered)
+
+
 def match_label_concepts(
     line_text: str, vocab: LabelVocabulary, exclusions: Optional[LabelVocabulary] = None
 ) -> list[LabelMatch]:
     """Returns at most one (the best) match per concept found in line_text."""
     if not line_text:
         return []
-    exclusions = exclusions or {}
     lowered = line_text.lower()
+    matches = _match_on(lowered, vocab, exclusions or {})
+    folded = _ocr_fold(lowered)
+    if folded != lowered:
+        found = {m.concept for m in matches}
+        for m in _match_on(folded, vocab, exclusions or {}):
+            if m.concept not in found:
+                matches.append(LabelMatch(m.concept, m.matched_synonym, m.span, fuzzy=True))
+    return _suppress_shorter_overlapping_matches(matches)
+
+
+def _match_on(
+    lowered: str, vocab: LabelVocabulary, exclusions: LabelVocabulary
+) -> list[LabelMatch]:
     tokens = list(re.finditer(r"\S+", lowered))
     matches: list[LabelMatch] = []
 
@@ -80,6 +109,13 @@ def match_label_concepts(
             if not isinstance(synonym, str):
                 continue  # a YAML-editing mistake (e.g. bare 'off' parsed as a bool) shouldn't crash extraction
             syn_lower = synonym.lower()
+            if syn_lower.startswith("re:"):
+                # Word-boundary / positional labels ("Inv:", a bare "No." at line start) that a plain substring can't express safely.
+                rm = re.search(syn_lower[3:], lowered)
+                if rm and not _is_excluded_followup(lowered, rm.end(), concept_exclusions):
+                    if best is None or best.fuzzy or (rm.end() - rm.start()) > (best.span[1] - best.span[0]):
+                        best = LabelMatch(concept, synonym, (rm.start(), rm.end()), fuzzy=False)
+                continue
             idx = lowered.find(syn_lower)
             if idx != -1:
                 end = idx + len(syn_lower)
@@ -108,7 +144,7 @@ def match_label_concepts(
                 best = LabelMatch(concept, synonym, best_span, fuzzy=True)
         if best is not None:
             matches.append(best)
-    return _suppress_shorter_overlapping_matches(matches)
+    return matches
 
 
 def _suppress_shorter_overlapping_matches(matches: list[LabelMatch]) -> list[LabelMatch]:

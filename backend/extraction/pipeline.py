@@ -35,7 +35,7 @@ def extract(lines: list[OcrLine], reference_data: ReferenceData) -> ExtractionRe
     context = build_scoring_context(lines, reference_data)
     candidates = score_candidates(candidates, context)
     candidates, reconciliation_mismatch = validate_and_adjust(candidates, reference_data)
-    fields = select_fields(candidates)
+    fields = select_fields(candidates, reference_data.plausible_vat_rates)
 
     # A mismatch flagged from candidates (pre-selection) is only meaningful once amount/vat_amount/total_amount are all actually populated.
     if reconciliation_mismatch and any(

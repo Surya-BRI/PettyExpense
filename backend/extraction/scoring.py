@@ -71,6 +71,8 @@ def _format_plausibility(candidate: FieldCandidate) -> tuple[float, Optional[str
             return 0.06, "format_plausible_rate"
         return -0.1, "format_penalty_implausible_rate"
     if field == "date":
+        if "implausible_year" in candidate.signals:
+            return -0.2, "format_penalty_implausible_year"
         return 0.1, "format_date_shape"
     if field == "vendor":
         if "label_colon_code_shape" in candidate.signals or "digit_dominated_line" in candidate.signals:
@@ -101,8 +103,20 @@ def _label_and_location_weight(candidate: FieldCandidate) -> tuple[float, list[s
         weight += 0.10
     elif "previous_line_label" in signals:
         weight += 0.06
+    if "adjacent_to_label" in signals:
+        weight += 0.12  # the value printed right beside its own label ("Invoice No.: 123")
+    if "currency_labelled" in signals:
+        weight += 0.20  # the code printed right after "Currency:"
+    if "below_label" in signals:
+        weight += 0.10  # the value printed directly under its label, in the same column
+    if "secondary_label" in signals:
+        weight -= 0.15  # e.g. a delivery-note number: only wins when no invoice number is on the page
     if "no_label_bare_number" in signals:
         weight -= 0.15
+    # Arithmetic identity (amount + vat == total, vat ~= rate * amount) found on one tax-summary row
+    # is stronger evidence than any single label match, which OCR garbles far more often than digits.
+    if "vat_breakdown_arithmetic" in signals:
+        weight += 0.42
     return weight, added
 
 
@@ -111,6 +125,8 @@ def _reference_match_weight(candidate: FieldCandidate) -> tuple[float, Optional[
         return 0.25, "known_reference_match"
     if "keyword_match" in candidate.signals or "name_match" in candidate.signals:
         return 0.25, "known_reference_match"
+    if "known_vendor_substring_match" in candidate.signals:
+        return 0.2, "known_reference_match"
     return 0.0, None
 
 

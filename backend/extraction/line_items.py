@@ -23,6 +23,7 @@ lines before submitting.
 """
 from __future__ import annotations
 
+import difflib
 import re
 import statistics
 from dataclasses import dataclass
@@ -57,11 +58,31 @@ _SUMMARY_ROW = re.compile(r"^\W*(q[tl]y|items?|no\.?\s*of\s*items?)\s*[:=]", re.
 # ("B111 Amount" for "Bill Amount"): item names on a bill practically never contain these words.
 # "vat" is included directly because the concept matcher misses a bare percentage-suffixed
 # reading like "VAT 5%" (vs. a standalone "VAT" line, which it does catch).
+# A Tax Code column prints "VAT_AE:S" / "VAT AE:S" (OCR drops the underscore) on every item row. That is
+# row data, not a "VAT" summary label: blank it out before end-of-table and description checks.
+_TAX_CODE = re.compile(r"\bVAT[\s_-]*[A-Z]{2}\s*:\s*[A-Z]\b|(?<![A-Za-z])-?\s?U\.?A\.?E\b(?!\s*[,.]?\s*[A-Za-z])", re.IGNORECASE)
 _END_WORDS = re.compile(r"\b(total|subtotal|grand|amount|balance|payable|rounding|vat)\b", re.IGNORECASE)
 
+# Some invoices print the item quantity as a bare integer with a unit suffix ("50 Pcs",
+# "1,000 Pc") rather than a decimal -- invisible to _DECIMAL below, which only sees the
+# Rate/Amount columns' decimal values and otherwise leaves decimals[0] (the Rate) mistaken
+# for the quantity. Matched separately so it can't collide with those money values.
+_UNIT_WORDS = {
+    "pcs", "pc", "nos", "mtr", "mtrs", "kg", "kgs", "ctn", "ctns", "box", "boxes", "unit", "units", "ea", "ltr", "ltrs",
+    # Arabic: piece(s), item, box, carton, kg, litre, metre, unit, number, crate
+    "قطعة", "قطع", "حبة", "علبة", "كرتون", "كجم", "كيلو", "لتر", "متر", "وحدة", "عدد", "صندوق",
+}
+_QTY_UNIT = re.compile(
+    r"(?<![\d.,])(\d{1,3}(?:,\d{3})*)\s+(" + "|".join(_UNIT_WORDS) + r")\b", re.IGNORECASE
+)
+
 # OCR reads "0.00" / "38.00" as "0 00" / "38 00": rejoin a 1-4 digit group followed by two or three digits
-# (some Gulf invoices print 3-decimal fils/baisa amounts, e.g. "480.000").
-_SPLIT_DECIMAL = re.compile(r"(?<![\d.,])(\d{1,4})\s(\d{2,3})(?![\d.,%])")
+# (some Gulf invoices print 3-decimal fils/baisa amounts, e.g. "480.000") -- but not when the second
+# group is actually a bare quantity cell ("...20X100 50 Pcs..."): merging that into the item code
+# ("20X100.50") destroys the one place the real quantity was readable.
+_SPLIT_DECIMAL = re.compile(
+    r"(?<![\d.,])(\d{1,4})\s(\d{2,3})(?![\d.,%])(?!\s*(?:" + "|".join(_UNIT_WORDS) + r")\b)", re.IGNORECASE
+)
 # Money values: 2- or 3-decimal numbers that are not glued to letters ("1.25CMX5M" is a size, not a price).
 _DECIMAL = re.compile(r"(?<![\d.,A-Za-z])\d{1,6}[.,]\d{2,3}(?![\dA-Za-z])")
 # OCR sometimes drops the last digit of the row's final amount ("14.3"); accepted only as the last token.
@@ -69,23 +90,14 @@ _TRAILING_ONE_DECIMAL = re.compile(r"(?<![\d.,A-Za-z])(\d{1,6}[.,]\d)\s*$")
 _INTEGER = re.compile(r"(?<![\d.,])\d+(?![\d.,])")
 _LETTERS = re.compile(r"[A-Za-z؀-ۿ]")
 
-# Some invoices print the item quantity as a bare integer with a unit suffix ("50 Pcs",
-# "1,000 Pc") rather than a decimal -- invisible to _DECIMAL above, which only sees the
-# Rate/Amount columns' decimal values and otherwise leaves decimals[0] (the Rate) mistaken
-# for the quantity. Matched separately so it can't collide with those money values.
-_UNIT_WORDS = {"pcs", "pc", "nos", "mtr", "mtrs", "kg", "kgs", "ctn", "ctns", "box", "boxes", "unit", "units", "ea", "ltr", "ltrs"}
-_QTY_UNIT = re.compile(
-    r"(?<![\d.,])(\d{1,3}(?:,\d{3})*)\s+(" + "|".join(_UNIT_WORDS) + r")\b", re.IGNORECASE
-)
-
 # A dense invoice table (Qty / Unit Rate / Unit Discount / Net Rate / Taxable Amount / VAT% /
 # Tax Amount / Total Amount, 8 numeric columns) breaks the decimals[0]/decimals[-1] positional
 # guess above -- there's no single "first"/"last" rule that holds for 5+ numeric columns. When
 # real word geometry is available, the header row's own cell positions tell us exactly which
 # x-band is Qty and which is the row's real Total, so a body row's matching number can be read
 # directly off its position instead of guessed from reading order.
-_QTY_HEADER_WORD = re.compile(r"^qty$|^quantity$", re.IGNORECASE)
-_AMOUNT_HEADER_WORD = re.compile(r"total|amount", re.IGNORECASE)
+_QTY_HEADER_WORD = re.compile(r"^qty$|^quantity$|^الكمية$|^الكميه$|^كمية$|^العدد$", re.IGNORECASE)
+_AMOUNT_HEADER_WORD = re.compile(r"total|amount|المجموع|الاجمالي|الإجمالي|اجمالي|إجمالي|المبلغ", re.IGNORECASE)
 _WORD_NUMBER = re.compile(r"^\(?\d{1,3}(?:,\d{3})*(?:[.,]\d{1,3})?\)?$")
 
 # A bill's VAT% column ("5 %", "5.00%") -- distinct from the Disc.%/other percentage columns some
@@ -127,7 +139,13 @@ class _Row:
 
     @property
     def has_numbers(self) -> bool:
-        return bool(self.decimals) or self.int_qty is not None
+        # x_qty/x_amount (read off real column geometry) count too -- a row can have a
+        # resolvable quantity by position alone, with no decimals and no unit-suffixed
+        # int_qty match of its own (e.g. a split-off row fragment whose Rate/Amount cells
+        # ended up on a different fragment). Missing this let such a row's own real content
+        # be silently treated as a bare, numberless "description" and handed to some
+        # unrelated stray numbers row as its partner instead of becoming its own item.
+        return bool(self.decimals) or self.int_qty is not None or self.x_qty is not None or self.x_amount is not None
 
     @property
     def has_text(self) -> bool:
@@ -156,6 +174,7 @@ def _is_header(text: str, reference_data: ReferenceData) -> bool:
 
 
 def _is_end(text: str, reference_data: ReferenceData) -> bool:
+    text = _TAX_CODE.sub(" ", text)
     if _SUMMARY_ROW.search(text) or _END_WORDS.search(text):
         return True
     matches = match_label_concepts(text, reference_data.label_vocabulary, reference_data.label_exclusions)
@@ -201,27 +220,40 @@ def _nearest_column_number(line: OcrLine, col_x: Optional[float], tolerance: flo
         if not w.bounding_box:
             continue
         token = w.text.strip().strip("()")
+        value_text = token
         if not _WORD_NUMBER.match(token):
-            continue
+            # A quantity cell sometimes arrives as one OCR word fused with its unit ("50 Pcs",
+            # no space in the engine's own box) -- invisible to the clean-number check above,
+            # which would otherwise make the real Qty cell disappear from the column search
+            # entirely and let the next-nearest number (another column) silently win instead.
+            qty_match = _QTY_UNIT.match(token)
+            if not qty_match or qty_match.end() != len(token):
+                continue
+            value_text = qty_match.group(1)
         cx = (w.bounding_box[0] + w.bounding_box[2]) / 2
         dist = abs(cx - col_x)
         if dist > tolerance or (best_dist is not None and dist >= best_dist):
             continue
         try:
-            best_val, best_dist = float(token.strip("()").replace(",", "")), dist
+            best_val, best_dist = float(value_text.strip("()").replace(",", "")), dist
         except ValueError:
             continue
     return best_val
 
 
 def _leading_qty_match(text: str) -> Optional[re.Match]:
-    # A real quantity cell leads its row ("50 Pcs 4.73 ...", optionally after a leading SI
-    # number); "400 PCS" buried inside a wrapped packing note a row or two below the real
-    # item ("1 PKT PER 400 PCS", "75 PKT X 400 PCS = 30000 PCS") is that note's own text,
-    # not a second item's quantity -- skip any match with real words ahead of it.
+    # A real quantity cell either leads its row ("50 Pcs 4.73 ...", optionally after a leading
+    # SI number) or follows the item's own description ("Bolt 20X100 50 Pcs 4.73 4.50 Pcs
+    # 225.00 ..." -- description-before-quantity is the more common table layout across these
+    # sample bills). "400 PCS" buried inside a wrapped packing note a row or two below the real
+    # item ("1 PKT PER 400 PCS", "75 PKT X 400 PCS = 30000 PCS") is that note's own text, not a
+    # second item's quantity -- those rows are pure arithmetic/packing prose with no Rate/Amount
+    # columns of their own, so requiring a real decimal money value somewhere later on the row
+    # (the Rate/Amount that always follows a genuine Qty cell) keeps rejecting them specifically.
+    has_real_row_numbers = bool(_DECIMAL.search(text))
     for m in _QTY_UNIT.finditer(text):
         prefix_words = [w for w in text[: m.start()].split() if _LETTERS.search(w)]
-        if not prefix_words:
+        if not prefix_words or (has_real_row_numbers and _DECIMAL.search(text, m.end())):
             return m
     return None
 
@@ -253,6 +285,13 @@ def _parse_row(
         elif words:
             words.append(token)  # e.g. "6 INCH", "50G" pieces that belong to the name
     description = " ".join(words).strip(" -:|")
+    # The Tax Code and Unit columns ("NOS VAT_AE:S") sit left of the numbers on dense invoices and would
+    # otherwise stand in as the product name -- strip them so the real name on the left is paired in.
+    description = _TAX_CODE.sub(" ", description)
+    tokens = description.split()
+    while tokens and tokens[0].lower().strip(".:") in _UNIT_WORDS:
+        tokens.pop(0)
+    description = " ".join(tokens).strip(" -:|")
     # A trailing run of codes after the name (e.g. "... 55507116 9999") is not part of it.
     description = re.sub(r"(\s+\d{4,})+$", "", description).strip()
     # OCR noise like "0 oo" or "Le pi" is not a product name: require a few real letters.
@@ -344,6 +383,103 @@ def _merge_row_fragments(lines: list[OcrLine], threshold: float) -> list[OcrLine
     return merged
 
 
+def _split_multi_item_rows(rows: list[OcrLine]) -> list[OcrLine]:
+    """A row genuinely has exactly one "<number> <unit>" quantity cell (its own Qty column) --
+    on a dense table, group_into_lines()'s own y-banding (not _merge_row_fragments, which has
+    already run by this point) can still weld two physically adjacent table rows into one
+    detected line when their columns don't line up in y as cleanly as their descriptions do
+    (confirmed on a real bill: one row's Qty/Rate cell sorts into the same OCR line as the row
+    above's description). A second "<number> <unit>" match is that different row's own quantity
+    bleeding in -- split the words at each extra match's start so each half is parsed as its own
+    row (gaining a correct partial read, or correctly abstaining) instead of confidently reading
+    one item's numbers as another's."""
+    out: list[OcrLine] = []
+    for ln in rows:
+        matches = list(_QTY_UNIT.finditer(ln.text))
+        if len(matches) < 2 or not ln.words:
+            out.append(ln)
+            continue
+        split_at = [m.start() for m in matches[1:]]
+        offset = 0
+        word_starts = []
+        for w in ln.words:
+            word_starts.append(offset)
+            offset += len(w.text) + 1
+        parts: list[list] = [[]]
+        next_split = 0
+        for i, w in enumerate(ln.words):
+            while next_split < len(split_at) and word_starts[i] >= split_at[next_split]:
+                parts.append([])
+                next_split += 1
+            parts[-1].append(w)
+        for part_words in parts:
+            if not part_words:
+                continue
+            text = " ".join(w.text for w in part_words if w.text)
+            boxes = [w.bounding_box for w in part_words if w.bounding_box]
+            bbox = (
+                (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+                if boxes
+                else ln.bounding_box
+            )
+            out.append(
+                OcrLine(
+                    text=text, words=tuple(part_words), confidence=ln.confidence, bounding_box=bbox,
+                    page=ln.page, reading_order=ln.reading_order,
+                )
+            )
+    return out
+
+
+def _attach_trailing_total_fragments(
+    items: list[tuple[float, LineItem]], body: list["_Row"], line_h: float
+) -> list[tuple[float, LineItem]]:
+    """A row's own trailing VAT%/VAT-amount/Total cells sometimes print at a position that fails
+    _merge_row_fragments's strict x-rightward rule -- the "row whose right-side columns sort
+    out of x-order" jitter its own docstring describes -- and surface as a separate, description-
+    less orphan a few pixels below the row they belong to (confirmed on a real bill: a row read
+    as "...486.00" with its real Total "24.30 510.30" stranded in its own OcrLine right under it).
+
+    Runs AFTER the ordinary partner-pairing step above, on whatever orphans that step left
+    genuinely unused -- not before it. An orphan that still has decimals and no description at
+    this point already had its chance to pair with a real nearby description and found none; only
+    then is it attached to the nearest already-item-forming row above as that row's missing tail.
+    Running this first instead (tried and reverted) stole rows that pairing would have correctly
+    matched to their own real description -- e.g. a bare "2 19.15" row is item 1's own total on one
+    real bill, not a continuation of the unrelated item 2 that merely happens to sit closest above.
+
+    A page-level Subtotal/Grand-Total row that leaked past _is_end (it has no label text of its
+    own, just a bare number, so the keyword check never catches it) looks exactly like an orphan
+    too, but its value is the SUM of every item, not one row's VAT/Total -- confirmed on a real
+    bill where it would otherwise have overwritten an already-correct last item's amount (173.25)
+    with the table's 732.60 grand total. A genuine trailing Total is only moderately larger than
+    the row's own partial amount (VAT added, rarely more than ~50%); a page total is typically
+    several times larger -- so a target without an implausible jump in value is preferred."""
+    gap = max(line_h * 0.9, 4.0) * 1.5
+    orphans = sorted(
+        (r for r in body if not r.used and not r.description and r.decimals and r.int_qty is None and len(r.decimals) <= 3),
+        key=lambda r: r.y,
+    )
+    if not orphans:
+        return items
+    out = list(items)
+    for orphan in orphans:
+        candidates = [
+            (i, y) for i, (y, it) in enumerate(out)
+            if 0 < orphan.y - y <= gap and (it.amount is None or it.amount <= 0 or orphan.decimals[-1] <= it.amount * 1.5)
+        ]
+        if not candidates:
+            continue
+        i, y = max(candidates, key=lambda c: c[1])
+        it = out[i][1]
+        out[i] = (y, LineItem(
+            description=it.description, quantity=it.quantity, amount=orphan.decimals[-1],
+            confidence=it.confidence, vat_percent=it.vat_percent,
+        ))
+        orphan.used = True
+    return out
+
+
 def _amount_and_qty(decimals: list[float]) -> tuple[Optional[float], Optional[float]]:
     if not decimals:
         return None, None
@@ -356,6 +492,32 @@ def _amount_and_qty(decimals: list[float]) -> tuple[Optional[float], Optional[fl
     if amount == 0 and len(decimals) >= 2:
         amount = None
     return amount, qty
+
+
+_NAME_STOP = re.compile(r"serial|batch|lot\s*no", re.IGNORECASE)
+
+
+def _append_wrapped_name(body: list["_Row"], first: "_Row", description: str, line_h: float) -> str:
+    """A tall item prints its name over several lines ("LED" / "WH-10K-0.7W" / "LEDRAY LED MODULE") with the
+    numbers on the first one. Chain the name-only rows directly below it up to its Serial/Batch line."""
+    below = sorted((r for r in body if r.y > first.y and r is not first), key=lambda r: r.y)
+    prev_y = first.y
+    parts = [description]
+    chain: list["_Row"] = []
+    for r in below:
+        if r.used or r.has_numbers or r.y - prev_y > line_h * 2.2:
+            return description
+        if _NAME_STOP.search(r.text):
+            # Only a name closed off by its own Serial/Batch line is trusted as one item's wrapped name; any
+            # other run of text below a row (footer, address, packing notes) is not part of it.
+            for c in chain:
+                c.used = True
+                if c.description:
+                    parts.append(c.description)
+            return " ".join(parts).strip()[:120]
+        chain.append(r)
+        prev_y = r.y
+    return description
 
 
 def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> list[LineItem]:
@@ -412,6 +574,7 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
     # page-wide threshold -- wrong inside a table. Chain fragments back into rows by y-proximity,
     # scoped to this already-bounded body so it can't bleed into page content above the header.
     merged_body = sorted(_merge_row_fragments(body_lines, max(line_h * 0.9, 4.0)), key=lambda ln: _y(ln, 0))
+    merged_body = _split_multi_item_rows(merged_body)
     body: list[_Row] = [_parse_row(ln, _y(ln, 0), qty_col_x, amount_col_x, col_tolerance) for ln in merged_body]
 
     # 2. Rejoin split rows: a numbers-only row takes the nearest unused names-only row within pair_gap.
@@ -427,10 +590,14 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
     for row in body:
         if row.used or not row.has_numbers:
             continue
-        if last_item_y is not None and row.y - last_item_y > max_item_gap:
+        # A row with a full set of money columns is a real table row even after a tall gap (items with
+        # wrapped names and Serial/Batch lines are 90-110px apart); a lone stray decimal is footer noise.
+        if last_item_y is not None and row.y - last_item_y > max_item_gap and len(row.decimals) < 3:
             break
         description = row.description
         confidence = row.confidence
+        if description and row.int_qty is None:
+            description = _append_wrapped_name(body, row, description, line_h)
         if not description:
             partner = min(
                 (r for r in body if not r.used and r is not row and r.has_text and not r.has_numbers and abs(r.y - row.y) <= pair_gap),
@@ -442,6 +609,7 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
             partner.used = True
             description = partner.description
             confidence = min(confidence, partner.confidence)
+            description = _append_wrapped_name(body, partner, description, line_h)
         row.used = True
         amount, qty = _amount_and_qty(row.decimals)
         if row.int_qty is not None:
@@ -465,7 +633,20 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
     # 3. A names-only row with a numbers row just below it that already had its own name
     #    is a wrapped description -- left alone; the user can merge it if needed.
     items.sort(key=lambda p: p[0])
+    items = _attach_trailing_total_fragments(items, body, line_h)
     return [it for _, it in _drop_duplicate_readings(items, line_h)][:MAX_LINES]
+
+
+def _same_reading(a: LineItem, b: LineItem) -> bool:
+    if a.amount is not None and b.amount is not None:
+        return a.amount == b.amount
+    # One side has no amount at all (e.g. a real column it genuinely wasn't read from, not a
+    # misread) -- that alone is weak evidence of "same row read twice" and, on a dense table,
+    # just as often means two adjacent DIFFERENT items where one's amount cell was lost. Only
+    # call it a duplicate when the descriptions themselves are clearly the same text misread.
+    if not a.description or not b.description:
+        return False
+    return difflib.SequenceMatcher(None, a.description.lower(), b.description.lower()).ratio() >= 0.4
 
 
 def _drop_duplicate_readings(items: list[tuple[float, LineItem]], line_h: float) -> list[tuple[float, LineItem]]:
@@ -474,7 +655,7 @@ def _drop_duplicate_readings(items: list[tuple[float, LineItem]], line_h: float)
     kept: list[tuple[float, LineItem]] = []
     for y, item in items:
         twin = next(
-            (k for k in kept if abs(k[0] - y) <= line_h * 0.6 and (k[1].amount == item.amount or None in (k[1].amount, item.amount))),
+            (k for k in kept if abs(k[0] - y) <= line_h * 0.6 and _same_reading(k[1], item)),
             None,
         )
         if twin is None:

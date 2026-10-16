@@ -39,6 +39,8 @@ subtotal:
   - sale amt
   - taxable amount
   - taxable amt
+  - amount
+  - fare
   - المجموع الفرعي
   - قبل الضريبة
   - الأجرة
@@ -128,13 +130,47 @@ date:
 invoice_number:
   - invoice no
   - invoice number
-  - invoice #
+  - "invoice #"
+  - invoice#
+  - tax invoice no
+  - tax invoice number
+  - "tax invoice #"
+  - inv no
+  - "inv #"
   - bill no
+  - "bill #"
+  - bill number
   - b / no
   - receipt no
   - receipt number
+  - credit no
+  - credit note no
+  - credit note number
+  - sale no
+  - sales no
+  - sales invoice no
+  - 're:(?<!despatch )(?<!dispatch )document\s*(?:no|number)'
+  - voucher no
   - رقم الفاتورة
+  - رقم فاتورة
+  - فاتورة رقم
+  - رقم السند
+  - رقم الإيصال
+  - 're:\binv\b\s*[:.#]'
+  - 're:\b(?:invoice|bill)\s*(?:no|n0|number)\b'
+  - 're:\bb\s*/\s*no\b'
+  - 're:(?<=\s)bil{1,2}\s*$'
+  - 're:^\s*(?:no|n0|№|#)\s*[.:\-]*\s*(?=(?=[a-z0-9/\-]*\d)[a-z0-9/\-]{3,})'
+delivery_note_number:
+  - delivery note no
+  - delivery note number
+  - "delivery note #"
+  - dn number
+  - dn no
+  - 're:\bdn\s*[#:]'
 transaction_number:
+  - tran no
+  - 're:\btran\b\s*[:#]'
   - transaction no
   - transaction number
   - txn no

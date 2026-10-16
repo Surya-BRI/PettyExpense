@@ -307,6 +307,45 @@ Three gaps found, in order of how actionable they are:
    was already found harmful when done broadly. Genuinely out of scope for a quick follow-up;
    needs its own properly-planned investigation.
 
+   **Follow-up (later session): tried, found unsafe on the real bill, reverted.** Added
+   `_positional_money_candidates()` in `extraction/candidates.py` — same word-geometry-by-x-
+   position technique as `line_items.py` §7, scoped to engage only when a row's `tiered_matches`
+   come from one source line, map to distinct money concepts, and their count matches the count
+   of usable number tokens on the value row (1:1, later relaxed to allow exactly one unlabeled
+   leftover number, to tolerate a header missing one garbled label).
+
+   **Synthetic test passed cleanly:** a `Subtotal`/`VAT` header line above a `45.21 2.28` value
+   line (mirroring the bug's description) resolved correctly — `amount=45.21`, `vat_amount=2.28`
+   — where the old cross-product tied both to `45.21`.
+
+   **Real-bill test (`image (4).png`, live RunPod→CPU fallback) found a worse failure mode.**
+   Dumped the actual OCR geometry: this bill's true single logical row (`"45.21 2.28 47.49"`)
+   is itself fragmented by the OCR engine into **three separate `OcrLine`s** — `"5."`, `"45.21"`,
+   and `"2.28 47.49"` (the last a case of two numbers sharing one detected word box, which also
+   needed a separate proportional-interpolation fix to even get distinguishable x-positions
+   within it). `_money_field_candidates` evaluates tokens per-line, so on the `"2.28 47.49"`
+   fragment alone the function saw exactly 2 labels (`Subtotal`, `VAT`, from the header above)
+   and exactly 2 tokens — a clean-looking 1:1 match — and confidently paired
+   `Subtotal↔2.28, VAT↔47.49`. Both wrong: the real `amount` (`45.21`) was never in view, since
+   it lives on a sibling fragment this per-line function has no visibility into. Confirmed this
+   isn't specific to this session's "allow one extra token" relaxation — the original strict
+   1:1-only version would fire identically wrongly here too, since 2 labels/2 tokens satisfies
+   strict equality just as well. Net real-bill result: `amount=2.28, vat_amount=47.49,
+   total_amount=49.77` — a new, *confidently* wrong answer (not an improvement on the pre-fix
+   arbitrary tie).
+
+   **Root cause, for a real future fix:** operating line-by-line is fundamentally insufficient
+   once OCR fragments one physical row into multiple `OcrLine`s (apparently common on this bill,
+   independent of the original "missing Total label" problem this session set out to fix). A
+   correct fix needs to reconstruct the full row first — gather tokens from every line that's
+   part of the same visual row (via the existing `_same_row`/`_nearest_aligned_line_above`
+   geometry, already computed here for labels but not for tokens) before doing positional
+   assignment — i.e., genuine row reconstruction similar in spirit to `line_items.py`'s
+   `_merge_row_fragments`, not a per-line patch. **Reverted** (`extraction/candidates.py` back to
+   its pre-session state, confirmed via `git diff`) rather than ship a fix that trades a known,
+   bounded-wrong tie for a new, confidently-wrong failure mode on the one real bill available to
+   test against. Scoped out of this session; §5.2's bug is still open.
+
 3. **Vendor on garbled/handwritten headers — not an extraction-logic bug.** Confirmed the raw OCR
    text itself doesn't contain a clean vendor name in these failures (the garbled text is genuinely
    all OCR produced) — this is an OCR-engine read-quality limitation, matches the historical doc's
@@ -431,3 +470,275 @@ suppress them, since that would trade back genuine wins to patch cases that stay
   sample bills re-checked before trusting it. Scoped out of this session.
 - **Quantity is still the weaker extracted field relative to amount** overall, though §7 narrowed
   the gap on the specific dense-table case it targeted.
+
+## 10. VAT/amount/total: arithmetic-identity detector (implemented, measured on all sample bills)
+
+§5.2's tie bug was finally solved by dropping label/geometry reasoning for tax-summary rows
+entirely (the row-fragmentation finding in §5.2 showed geometry is the wrong tool) and using the
+accounting invariant instead: on a tax-summary row, `amount + vat == total` and `vat ~= rate *
+amount` for a plausible nonzero rate (`ReferenceData.plausible_vat_rates`).
+
+**Implementation (`extraction/candidates.py::_vat_breakdown_candidates`, wired into
+`generate_candidates`):**
+- Row = a line plus its `_same_row` neighbours, so OCR fragmenting one row across several
+  `OcrLine`s no longer matters. Collects decimal tokens (2-6 distinct values).
+- Requires a **rate cue** (a printed `5%`, or a VAT-concept label on the row / the aligned line
+  above / the previous text line when there is no geometry) so unrelated number pairs can't match.
+- Tries every pair (x < y) as (vat, total) or (amount, total) with the third value derived from the
+  difference, and accepts it only if `|vat - rate*amount| <= max(0.03, 0.0012*amount)`. Needs only
+  **2 of the 3 numbers to read cleanly**: `image (3).png`'s amount cell read as `4u.84`, but
+  `49.18 - 2.34 = 46.84` and `2.34/46.84 = 4.996%`, so it is recovered.
+- Several different readings -> prefer one whose three numbers were all printed; still ambiguous ->
+  emit nothing (falls back to the pre-existing behaviour).
+- Emits `amount`/`vat_amount`/`total_amount` candidates tagged `vat_breakdown_arithmetic` (and
+  `derived_from_breakdown` for a recovered value). `scoring.py` gives the tag +0.42;
+  `select.py` ranks a verified candidate above unverified ones, and breaks ties *between* verified
+  triples (stacked receipts, e.g. `image (6).png`) by "lower on the page" -- the same prior scoring
+  already uses -- because arithmetic reconciliation saturates both at the 1.0 confidence cap.
+
+**Results** (cached CPU-RapidOCR words, so old/new differ only in extraction):
+
+| Metric | Before | After |
+|---|---|---|
+| Ground truth `amount` (11 bills with truth) | 5/11 | **8/11** |
+| Ground truth `vat_amount` | 3/7 | **6/7** |
+| Ground truth `total_amount` | 6/11 | **8/11** |
+| Arithmetic-coherent output (amount+vat=total, 2-20% rate), all 38 sample bills | 14 | **28** |
+| Bills that went coherent -> incoherent | | **0** |
+
+All 7 printed bills with ground truth are now fully correct (`image (2)`-`(6)`, `enoc_test`). The
+remaining ground-truth misses are the handwritten KSA slips, where the digits never reach the OCR
+text at all -- not fixable in extraction. `enoc_test.jpg` `amount` (6.00 -> 5.71) was fixed as a
+side effect. Tests: `tests/test_vat_breakdown.py` (5 cases from the real rows, incl. a no-cue
+negative and a non-reconciling negative); suite 160 passed, same 8 pre-existing failures.
+
+**Bugs the all-bills sweep caught in my own first versions (worth remembering):** a 0.3%-of-amount
+tolerance let a spurious `(4.17, 83.37)` pair through and the ambiguity guard then suppressed the
+real triple; and a global y-position tie-break picked `vat=10.0` over `0.48` on one bill -- fixed by
+restricting the tie-break to verified triples. Checking only the 4 target bills would have shipped
+both.
+
+**Still open:** `multi_line/img 25.png`, `img 27.png`, `img27.png` (dense multi-item invoices) still
+produce incoherent totals before and after; their summary rows don't follow the single-rate
+5% pattern this detector targets.
+
+## 11. Case study: hand-filled AL MANAR invoice (single and multi-item both wrong) -- 5 root causes
+
+Reproduced from the emulator: the app showed `amount 5.71 / vat 0.29` and the multi-item screen a
+one-line item. The captured image was pulled from the debug app's cache
+(`adb exec-out run-as com.expense.expense_app cat ...`; use `exec-out`, plain `shell` corrupts
+binary via CRLF) and run through the real `OcrService.run()` (RunPod first). True figures:
+330.00 / VAT 5% 16.50 / Grand Total 346.50, bill no 22860, date 06.07.2026.
+
+| # | Root cause | Evidence | Fix |
+|---|---|---|---|
+| 1 | Hand-filled totals lose decimals / garble digits: `Total 330`, `VAT 5%` + `16 so`, `Grand Total bE 6`. The lone `6` won as the total; the existing inclusive-VAT rule then split 6.00 at 5% into 5.71 / 0.29 (coincidentally identical to the ENOC receipt, which is also 6.00). | RunPod text | `_stacked_totals_candidates`: subtotal line + printed `VAT r%` line => `vat = subtotal*r`, `total = subtotal+vat`. Accepted only when the garbled VAT reading (or grand total) agrees within 1 -- so an unrelated pair can't invent numbers. |
+| 2 | Fields are selected independently, so impossible triples survive (VAT >= total, total < amount, `amount = -10.0` from `total - vat`). | 10 of 38 sample bills incoherent | `select._enforce_arithmetic_consistency`: when picks don't reconcile, take the best reconciling triple *already among the candidates* with a plausible tax rate (or zero VAT), flagged `resolved_by_arithmetic_consistency` for review. Derived `amount` must be > 0. |
+| 3 | `normalize_text` rewrote `No. 22860` as `N0.22860` (rule meant for `AEDO.29`), destroying the `invoice no` label, so the bill number was blank. | `inv2.py` trace | O->0 repair now only for an uppercase O after 2+ uppercase letters. |
+| 4 | The TRN (`TRN100362941500003`) on the same line tied with / beat the real number. On the sweep, **5 bills were reporting a 15-digit TRN as the bill number**. | sweep diff | Tokens belonging to a TRN label are never invoice-number candidates. |
+| 5 | Year misread `06.07.1016`; no year plausibility check existed anywhere. | RunPod text | `_check_year`: year outside [this-6, this+1] is penalised, and repaired to this/last year only if exactly one is within 2 digit positions of the OCR text. |
+
+Also found and removed: I had defined `_nearest_aligned_line_below` a second time, silently
+overriding the original (which only scans later lines) and changing ID-candidate behaviour.
+
+**Measured on the 38-bill sweep (cached CPU OCR), original code vs now:**
+amount+vat=total coherent **14 -> 33**; five TRN-as-bill-number errors fixed; ground truth unchanged
+(amount 8/11, vat 6/7, total 8/11 -- already at the printed-bill ceiling); 0 coherent->incoherent
+regressions. AL MANAR bill: RunPod and CPU OCR both now give 330.00 / 16.50 / 346.50, bill no 22860,
+date 06.07.2026. Tests: 170 passed, same 8 pre-existing unrelated failures.
+
+**Considered and rejected:** gating totals on the sum of extracted line items. Item sums are not a
+reliable reference (e.g. image (3): items sum 12.18 vs real total 49.18; image (4): 96.49 vs 47.49).
+
+**Still not fixable in extraction:** the handwritten item description (`wifh ap 1nreR.`) -- OCR noise
+from handwriting; the user must retype it. Quantity 30 and amount 330.00 do come through.
+
+### 11.1 Bill-number hardening (found by auditing every bill's chosen bill number against its source line)
+
+After the TRN fix, a sweep of what the bill-number field actually returned on all 38 sample bills
+showed ~8 clearly wrong values. Root cause: `_id_candidates` lends an "invoice no" label from a
+neighbouring line to *any* number-like token, so addresses, phone/fax lines, ISO numbers, bank
+accounts, delivery notes, IBANs, e-mail names and date fragments all won. Fix (`candidates.py`,
+`scoring.py`):
+- Reject by shape: phone numbers (`05xxxxxxxx`, `+971 ...`, tokens after Tel/Mob/Fax), `SAR72`-style
+  currency+amount, IBANs, e-mail local parts, >=14-digit TRN/barcode runs, words with one stray digit
+  (`Invo1ce`, `Telbole6`).
+- Reject by context: preceded by tel/phone/fax/bank/a-c/iso/PO box/delivery note/date, followed by
+  street/road/near/building, or prefixed `CUST-`/`LPO-`.
+- **Prefer the number printed beside its own label** (`adjacent_to_label`, +0.12 in scoring). A number
+  borrowed from a neighbouring line's label must also have a strong invoice shape (separators,
+  letter+digit mix, or 7+ digits), so a bare `3810`/`7905` is dropped.
+
+Result on the 38 sample bills: wrong values removed (phone numbers, `SAR72`, `Telbole6`, `Invoice`
+misreads, `9001` from "ISO 9001", bank account `1015789510401`, `Tel:+971 547578173`, IBAN, e-mail name),
+and labelled numbers that were hidden behind them now surface: `INV-DIP-112954`, `ECR0045786`,
+`PEN91473`, `000POSDIP2000039678`; `Bill No` bills went from ambiguous to confident (0.62 -> 0.85).
+12 bills now return a value (was 23, but ~11 of those 23 were wrong), 11 of the 12 verified plausible by
+source line; `BR-TZ231` (a product code near a borrowed label) is still wrong. Amounts, VAT, totals and
+dates are byte-identical before/after this step. Known loss: `ksa1` `92375` (an Arabic-labelled
+number next to a misspelled label) is no longer returned.
+
+### 11.2 Arabic coverage check of this session's changes
+
+Tested on Arabic-label / Arabic-Indic-digit / Hijri inputs (the repo has no real Arabic multi-item
+sample, so these are synthetic): single-item totals, stacked-block derivation (incl. dropped decimals),
+bill number and the `٫`/`٪` separators all work with Arabic labels (48 Arabic label synonyms already
+existed; the new detectors reuse them). Two things were found and fixed: (1) my year-plausibility check
+penalised Hijri years (1447 AH), dropping a Hijri-only date's confidence 0.67 -> 0.37 -- years 1300-1500
+are now exempt; (2) Arabic unit words (`قطعة`, `كجم`, `علبة`...) and Arabic Qty/Amount header words were
+missing from `line_items.py`, so a row like `2 قطعة قلم 5.00 10.00` took the rate as the quantity -- added
+(line items identical on all 38 sample bills, so English behaviour is untouched).
+
+**Still open (needs a real sample to do safely):** a fully right-to-left item table, where the amount
+column is physically leftmost (`10.00 5.00 2 قلم`), yields **no items** -- the row parser assumes
+description-first / quantity-before-amount. Also, with geometry-less input quantity is read as the rate
+when the description precedes the quantity (English too); real bills use column geometry which mitigates it.
+
+## 9. Editor UI: paginated item cards + quantity sanity nudge (in progress, uncommitted)
+
+With real multi-item bills now extracting correctly (up to 12-13 items, §6-7), the claim editor's
+`LineItemsEditor` (`lib/src/features/claims/line_items_editor.dart`) needed to actually handle that
+many lines well -- stacking a dozen+ full item cards in one scroll was unreasonable, especially on
+the pharmacy/hardware bills this session's OCR fixes specifically targeted.
+
+**What changed (not yet committed):**
+- `LineItemsEditor` converted `StatelessWidget` -> `StatefulWidget`, now shows **one item card at a
+  time** with Previous/Next (`PhosphorIcons.caretLeft/caretRight`) and an "Item N of M" counter,
+  instead of a stacked list.
+- Add/remove now re-navigate to the sensible slot: adding jumps to the new last item, removing
+  lands on whatever slid into the removed index (or steps back if the last item was removed) --
+  both rely on `lines` being the same `List` instance the parent mutates in place, so
+  `lines.length` already reflects the change by the time `onAdd`/`onRemove` return.
+- New `LineItemDraft.quantityLooksOff` getter: flags a line (orange border + inline warning text)
+  when its parsed quantity is non-integer. Rationale: a real counted quantity (pieces, boxes,
+  units) is almost always whole; a fractional one is the same OCR failure mode chased all through
+  §2-§7 above (Rate or VAT% column misread into the Qty field) now surfaced as a user-facing nudge
+  rather than a silent wrong value. Non-blocking -- genuinely fractional quantities (metres, kilos)
+  exist, so it's a double-check prompt, not a validation error.
+
+**Status:** implemented, not yet tested against the app running end-to-end on an emulator or
+committed. Natural next step once verified: confirm add/remove navigation against a real 12+ item
+bill (e.g. `img 27.png`'s pharmacy case) and commit.
+
+## 12. Real Arabic bills (`assets/ksa/*.png`): crash fix, vendor/money bugs, OCR-engine dead end
+
+Follow-up session specifically auditing the 6 real KSA bills (`ksa1/3/4/5/8/9.png` -- `ksa2/6/7`
+referenced in the old `scripts/ocr_results.csv` no longer exist in the repo). All work below is
+**uncommitted** (`candidates.py`, `scoring.py`, `label_vocabulary.yaml`).
+
+### Crash: Arabic text after a number broke extraction outright
+
+`extraction/candidates.py::_looks_like_non_money` checked `after[:1].isalpha()` (Unicode-aware --
+true for Arabic letters too) then matched the tail with `re.match(r"[A-Za-z]+", after)` (ASCII-only)
+and called `.group(0)` unconditionally. A number glued directly to Arabic text with no space (e.g.
+a number immediately followed by `ريال`) made the regex return `None`, crashing with
+`AttributeError`. Hit on `ksa4.png`. **Fixed**: tail regex changed to `r"[^\W\d_]+"` (any Unicode
+letter), with a `None`-safe fallback. This bug was introduced by this session's own earlier
+uncommitted changes, not present in committed history.
+
+### Vendor: generic document titles and screenshot UI chrome mistaken for the business name
+
+`"Ride details"` (Uber app screen title), `"Tax Invoice"`, `"Delivery Note"`, `"Credit Note"`,
+`"Customer Invoice"` and its real OCR misread `"Customer Invoise"` (c/s confusion, seen verbatim on
+`ksa1.png`) were all winning as the vendor candidate over the real business name. **Fixed**: new
+`_DOCUMENT_TITLE_RE` in `candidates.py` (short, <=3-word lines ending in
+details/summary/receipt/invoice/invoise/history/note/slip/voucher/statement) excludes these from
+vendor eligibility -- generic document/screen chrome, not vendor-specific.
+
+**Known-vendor substring matching added** (`_vendor_known_match_bonus` in `candidates.py`,
+`scoring.py`'s `_reference_match_weight`): previously a vendor candidate only scored a bonus on a
+>=0.85 whole-line similarity match against `reference_data.known_vendors`. Real app-receipt
+screenshots embed the brand mid-sentence ("UberX Saver reserve", not "Uber" alone), so added a
+narrow second candidate-generation pass scanning past the normal header window specifically for a
+known-vendor name as a substring/word match. Verified on `ksa8.png`/`ksa9.png` with a synthetic
+`known_vendors=("Uber",...)` -- correctly picks `"UberX Saver reserve"` /
+`"UberX Saver ride with"` over `"Ride details"`.
+
+**Important caveat, confirmed by direct DB query:** this fix is currently dormant in practice.
+`ERP-Dev`'s live `ErpExpenseVendor` table has only 19 active vendors (several with data-quality
+issues -- a phone+email glued into one name field, a bare `"TRADING L.L.C"` fragment, a test record
+`"Zylo Test Vendor Alpha 9931"`), none of them Uber/Careem/Talabat or any app-based vendor. Checked
+the real production server too (`ERP-Live`, 65.2.162.104) -- it has 792 tables but **zero**
+containing "Expense" or "Vendor" in the name anywhere; this app's entire schema
+(`ErpExpenseVendor`, `ErpExpenseTransaction`, etc.) was created by this codebase's own
+`init_db()`/`Base.metadata.create_all()` against `ERP-Dev` only and has never been migrated to the
+real production ERP. So right now `ERP-Dev` isn't a test copy of production data -- it's the only
+place this app's data exists at all.
+
+### Money: a handwritten location/zone code misread as the amount
+
+All three handwritten taxi receipts (`ksa1/3/5.png`) share the same rider's habit of writing a
+Riyadh business-district code (`"KAFD 2.08"`, `"KAFD208"`) on the notes/from-location line. That
+decimal number was winning as the extracted `amount` -- e.g. `ksa1.png` returned `208.0` (from
+"KAFD **2.08**"), wildly wrong vs. the real ~45 SAR fare. **Fixed**: `_looks_like_non_money` now
+also rejects a decimal number immediately preceded by a short (2-6 letter) all-caps code word
+(`_ZONE_CODE_PREFIX_RE`), *unless* that word is a currency code ("SAR 45.00") or a recognised money
+label on the same line ("VAT 5.00", "CASH 45.00") -- both legitimate. Took two iterations: the
+first version had no label-context exception and broke `test_tax_exclusive_total` (`"VAT 5.00"`
+looks identical in shape to `"KAFD 2.08"` -- short caps word + space + decimal). Fixed by threading
+`label_matches_by_line[i]` into the check and only suppressing when the prefix word isn't itself a
+recognised label span.
+
+Net effect on the 3 bills: `ksa1` 208.0 -> 51.0, `ksa5` 2.09 -> 1.0 -- the false zone-code pick is
+gone, but the *real* handwritten amount (45 / 40 / 50) still isn't recovered, because those digits
+never form a clean parseable decimal anywhere in the OCR'd text (`"45+"`, `"40f"`, `"50/1"` are all
+malformed as numbers). This is a genuine bug fix (stops a wrong-but-specific-looking number from
+being reported with false confidence) but not a full recovery -- consistent with this doc's
+existing conclusion (§5) that handwriting is an OCR-engine read-quality ceiling, not an
+extraction-logic gap.
+
+### Money: "Amount"/"Fare" were never recognised as English money labels
+
+Real, generalisable vocabulary gap found while chasing `ksa3.png`'s amount: `label_vocabulary.yaml`'s
+`subtotal` concept had `"المبلغ"` (Amount) and `"الأجرة"` (Fare) in Arabic, but no plain English
+`"amount"` or `"fare"` synonym at all -- despite these being extremely common English column
+headers. **Fixed**: added `amount` and `fare` to `subtotal`'s synonym list. Safe because
+`match_label_concepts`'s `_suppress_shorter_overlapping_matches` already prefers longer/more-specific
+matches on overlap, so this doesn't disturb `"VAT Amount"`/`"Paid Amount"` (already separate,
+longer, multi-word entries under their own concepts).
+
+Confirmed via direct candidate-generation trace on `ksa3.png`: before the fix, the real "Amount"
+column cell (`"40f"`, OCR misreading a handwritten `/` as `f`) generated **zero** candidates since
+its header literally wasn't recognised as a label. After the fix it generates a real `40.0`
+candidate at confidence 0.835 -- but a near-duplicate bilingual-OCR-pass reading of the same
+physical row (`"409 KAFD208 29-6-26"`, the Arabic pass's garbled full-row merge) scores 0.838 and
+edges it out by ~0.003, a noise-level margin. **Not fixed** -- this is the same class of bug this
+doc's §5.2 already flagged as open and twice attempted/reverted for regressions (collapsing
+duplicate bilingual-OCR-pass row readings is subtle; a naive dedup-by-overlapping-box rule breaks
+the legitimate case where the same row is deliberately read twice and needs real dedup, not blind
+suppression). Deliberately not reattempted this session given that history.
+
+### Dead end investigated and explicitly rejected: swapping the OCR detector model
+
+Hypothesis: the shared text-detection model (hardcoded `PP-OCRv6 + SMALL` in
+`services/ocr_service.py::_REC_ENGINE_CONFIG`/`_get_rapid_engine`) might be missing/merging faint
+handwritten strokes that a larger model would catch. Confirmed Arabic *recognition* has no larger
+variant to upgrade to (RapidOCR only ships `arabic_*_rec_mobile` for both PP-OCRv4 and PP-OCRv5 --
+no `_server` recognition model exists for Arabic). But detection does have a larger `PP-OCRv5_det_server`
+option available as a drop-in config swap.
+
+**Tested directly** (controlled A/B, same recognition/retry logic, only the detector config
+varied) against all 4 bills with ground-truth-ish values: mixed result, including a real
+regression --
+
+| Bill | Field | Current (v6 small det) | v5 server det |
+|---|---|---|---|
+| ksa1 | amount | 51.0 | 4.51 (closer to real ~45, plausible win) |
+| ksa1 | vendor | `شركة الشارقة` (clean) | `عامة أجرة الشارقة شركة` (word order scrambled) |
+| ksa3 | amount | 0.01 | 1.0 (still wrong either way) |
+| ksa4 | amount | **55.0 (correct)** | **1.0 -- regressed a previously-correct value** |
+| ksa5 | vendor | clean | gained stray garbage text ("asle") |
+
+Also ~1.8x slower per bill (2.1s -> 3.8s). **Rejected** -- the larger detector finds text in a
+different reading order that the geometry-dependent logic (vendor multi-line merge, same-row
+alignment, `_nearest_aligned_line_above`) isn't tuned for; one plausible win is outweighed by one
+clear regression and broad quality loss on vendor text. Detection changes have page-wide blast
+radius (shared by English and Arabic both, affects every bill not just Arabic ones) -- not a safe
+drop-in upgrade on this evidence. Conclusion: there is no available OCR-engine-level lever left to
+pull for Arabic specifically (recognition has one model size, the alternative detector trades bugs
+rather than strictly improving) -- further gains have to come from extraction-logic fixes
+downstream of OCR, same as everything else in this document, not from swapping engines/models.
+
+**Full regression status throughout this section's changes:** 203 passed, same 8 pre-existing
+unrelated failures (`test_claim_line_items.py`'s missing-`bill_number`-kwarg fixture bug, see §2),
+0 new regressions.
