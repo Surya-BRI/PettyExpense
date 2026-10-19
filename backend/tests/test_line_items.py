@@ -1,8 +1,9 @@
 """Line-item extraction on real OCR output of itemised bills (see fixtures/line_item_bills.py)."""
+import extraction.line_items as _li_mod
 from extraction.line_items import extract_line_items
 from extraction.reference_data import ReferenceData
 from extraction.types import OcrLine, OcrWord
-from tests.fixtures.line_item_bills import PHARMACY, SUPERMARKET
+from tests.fixtures.line_item_bills import ENOC, PHARMACY, SUPERMARKET
 
 
 def _lines(rows: list[tuple[int, str]]) -> list[OcrLine]:
@@ -146,3 +147,24 @@ def test_a_quantity_cell_merged_with_its_unit_into_one_ocr_word_still_resolves_b
     )
     items = extract_line_items([header, body], ReferenceData())
     assert [(i.description, i.quantity, i.amount) for i in items] == [("Bolt 20X100 50 Pcs", 50.0, 225.0)]
+
+
+# --- ENOC single-item receipt: currency-glued amount "AED6.00" never flips seen_item ----------------
+
+def test_enoc_no_fake_item_from_footer_timestamp(monkeypatch):
+    # After the _MAX_HEADER_GUARD_LINES fix: scanner stops at "TOTAL AED AED6.00" (body line 4).
+    # "Shift:1 04:52:23" must not appear as a line item.
+    items = _items(ENOC)
+    descriptions = [d for d, _, _ in items]
+    assert not any("shift" in d.lower() or "tran" in d.lower() or "pos" in d.lower() for d in descriptions)
+
+
+def test_enoc_without_guard_cap_footer_becomes_fake_item(monkeypatch):
+    # Regression proof: if the cap is removed (set to 999), the scanner reaches the footer
+    # "Shift:1 04:52:23" and _SPLIT_DECIMAL parses "1 04" as 1.04 — a fake item appears.
+    monkeypatch.setattr(_li_mod, "_MAX_HEADER_GUARD_LINES", 999)
+    items = _items(ENOC)
+    descriptions = [d.lower() for d, _, _ in items]
+    assert any("shift" in d or "tran" in d or "pos" in d for d in descriptions), (
+        "Expected a fake footer item when guard cap is removed — fixture or logic may have changed"
+    )

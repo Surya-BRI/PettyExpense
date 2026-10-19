@@ -35,6 +35,15 @@ from extraction.types import OcrLine
 
 MAX_LINES = 60
 
+# Once this many body lines have been scanned past the header without a real item being found,
+# the seen_item guard is lifted: an end-of-table marker can fire even though no item has yet been
+# recognised. This lets a single-item bill whose amount format isn't matched by _DECIMAL (e.g.
+# "AED6.00" glued directly to the currency code) still stop scanning at its own totals/VAT rows
+# instead of running all the way into the footer. The guard still suppresses end-matches for the
+# first few lines past the header to avoid stray column-label fragments in a wrapped multi-row
+# header (e.g. "...Incl.VAT(AED) Total") from prematurely ending the table.
+_MAX_HEADER_GUARD_LINES = 3
+
 # Concepts that end the item table.
 _END_CONCEPTS = {
     LabelConcept.TOTAL,
@@ -553,7 +562,11 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
         # A wrapped multi-row header often has its own stray "VAT"/"Total" column label
         # (e.g. "Incl.VAT(AED) Total"), which otherwise reads as an end-of-table marker
         # before any item has actually been seen -- an end marker can't appear before item 1.
-        if _is_end(ln.text, reference_data) and seen_item:
+        # But don't suppress end-markers forever: a single-item bill whose amount format isn't
+        # matched by _DECIMAL (e.g. "AED6.00") would otherwise scan all the way into the footer.
+        # After _MAX_HEADER_GUARD_LINES lines, lift the seen_item requirement.
+        past_header_guard = (idx - start) > _MAX_HEADER_GUARD_LINES
+        if _is_end(ln.text, reference_data) and (seen_item or past_header_guard):
             break
         body_lines.append(ln)
         if not seen_item and _parse_row(ln, ys[idx]).has_numbers:

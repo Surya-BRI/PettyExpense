@@ -1,4 +1,4 @@
-"""Real RapidOCR output (grouped lines: top y + text) captured from two itemised bills,
+"""Real RapidOCR output (grouped lines: top y + text) captured from itemised bills,
 used to test line-item extraction without running the OCR engine.
 
 SUPERMARKET: assets/dubai/image (3).png -- Qamar Al Madina Supermarket. Each item's
@@ -7,6 +7,11 @@ numbers ("2,00 1.98") come out as their own line a few px ABOVE the item name.
 PHARMACY: a phone photo of a Bab Al Hayat Pharmacy tax invoice (12 items). Most rows
 are "name codes qty vat% amount"; some names land on their own line just below the
 numbers; the first row's amount is cut off at the photo edge.
+
+ENOC: assets/dubai/enoc_test.jpg -- single-item fuel/shop receipt. The amount format
+"AED6.00" (currency code glued directly to the number) is not matched by _DECIMAL, so
+seen_item never flips True. Without the _MAX_HEADER_GUARD_LINES cap the scanner ran
+into the footer and created a fake item from "Shift:1 04:52:23".
 """
 
 SUPERMARKET = [
@@ -43,6 +48,24 @@ SUPERMARKET = [
     (460, "Anount to return 0.00"),
     (488, "ATX Taxable Amount VAI Total"),
     (510, "5% 4u.84 2.34 49.18"),
+]
+
+# Real RapidOCR output from assets/dubai/enoc_test.jpg (condensed to the relevant rows).
+# The body has "ICE BAG AED6.00" — "AED6.00" is not matched by _DECIMAL (currency prefix lookbehind),
+# so seen_item never flips True. The _MAX_HEADER_GUARD_LINES=3 cap must stop scanning at
+# "TOTAL AED AED6.00" (body line 4) before the footer "Shift:1 04:52:23" is reached.
+ENOC = [
+    (50,  "ENOC RETAIL"),
+    (80,  "Welcome to ZOOM"),
+    (110, "Description UnitPrc Qty"),
+    (120, "Amount V"),
+    (140, "ICE BAG AED6.00"),
+    (155, "AED6.00 S"),
+    (170, "TOTAL AED AED6.00"),
+    (185, "Cash AED AED10.00"),
+    (200, "Change AED AED4.00"),
+    (230, "8/18/2026 Shift:1 04:52:23"),
+    (245, "POS: 2 CSR:Babbry, Wahid TRAN 584439"),
 ]
 
 PHARMACY = [
