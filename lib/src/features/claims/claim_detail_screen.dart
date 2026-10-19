@@ -225,22 +225,59 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                         // Most recent activity first -- the backend returns oldest-first for
                         // approval-chain logic, but a timeline reads better newest-on-top.
                         children: [
-                          for (final h in claim.history!.reversed)
-                            ListTile(
-                              dense: true,
-                              title: Text('${h.stage ?? 'None'} · ${h.action}'),
-                              subtitle:
-                                  h.remarks != null && h.remarks!.isNotEmpty
-                                  ? Text(h.remarks!)
-                                  : null,
-                              trailing: Text(
-                                formatDubaiTime(h.createdAt),
-                                style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 12,
-                                ),
+                          for (final (i, h) in claim.history!.reversed.indexed) ...[
+                            if (i > 0)
+                              const Divider(height: 1, indent: 8, endIndent: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 10,
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${h.stage ?? 'None'} · ${h.action}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium,
+                                        ),
+                                        if (h.remarks != null &&
+                                            h.remarks!.isNotEmpty)
+                                          Padding(
+                                            padding:
+                                                const EdgeInsets.only(top: 2),
+                                            child: Text(
+                                              h.remarks!,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color:
+                                                        AppColors.textSecondary,
+                                                  ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    formatDubaiTime(h.createdAt),
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
+                          ],
                         ],
                       ),
               ),

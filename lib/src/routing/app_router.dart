@@ -7,6 +7,7 @@ import '../api/enums.dart';
 import '../api/models.dart';
 import '../features/approvals/approval_detail_screen.dart';
 import '../features/approvals/approval_queue_screen.dart';
+import '../features/approvals/approver_history_screen.dart';
 import '../features/authentication/auth_controller.dart';
 import '../features/authentication/login_screen.dart';
 import '../features/claims/claim_detail_screen.dart';
@@ -127,6 +128,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/claim/:id/edit',
             builder: (context, state) => ConfirmClaimScreen(
               existingClaimId: int.parse(state.pathParameters['id']!),
+            ),
+          ),
+          GoRoute(
+            path: '/approvals/history',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: ApproverHistoryScreen(),
             ),
           ),
           GoRoute(

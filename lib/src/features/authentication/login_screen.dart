@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -161,36 +160,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: _busy ? null : _login,
                         child: Text(_busy ? 'Signing in…' : 'Sign in'),
                       ),
-                      // Debug-only: never ships in a release build (flutter build --release / --profile),
-                      // so a real APK handed to actual users never exposes these credentials.
-                      if (kDebugMode) ...[
-                        const SizedBox(height: 20),
-                        DropdownButtonFormField<int>(
-                          decoration: InputDecoration(
-                            labelText: 'Dev account',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          hint: const Text('Select a dev account'),
-                          value: null,
-                          items: [
-                            for (var i = 0; i < _demoAccounts.length; i++)
-                              DropdownMenuItem(
-                                value: i,
-                                child: Text(
-                                  '${_demoAccounts[i].$1} — ${_demoAccounts[i].$3}',
-                                  style: const TextStyle(fontSize: 13),
-                                ),
-                              ),
-                          ],
-                          onChanged: (i) {
-                            if (i == null) return;
-                            setState(() {
-                              _userCtrl.text = _demoAccounts[i].$1;
-                              _passCtrl.text = _demoAccounts[i].$2;
-                            });
-                          },
+                      // Shown in every build per explicit request -- kept even in release APKs
+                      // while the app is still internal-testing only.
+                      const SizedBox(height: 20),
+                      DropdownButtonFormField<int>(
+                        decoration: InputDecoration(
+                          labelText: 'Dev account',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                      ],
+                        hint: const Text('Select a dev account'),
+                        value: null,
+                        items: [
+                          for (var i = 0; i < _demoAccounts.length; i++)
+                            DropdownMenuItem(
+                              value: i,
+                              child: Text(
+                                '${_demoAccounts[i].$1} — ${_demoAccounts[i].$3}',
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                        ],
+                        onChanged: (i) {
+                          if (i == null) return;
+                          setState(() {
+                            _userCtrl.text = _demoAccounts[i].$1;
+                            _passCtrl.text = _demoAccounts[i].$2;
+                          });
+                        },
+                      ),
                       const Spacer(flex: 1),
                     ],
                   ),

@@ -422,6 +422,54 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
     return transaction_to_dict(txn, include_history=True, db=db)
 
 
+def list_history(db: Session, user: CurrentUser, limit: int = 100) -> list[dict[str, Any]]:
+    """Claims this approver has personally actioned, newest first.
+    One row per unique transaction; the most recent action taken by this user is shown."""
+    from database.models import ErpExpenseApprovalHistory
+    from services.transaction_service import transaction_to_dict
+
+    # Subquery: most-recent actedOn per transaction for this actor.
+    from sqlalchemy import func
+
+    latest_per_txn = (
+        db.query(
+            ErpExpenseApprovalHistory.transaction_id,
+            func.max(ErpExpenseApprovalHistory.acted_on).label("latest"),
+        )
+        .filter(ErpExpenseApprovalHistory.actor_id == user.id)
+        .group_by(ErpExpenseApprovalHistory.transaction_id)
+        .subquery()
+    )
+
+    rows = (
+        db.query(ErpExpenseApprovalHistory, ErpExpenseTransaction)
+        .join(latest_per_txn, (ErpExpenseApprovalHistory.transaction_id == latest_per_txn.c.transaction_id) & (ErpExpenseApprovalHistory.acted_on == latest_per_txn.c.latest))
+        .join(ErpExpenseTransaction, ErpExpenseTransaction.transaction_id == ErpExpenseApprovalHistory.transaction_id)
+        .options(
+            joinedload(ErpExpenseTransaction.documents),
+            joinedload(ErpExpenseTransaction.region),
+            joinedload(ErpExpenseTransaction.category),
+            joinedload(ErpExpenseTransaction.vendor),
+            joinedload(ErpExpenseTransaction.employee),
+            selectinload(ErpExpenseTransaction.line_items).joinedload(ErpExpenseLineItem.category),
+        )
+        .filter(ErpExpenseApprovalHistory.actor_id == user.id)
+        .order_by(ErpExpenseApprovalHistory.acted_on.desc())
+        .limit(limit)
+        .all()
+    )
+
+    results = []
+    for hist, txn in rows:
+        d = transaction_to_dict(txn)
+        d["my_action"] = hist.action
+        d["my_action_stage"] = hist.stage
+        d["my_actioned_at"] = hist.acted_on.isoformat() if hist.acted_on else None
+        d["my_comment"] = hist.comment
+        results.append(d)
+    return results
+
+
 def bulk_approve(db: Session, user: CurrentUser, transaction_ids: list[int]) -> dict[str, Any]:
     approved: list[int] = []
     skipped: list[dict[str, Any]] = []

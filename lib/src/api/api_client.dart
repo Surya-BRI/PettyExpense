@@ -215,6 +215,11 @@ class ApiClient {
 
   // -- Approvals (Phase 2 multi-stage workflow) --
 
+  Future<List<Map<String, dynamic>>> approvalsHistory({int limit = 100}) async {
+    final res = await _authorized(() => http.get(_uri('/api/approvals/history', {'limit': '$limit'}), headers: _headers));
+    return _decodeList(res).cast<Map<String, dynamic>>();
+  }
+
   Future<List<ExpenseClaim>> approvalsQueue(String stage) async {
     final res = await _authorized(() => http.get(_uri('/api/approvals/queue', {'stage': stage}), headers: _headers));
     final list = _decodeList(res);

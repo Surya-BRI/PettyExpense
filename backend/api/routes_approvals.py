@@ -24,6 +24,15 @@ class ResolveVendorRequest(BaseModel):
     create_new: bool = False
 
 
+@router.get("/history")
+def history(
+    limit: int = 100,
+    user: CurrentUser = Depends(require_approver),
+    db: Session = Depends(get_db),
+):
+    return approval_service.list_history(db, user, limit=limit)
+
+
 @router.get("/queue")
 def queue(
     stage: str,

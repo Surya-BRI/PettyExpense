@@ -35,15 +35,7 @@ class AppNavDrawer extends ConsumerWidget {
     // so only approvers (whose Home is the approvals queue, distinct from Claims) need
     // both entries.
     final items = <_DrawerItem>[
-      if (isApprover) ...[
-        _DrawerItem(
-          icon: PhosphorIcons.house(),
-          selectedIcon: PhosphorIcons.house(PhosphorIconsStyle.fill),
-          accent: AppColors.darkBlue,
-          label: 'Home',
-          selected: location == homeRouteFor(role),
-          onTap: () => go(homeRouteFor(role)),
-        ),
+      if (isApprover)
         _DrawerItem(
           icon: PhosphorIcons.wallet(),
           selectedIcon: PhosphorIcons.wallet(PhosphorIconsStyle.fill),
@@ -51,8 +43,8 @@ class AppNavDrawer extends ConsumerWidget {
           label: 'Claims',
           selected: location.startsWith('/approvals'),
           onTap: () => go('/approvals/${defaultStageFor(role)}'),
-        ),
-      ] else
+        )
+      else
         _DrawerItem(
           icon: PhosphorIcons.receipt(),
           selectedIcon: PhosphorIcons.receipt(PhosphorIconsStyle.fill),

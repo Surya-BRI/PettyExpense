@@ -45,7 +45,8 @@ class MainShell extends ConsumerWidget {
         location == '/all-claims' ||
         location == '/confirm' ||
         location.startsWith('/claim/');
-    final approvalsSelected = location.startsWith('/approvals');
+    final approvalsSelected = location.startsWith('/approvals') && location != '/approvals/history';
+    final historySelected = location == '/approvals/history';
     final profileSelected = location == '/profile';
     final alertsSelected = location == '/notifications';
     final unreadCount = ref
@@ -62,15 +63,16 @@ class MainShell extends ConsumerWidget {
         child: isApprover
             ? Row(
                 children: [
-                  Expanded(
-                    child: _NavItem(
-                      icon: PhosphorIcons.house(),
-                      selectedIcon: PhosphorIcons.house(PhosphorIconsStyle.fill),
-                      label: 'Home',
-                      selected: kIsWeb ? homeSelected : approvalsSelected,
-                      onTap: () => context.go(homeRouteFor(role)),
+                  if (kIsWeb)
+                    Expanded(
+                      child: _NavItem(
+                        icon: PhosphorIcons.house(),
+                        selectedIcon: PhosphorIcons.house(PhosphorIconsStyle.fill),
+                        label: 'Home',
+                        selected: homeSelected,
+                        onTap: () => context.go(homeRouteFor(role)),
+                      ),
                     ),
-                  ),
                   Expanded(
                     child: _NavItem(
                       icon: PhosphorIcons.wallet(),
@@ -79,6 +81,15 @@ class MainShell extends ConsumerWidget {
                       selected: approvalsSelected,
                       onTap: () =>
                           context.go('/approvals/${defaultStageFor(role)}'),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavItem(
+                      icon: PhosphorIcons.clockClockwise(),
+                      selectedIcon: PhosphorIcons.clockClockwise(PhosphorIconsStyle.fill),
+                      label: 'History',
+                      selected: historySelected,
+                      onTap: () => context.go('/approvals/history'),
                     ),
                   ),
                   Expanded(
