@@ -22,6 +22,8 @@ pillow>=10.0.0
 rapidocr>=3.9.0
 onnxruntime>=1.29.0
 pyyaml>=6.0.0
+indra-ocr>=0.3.2
+opencv-python-headless>=4.9.0
 
 # Test-only (not needed to run the app; no separate dev-requirements file
 # exists in this repo yet, so it's marked here rather than installed by default)
