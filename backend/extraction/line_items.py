@@ -496,9 +496,9 @@ def _amount_and_qty(decimals: list[float]) -> tuple[Optional[float], Optional[fl
     qty: Optional[float] = decimals[0] if len(decimals) >= 2 else None
     if qty is not None and not (0 < qty <= 1000):
         qty = None
-    # "2.00 0.00" with the real amount cut off the photo: a 0 last value next to other
-    # numbers is the VAT/discount column, not a line total -- leave the amount for the user.
-    if amount == 0 and len(decimals) >= 2:
+    # A 0.00 last value is the VAT/discount column or a missed read, not a real line total.
+    # Leave amount blank so the employee fills it in rather than submitting a wrong 0.
+    if amount == 0:
         amount = None
     return amount, qty
 
@@ -633,7 +633,7 @@ def extract_line_items(lines: list[OcrLine], reference_data: ReferenceData) -> l
         # is actually Qty vs. Total).
         if row.x_qty is not None:
             qty = row.x_qty
-        if row.x_amount is not None:
+        if row.x_amount is not None and row.x_amount != 0:
             amount = row.x_amount
         if len(description) < 2:
             continue

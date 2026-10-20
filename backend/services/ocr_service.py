@@ -246,6 +246,7 @@ def _run_indra_ocr(image_bytes: bytes, mode: str) -> dict[str, Any] | None:
     try:
         import indra_ocr  # type: ignore
     except ImportError:
+        logger.warning("[OCR] indra_ocr not installed — skipping Indra engine")
         return None
 
     import tempfile, os
@@ -295,6 +296,8 @@ def _run_indra_ocr(image_bytes: bytes, mode: str) -> dict[str, Any] | None:
         parsed = to_legacy_dict(result)
         parsed["raw_text"] = result.raw_text
         parsed["line_items"] = [li.to_dict() for li in extract_line_items(lines, _reference_data)]
+        logger.warning("[OCR] line_items count=%d items=%s", len(parsed["line_items"]),
+                       [(i.get("description","")[:20], i.get("quantity"), i.get("amount")) for i in parsed["line_items"][:5]])
         parsed["raw_json"] = {
             "engine": "indra_ocr",
             "mode": mode,
@@ -347,13 +350,27 @@ class OcrService:
         # "paddle" predates this engine rewrite; it now just means "run the real OCR pipeline".
         if settings.ocr_backend == "paddle":
             # Indra OCR (CPU, 18 MB ONNX) tried first — fast and no GPU required.
-            # Falls through to RapidOCR (Arabic retry pass) on any failure.
+            # Falls through to RapidOCR with Arabic retry when Indra confidence is too low
+            # (e.g. handwritten Arabic KSA bills) or on any Indra failure.
+            _INDRA_MIN_CONFIDENCE = 0.15
+            logger.warning("[OCR] Routing to Indra OCR (primary engine)")
             indra_result = _run_indra_ocr(image_bytes, mode)
             if indra_result:
-                return _apply_currency_fallback(indra_result, region_code)
+                conf = indra_result.get("confidence", 0)
+                logger.warning("[OCR] Indra result: conf=%.2f vendor=%s invoice=%s",
+                            conf, indra_result.get("vendor"), indra_result.get("invoice_number"))
+                if conf >= _INDRA_MIN_CONFIDENCE:
+                    logger.warning("[OCR] Indra confidence OK — returning Indra result")
+                    return _apply_currency_fallback(indra_result, region_code)
+                logger.warning("[OCR] Indra confidence %.2f below threshold %.2f — falling back to RapidOCR",
+                            conf, _INDRA_MIN_CONFIDENCE)
+            else:
+                logger.warning("[OCR] Indra returned no result — falling back to RapidOCR")
 
-            real = _run_ocr(image_bytes, mode)
+            real = _run_ocr(image_bytes, mode="auto")
             if real:
+                logger.warning("[OCR] RapidOCR result: conf=%.2f vendor=%s",
+                            real.get("confidence", 0), real.get("vendor"))
                 return _apply_currency_fallback(real, region_code)
             # Both engines failed (already logged) — must NOT fall through to fake stub data; raise so the app's "enter manually" UX takes over.
             raise RuntimeError(
