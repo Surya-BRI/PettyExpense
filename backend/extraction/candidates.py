@@ -54,6 +54,14 @@ _DATE_PATTERNS = (
 )
 # Clock times ("8:09 AM") are numeric but never a money value — excluded the same way dates are.
 _TIME_PATTERN = re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\b", re.IGNORECASE)
+# Address-line keywords: a line containing any of these is a street address, not a vendor name.
+# "ride with Ali", "trip with Faisal" — driver-name suffix on app receipts, not part of the vendor name.
+_RIDE_WITH_RE = re.compile(r"\s*\b(?:ride|trip|journey)\s+with\b.*$", re.IGNORECASE)
+_ADDRESS_KEYWORD_RE = re.compile(
+    r"\b(?:street|st\b|road|rd\b|avenue|ave\b|boulevard|blvd|district|area|zone|sector|"
+    r"building|bldg|floor|flat|villa|tower|mall|plaza|gate|exit|highway|freeway)\b",
+    re.IGNORECASE,
+)
 # A document's own generic title -- a phone-app screen header ("Ride details", "Trip summary") or
 # a printed receipt's own heading ("Tax Invoice", "Delivery Note", "Credit Note") -- shared chrome
 # across countless vendors, never the vendor name itself. Short (<=3 words) and ends on one of
@@ -824,8 +832,16 @@ def _is_vendor_eligible_line(text: str, matches: list[LabelMatch]) -> bool:
         return False  # this line is mostly a recognized label/value line, not a vendor name
     if _TIME_PATTERN.match(text):
         return False  # a clock reading is never a business name, in any language
-    if _DOCUMENT_TITLE_RE.match(text):
+    if _DOCUMENT_TITLE_RE.match(re.sub(r"^[^A-Za-z؀-ۿ]+", "", text)):
         return False  # the document's own generic title, not the vendor name
+    if _RIDE_WITH_RE.fullmatch(text.strip()):
+        return False  # pure "ride with Ali" driver line, not a vendor name
+    if _EMAIL_IN_LINE_RE.search(text):
+        return False  # an email address line is never a vendor name
+    if _TRN_LINE_RE.search(text) and len(text) > 15:
+        return False  # a TRN number line is a tax-registration line, not a vendor name
+    if _METADATA_LABEL_PREFIX_RE.match(text):
+        return False  # "Branch: DIP", "Store: 01" — operational metadata, not a vendor name
     return True
 
 
@@ -896,9 +912,52 @@ def _digit_dominated(text: str) -> bool:
     return digits / len(stripped) > 0.25
 
 
+_PO_BOX_RE = re.compile(r"(?i)\bp\.?\s*o\.?\s*box\b")
+_EMAIL_IN_LINE_RE = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
+_TRN_LINE_RE = re.compile(r"(?i)\bTRN\s*[:#]")
+# Lines that contain a registered-entity suffix are almost certainly a business name regardless
+# of where they appear in the document — bypass the top-of-receipt positional decay.
+_ENTITY_SUFFIX_RE = re.compile(
+    r"(?i)\b(?:LLC|L\.L\.C\.?|LTD|LIMITED|TRADING|INDUSTRIES|INDUSTRY|COMPANY|CO\b|"
+    r"ENTERPRISES?|ESTABLISHMENT|EST\b|CORPORATION|CORP|INC|INCORPORATED|"
+    r"GROUP|HOLDINGS?|PARTNERS?|ASSOCIATES?|CONTRACTING|SERVICES?|SOLUTIONS?)\b"
+)
+# "Branch: DIP", "Customer: BLUE RHINE", "Billing Address XYZ" — metadata labels that appear mid-bill
+# and identify buyer/location info, never the issuing vendor.
+_METADATA_LABEL_PREFIX_RE = re.compile(
+    r"(?i)^(?:"
+    r"branch|store|outlet|location|site|unit|shop|dept|section|division|region"
+    r"|customer|client|buyer|sold\s+to|bill\s+to|ship\s+to"
+    r"|billing\s+(?:address|name|to)|shipping\s+(?:address|to)"
+    r"|deliver(?:y|ed)\s+(?:address|to)"
+    r")(?:\s*[:\-]|\s+\S|\s*$)",
+)
+
+
 def _looks_like_address_line(text: str) -> bool:
-    # A "City, Country" style line is plausible on its own but is an address block line, not a vendor-name continuation — a comma is the tell.
-    return "," in text
+    if "," in text:
+        return True
+    if _ADDRESS_KEYWORD_RE.search(text):
+        return True
+    if _PO_BOX_RE.search(text):
+        return True
+    # "7926 Zayd Ibn Thabit Street..." — a street number prefix is a reliable address tell.
+    if re.match(r"^\d{1,5}\s+[A-Za-z]", text):
+        return True
+    return False
+
+
+def _line_followed_by_date_or_time(lines: list[OcrLine], i: int) -> bool:
+    # Look up to 2 lines ahead — app receipts sometimes have a driver-name line between vendor and date.
+    for j in (i + 1, i + 2):
+        if j >= len(lines):
+            break
+        nxt = lines[j].text.strip()
+        if _TIME_PATTERN.search(nxt):
+            return True
+        if any(p.search(nxt) for p in _DATE_PATTERNS):
+            return True
+    return False
 
 
 def _vendor_known_match_bonus(text: str, reference_data: ReferenceData) -> tuple[float, list[str]]:
@@ -935,13 +994,30 @@ def _vendor_candidates(
     ]
     median_height = _median_line_height(lines)
 
+    # Mark lines that fall inside a "buyer section" — 1-3 lines immediately following a blocked
+    # buyer-label (Customer:, Bill To:, Billing Address:).  Entity suffixes on those lines belong
+    # to the buyer, not the issuing vendor, so they must not get the entity-suffix score bypass.
+    buyer_section_indices: set[int] = set()
+    for i in range(top_n):
+        if not eligible[i] and _METADATA_LABEL_PREFIX_RE.match(lines[i].text.strip()):
+            for j in range(i + 1, min(i + 4, top_n)):
+                buyer_section_indices.add(j)
+
     for i in range(top_n):
         if not eligible[i]:
             continue
         line = lines[i]
-        text = line.text.strip()
+        text = _RIDE_WITH_RE.sub("", line.text.strip()).strip() or line.text.strip()
         signals = ["top_of_receipt"] + _vendor_shape_signals(text, line, median_height)
-        confidence = max(0.1, line.confidence * (1.0 - i * 0.12))
+        if _line_followed_by_date_or_time(lines, i) and not _looks_like_address_line(text):
+            signals.append("followed_by_date")
+        if _ENTITY_SUFFIX_RE.search(text) and i not in buyer_section_indices:
+            # Business entity suffix (TRADING, LLC, LTD…) self-identifies the line as a vendor name;
+            # skip positional decay so it can beat early garbled fragments.
+            confidence = min(1.0, line.confidence + 0.35)
+            signals.append("entity_suffix")
+        else:
+            confidence = max(0.1, line.confidence * (1.0 - i * 0.12))
         bonus, bonus_signals = _vendor_known_match_bonus(text, reference_data)
         confidence = min(1.0, confidence + bonus)
         signals += bonus_signals
@@ -1037,9 +1113,14 @@ def _vendor_candidates(
                     if boxes
                     else None
                 )
-                base_confidence = max(0.1, lines[i].confidence * (1.0 - i * 0.12))
                 bonus, bonus_signals = _vendor_known_match_bonus(merged_text, reference_data)
-                confidence = min(1.0, base_confidence + 0.1 + bonus)
+                _anchor_short = len(lines[i].text.strip()) <= 25
+                if _ENTITY_SUFFIX_RE.search(merged_text) and i not in buyer_section_indices and _anchor_short:
+                    # Short anchor (e.g. "LAM DAR") + continuation with entity suffix → bypass decay
+                    confidence = min(1.0, lines[i].confidence + 0.35 + 0.1 + bonus)
+                else:
+                    base_confidence = max(0.1, lines[i].confidence * (1.0 - i * 0.12))
+                    confidence = min(1.0, base_confidence + 0.1 + bonus)
                 shape_signals = _vendor_shape_signals(merged_text, lines[i], median_height)
                 candidates.append(
                     FieldCandidate(

@@ -1,6 +1,8 @@
 """Orchestrates the full extraction pipeline and adapts its output to the legacy result-dict shape services/ocr_service.py depends on."""
 from typing import Any
 
+import re
+
 from extraction.candidates import generate_candidates
 from extraction.dedupe import dedupe_lines
 from extraction.normalize import group_into_lines, lines_from_text, normalize_text
@@ -9,6 +11,21 @@ from extraction.scoring import build_scoring_context, score_candidates
 from extraction.select import select_fields
 from extraction.types import ExtractionResult, FieldCandidate, OcrLine, OcrWord
 from extraction.validation import validate_and_adjust
+
+# Patterns that mark where a vendor name ends and operational metadata begins; everything
+# from the first match onwards is stripped from the selected vendor value.
+_VENDOR_TRAILING_JUNK_RE = re.compile(
+    r"(?i)\s*(?:\bTRN\s*[:#]|\bE[-\s]?Mail\s*[:#]|"
+    r"\bTel(?:ephone)?\s*[:#]|\bMob(?:ile)?\s*[:#]|\bFax\s*[:#]|"
+    r"\bP\.?\s*O\.?\s*Box\b|\bPO\s*Box\b|"
+    r"\bCustomer\s*[:#]|\bClient\s*[:#]|\bBill(?:ing)?\s+(?:Address|To)\b|"
+    r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})"
+)
+
+
+def _clean_vendor(raw: str) -> str:
+    m = _VENDOR_TRAILING_JUNK_RE.search(raw)
+    return raw[: m.start()].strip() if m else raw
 
 
 def _group_by_field(candidates: list[FieldCandidate]) -> dict[str, list[FieldCandidate]]:
@@ -46,6 +63,10 @@ def extract(lines: list[OcrLine], reference_data: ReferenceData) -> ExtractionRe
     confidences = [f.confidence for f in fields.values()]
     overall = round(sum(confidences) / len(confidences), 2) if confidences else 0.0
     raw_text = "\n".join(ln.text for ln in lines)
+
+    vendor_field = fields.get("vendor")
+    if vendor_field is not None and isinstance(vendor_field.value, str):
+        vendor_field.value = _clean_vendor(vendor_field.value) or vendor_field.value
 
     return ExtractionResult(
         fields=fields,

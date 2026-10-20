@@ -240,106 +240,74 @@ def _run_ocr(image_bytes: bytes, mode: str = _DEFAULT_OCR_MODE) -> dict[str, Any
     return parsed
 
 
-_RUNPOD_POLL_INTERVAL_S = 2
-# RunPod cold-starts observed at ~10-15s in testing (20s was too tight: some scans timed out and fell
-# back to CPU OCR, which reads digits differently). Worst case before CPU fallback starts is the
-# initial submit (<=15s) + this wait + one in-flight poll (<=15s), so 35s keeps the total well under
-# gunicorn's worker --timeout (90s, see ecosystem.config.js) with room left for CPU OCR.
-_RUNPOD_MAX_WAIT_S = 35
-_RUNPOD_REQUEST_TIMEOUT_S = 15
-
-
-def _run_runpod_ocr(image_bytes: bytes, mode: str) -> dict[str, Any] | None:
-    # GPU OCR via a RunPod serverless endpoint, tried before the CPU RapidOCR pipeline. Returns
-    # None on anything short of a clean success (not configured, HTTP error, FAILED status,
-    # timeout, empty text) so the caller falls through to the CPU path rather than surfacing a
-    # RunPod-specific error to the user.
-    settings = get_settings()
-    endpoint_id = settings.runpod_endpoint_id.strip()
-    api_key = settings.runpod_api_key.strip()
-    if not endpoint_id or not api_key:
+def _run_indra_ocr(image_bytes: bytes, mode: str) -> dict[str, Any] | None:
+    # Indra OCR: 18 MB ONNX model, ~400 ms/page on CPU, no GPU needed.
+    # Returns None on import failure or any error so the caller falls through to RapidOCR.
+    try:
+        import indra_ocr  # type: ignore
+    except ImportError:
         return None
 
-    import base64
-    import time
-
-    import httpx
-
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    payload = {"input": {"image_base64": base64.b64encode(image_bytes).decode("utf-8")}}
-
+    import tempfile, os
     try:
-        run_resp = httpx.post(
-            f"https://api.runpod.ai/v2/{endpoint_id}/run",
-            headers=headers, json=payload, timeout=_RUNPOD_REQUEST_TIMEOUT_S,
-        )
-        run_resp.raise_for_status()
-        job_id = run_resp.json().get("id")
-        if not job_id:
-            logger.warning("RunPod OCR: no job id in response, falling back to CPU OCR")
+        from services.image_preprocess import preprocess_if_needed
+        image_bytes, quality = preprocess_if_needed(image_bytes)
+        if quality.needs_preprocessing:
+            logger.info("Image preprocessing applied: %s", quality.summary())
+
+        # Write bytes to a temp file — Indra's converter takes a file path.
+        suffix = ".jpg"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(image_bytes)
+            tmp_path = tmp.name
+
+        try:
+            conv = indra_ocr.load(threads=4)
+            pages = list(conv.convert(tmp_path))
+        finally:
+            os.unlink(tmp_path)
+
+        if not pages:
             return None
 
-        status_url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
-        deadline = time.monotonic() + _RUNPOD_MAX_WAIT_S
-        while time.monotonic() < deadline:
-            status_resp = httpx.get(status_url, headers=headers, timeout=_RUNPOD_REQUEST_TIMEOUT_S)
-            status_resp.raise_for_status()
-            status_data = status_resp.json()
-            status = status_data.get("status")
+        _, page = pages[0]  # single image → single page
+        if not page.lines:
+            return None
 
-            if status == "COMPLETED":
-                output = status_data.get("output") or {}
-                text = output.get("text", "") or ""
-                if not text.strip():
-                    logger.warning("RunPod OCR: COMPLETED with empty text, falling back to CPU OCR")
-                    return None
-                # The worker also returns per-line boxes ({text, x, y, w, h}) alongside the plain
-                # text -- real geometry, so line-item table reconstruction can run here too instead
-                # of only on the CPU fallback. No per-box confidence is returned, so each word gets
-                # a flat 1.0 (matches the precedent in the geometry-less branch below).
-                boxes = output.get("boxes") or []
-                if boxes:
-                    words = [
-                        OcrWord(
-                            text=b.get("text", ""), confidence=1.0, lang="en",
-                            bounding_box=(
-                                float(b["x"]), float(b["y"]),
-                                float(b["x"]) + float(b["w"]), float(b["y"]) + float(b["h"]),
-                            ),
-                            page=1, reading_order=i,
-                        )
-                        for i, b in enumerate(boxes)
-                        if (b.get("text") or "").strip()
-                    ]
-                else:
-                    words = words_from_text(text)
-                lines = dedupe_lines(group_into_lines(words))
-                result = extract(lines, _reference_data)
-                parsed = to_legacy_dict(result)
-                parsed["raw_text"] = result.raw_text
-                # Item rows for the "Multiple items" flow -- a suggestion the employee reviews and edits.
-                parsed["line_items"] = [li.to_dict() for li in extract_line_items(lines, _reference_data)]
-                parsed["raw_json"] = {
-                    "engine": "runpod_paddleocr",
-                    "mode": mode,
-                    "field_confidence": parsed["field_confidence"],
-                    "low_confidence_fields": parsed["low_confidence_fields"],
-                    "expense_type": parsed["expense_type"],
-                    "line_items": parsed["line_items"],
-                }
-                return parsed
+        words: list[OcrWord] = []
+        for i, line in enumerate(page.lines):
+            text = getattr(line, "text", None) or ""
+            if not text.strip():
+                continue
+            conf = float(getattr(line, "conf", 1.0) or 1.0)
+            box_raw = getattr(line, "box", None)
+            bbox: Optional[tuple[float, float, float, float]] = None
+            if box_raw is not None:
+                try:
+                    # Indra box is [x_min, y_min, x_max, y_max]
+                    bbox = (float(box_raw[0]), float(box_raw[1]), float(box_raw[2]), float(box_raw[3]))
+                except (TypeError, IndexError, ValueError):
+                    pass
+            words.append(OcrWord(text=text, confidence=conf, lang="en", bounding_box=bbox, page=1, reading_order=i, source_pass="indra"))
 
-            if status == "FAILED":
-                logger.warning("RunPod OCR job failed: %s", status_data)
-                return None
-
-            time.sleep(_RUNPOD_POLL_INTERVAL_S)
-
-        logger.warning("RunPod OCR: job %s did not complete within %ds, falling back to CPU OCR", job_id, _RUNPOD_MAX_WAIT_S)
-        return None
+        lines = dedupe_lines(group_into_lines(words))
+        result = extract(lines, _reference_data)
+        parsed = to_legacy_dict(result)
+        parsed["raw_text"] = result.raw_text
+        parsed["line_items"] = [li.to_dict() for li in extract_line_items(lines, _reference_data)]
+        parsed["raw_json"] = {
+            "engine": "indra_ocr",
+            "mode": mode,
+            "field_confidence": parsed["field_confidence"],
+            "low_confidence_fields": parsed["low_confidence_fields"],
+            "expense_type": parsed["expense_type"],
+            "line_items": parsed["line_items"],
+        }
+        return parsed
     except Exception:
-        logger.exception("RunPod OCR call failed, falling back to CPU OCR")
+        logger.exception("Indra OCR pipeline failed, falling back to RapidOCR")
         return None
+
 
 
 def _stub_ocr(filename_hint: str = "") -> dict[str, Any]:
@@ -378,11 +346,11 @@ class OcrService:
         settings = get_settings()
         # "paddle" predates this engine rewrite; it now just means "run the real OCR pipeline".
         if settings.ocr_backend == "paddle":
-            # RunPod GPU tried first when configured; any failure/timeout falls through to the
-            # CPU RapidOCR pipeline below rather than surfacing a RunPod-specific error.
-            runpod_result = _run_runpod_ocr(image_bytes, mode)
-            if runpod_result:
-                return _apply_currency_fallback(runpod_result, region_code)
+            # Indra OCR (CPU, 18 MB ONNX) tried first — fast and no GPU required.
+            # Falls through to RapidOCR (Arabic retry pass) on any failure.
+            indra_result = _run_indra_ocr(image_bytes, mode)
+            if indra_result:
+                return _apply_currency_fallback(indra_result, region_code)
 
             real = _run_ocr(image_bytes, mode)
             if real:

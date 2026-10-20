@@ -106,6 +106,15 @@ def resolve_stage_approvers(db: Session, txn: ErpExpenseTransaction, stage: str)
     if stage == "hod":
         if employee and employee.department_id:
             approvers = _hods_for_department(db, employee.department_id)
+        else:
+            # Employee has no department assigned — broadcast to all active HODs so the
+            # claim is visible and actionable rather than stuck in limbo forever.
+            approvers = (
+                db.query(ErpAuthExpenseUsers)
+                .join(ErpAuthExpenseUsers.role)
+                .filter(ErpAuthExpenseUsers.role.has(role_code="hod"), ErpAuthExpenseUsers.is_active == 1)
+                .all()
+            )
     elif stage == "department_hod":
         if category and category.owning_department_id:
             approvers = _hods_for_department(db, category.owning_department_id)

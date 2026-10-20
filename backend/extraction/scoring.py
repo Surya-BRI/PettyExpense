@@ -83,6 +83,8 @@ def _format_plausibility(candidate: FieldCandidate) -> tuple[float, Optional[str
                 bonus += 0.05
             if "multi_word_name_shape" in candidate.signals:
                 bonus += 0.15
+            if "followed_by_date" in candidate.signals:
+                bonus += 0.15
             return bonus, "format_business_name_shape"
         return 0.0, None
     return 0.0, None
