@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/dubai_time.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/authenticated_image.dart';
@@ -156,11 +157,9 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                   ),
                 ),
               ],
-              if (claim.vendorUnmatched) ...[
+              if (claim.vendorUnmatched && widget.stage == 'accountant') ...[
                 const SizedBox(height: 16),
-                // Resolving a vendor match is an Accountant decision (backend enforces this too,
-                // see approval_service.resolve_vendor) -- other stages only ever see the notice.
-                if (awaitingThisStage && widget.stage == 'accountant')
+                if (awaitingThisStage)
                   _VendorResolveCard(
                     transactionId: widget.transactionId,
                     rawVendorText: claim.vendorName ?? '',
@@ -254,13 +253,43 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                       )
                     : Column(
                         children: [
-                          for (final h in claim.history!)
-                            ListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              title: Text('${_stageLabels[h.stage] ?? h.stage ?? 'None'} · ${h.action}'),
-                              subtitle: Text(h.remarks != null && h.remarks!.isNotEmpty ? h.remarks! : ''),
+                          for (final (i, h) in claim.history!.reversed.indexed) ...[
+                            if (i > 0) const Divider(height: 1, indent: 8, endIndent: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${_stageLabels[h.stage] ?? h.stage ?? 'None'} · ${h.action}',
+                                          style: Theme.of(context).textTheme.bodyMedium,
+                                        ),
+                                        if (h.remarks != null && h.remarks!.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Text(
+                                              h.remarks!,
+                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                    color: AppColors.textSecondary,
+                                                  ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    formatDubaiTime(h.createdAt),
+                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                  ),
+                                ],
+                              ),
                             ),
+                          ],
                         ],
                       ),
               ),
