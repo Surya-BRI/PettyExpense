@@ -144,12 +144,13 @@ class OcrResult {
 }
 
 class OcrLineItem {
-  const OcrLineItem({required this.description, this.quantity, this.amount, this.confidence});
+  const OcrLineItem({required this.description, this.quantity, this.amount, this.confidence, this.vatPercent});
 
   final String description;
   final double? quantity;
   final double? amount;
   final double? confidence;
+  final double? vatPercent;
 
   factory OcrLineItem.fromJson(Map<String, dynamic> json) {
     return OcrLineItem(
@@ -157,6 +158,7 @@ class OcrLineItem {
       quantity: (json['quantity'] as num?)?.toDouble(),
       amount: (json['amount'] as num?)?.toDouble(),
       confidence: (json['confidence'] as num?)?.toDouble(),
+      vatPercent: (json['vat_percent'] as num?)?.toDouble(),
     );
   }
 }
@@ -171,6 +173,7 @@ class ClaimLineItem {
     this.categoryId,
     this.categoryName,
     this.opNumber,
+    this.vatPercent,
   });
 
   final int lineNo;
@@ -180,6 +183,7 @@ class ClaimLineItem {
   final int? categoryId;
   final String? categoryName;
   final String? opNumber;
+  final double? vatPercent;
 
   factory ClaimLineItem.fromJson(Map<String, dynamic> json) {
     return ClaimLineItem(
@@ -190,6 +194,7 @@ class ClaimLineItem {
       categoryId: (json['category_id'] as num?)?.toInt(),
       categoryName: json['category_name'] as String?,
       opNumber: json['op_number'] as String?,
+      vatPercent: (json['vat_percent'] as num?)?.toDouble(),
     );
   }
 }

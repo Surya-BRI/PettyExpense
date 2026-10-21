@@ -124,6 +124,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   // "Multiple items" bills: one editable draft per item line.
   final List<LineItemDraft> _lines = [];
   bool _showLineProblems = false;
+  // True once the user has manually typed in the Amount excl. VAT field in multi mode;
+  // while false the field stays in sync with linesTotal - vat automatically.
+  bool _amountOverridden = false;
   // When editing an existing claim there's no pre-chosen BillLineMode -- single vs multi is
   // whatever the claim itself already is, set once it loads (see _loadExistingClaim).
   bool _editingMulti = false;
@@ -262,6 +265,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         items.map((i) => LineItemDraft.fromOcr(i, categoryId: _categoryId)),
       );
     if (_lines.isEmpty) _lines.add(LineItemDraft(categoryId: _categoryId));
+    _amountOverridden = false;
   }
 
   /// Edit-mode counterpart to [_seedLines] -- same shape, seeded from the claim's own saved
@@ -278,17 +282,26 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             description: i.description,
             quantity: i.quantity,
             amount: i.amount,
+            vatPercent: i.vatPercent,
             categoryId: i.categoryId,
           ),
         ),
       );
     if (_lines.isEmpty) _lines.add(LineItemDraft(categoryId: _categoryId));
+    // When loading an existing claim, _amount is already populated from the saved value
+    // (set by _loadExistingClaim before this is called) -- treat it as user-set.
+    _amountOverridden = true;
   }
 
   double get _linesTotal =>
       _lines.fold(0.0, (sum, l) => sum + (l.amountValue ?? 0));
 
   double get _vatValue => double.tryParse(_vat.text.trim()) ?? 0;
+
+  void _syncAmountExclVat() {
+    final excl = _linesTotal - _vatValue;
+    _amount.text = excl < 0 ? '' : excl.toStringAsFixed(2);
+  }
 
   /// Live, not just after a save -- lets the employee see what's still blocking a real submit
   /// while they're still editing a draft.
@@ -428,10 +441,13 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         // Totals come from the lines (the backend recomputes them the same way).
         final total = double.parse(_linesTotal.toStringAsFixed(2));
         if (_vatValue > total) {
-          throw Exception('VAT can’t be more than the items total');
+          throw Exception("VAT can’t be more than the items total");
         }
         _total.text = total.toStringAsFixed(2);
-        _amount.text = (total - _vatValue).toStringAsFixed(2);
+        // If user hasn’t manually set Amount excl. VAT, fill it now.
+        if (!_amountOverridden || _amount.text.trim().isEmpty) {
+          _amount.text = (total - _vatValue).toStringAsFixed(2);
+        }
         _categoryId = _mainLineCategory ?? _categoryId;
       }
       final amount = double.tryParse(_amount.text.trim());
@@ -898,7 +914,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                       categories: _categories,
                       currency: currency,
                       showProblems: _showLineProblems,
-                      onChanged: () => setState(() {}),
+                      onChanged: () => setState(() {
+                        if (!_amountOverridden) _syncAmountExclVat();
+                      }),
                       onAdd: () => setState(
                         () => _lines.add(
                           LineItemDraft(
@@ -917,6 +935,19 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                     ),
                     const SizedBox(height: 12),
                     _OcrTextField(
+                      controller: _amount,
+                      label: currency == null
+                          ? 'Amount excl. VAT'
+                          : 'Amount excl. VAT ($currency)',
+                      lowConfidence: false,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: _decimalInputFormatters,
+                      onChanged: () => setState(() => _amountOverridden = true),
+                    ),
+                    const SizedBox(height: 12),
+                    _OcrTextField(
                       controller: _vat,
                       label:
                           'VAT amount included in the items (leave blank if none)',
@@ -928,13 +959,16 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                         decimal: true,
                       ),
                       inputFormatters: _decimalInputFormatters,
-                      onChanged: () => setState(() {}),
+                      onChanged: () => setState(() {
+                        if (!_amountOverridden) _syncAmountExclVat();
+                      }),
                     ),
                     const SizedBox(height: 12),
                     _ItemsTotals(
                       currency: currency,
-                      itemsTotal: _linesTotal,
+                      amountExclVat: double.tryParse(_amount.text.trim()) ?? (_linesTotal - _vatValue),
                       vat: _vatValue,
+                      itemsTotal: _linesTotal,
                       billTotal: _ocrFailed ? null : _ocr.totalAmount,
                     ),
                   ],
@@ -1428,22 +1462,25 @@ class _SectionLabel extends StatelessWidget {
 class _ItemsTotals extends StatelessWidget {
   const _ItemsTotals({
     required this.currency,
-    required this.itemsTotal,
+    required this.amountExclVat,
     required this.vat,
+    required this.itemsTotal,
     this.billTotal,
   });
 
   final String? currency;
-  final double itemsTotal;
+  final double amountExclVat;
   final double vat;
+  final double itemsTotal; // line items sum — only used for the mismatch warning
   final double? billTotal;
 
   String _m(double v) => '${currency ?? ''} ${v.toStringAsFixed(2)}'.trim();
 
   @override
   Widget build(BuildContext context) {
+    final displayTotal = amountExclVat + vat;
     final mismatch =
-        billTotal != null && (billTotal! - itemsTotal).abs() > 0.01;
+        billTotal != null && (billTotal! - displayTotal).abs() > 0.01;
     Widget row(String label, String value, {bool bold = false}) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
@@ -1475,10 +1512,10 @@ class _ItemsTotals extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          row('Amount excl. VAT', _m(itemsTotal - vat)),
-          row('VAT', _m(vat)),
+          row("Amount excl. VAT", _m(amountExclVat)),
+          row("VAT", _m(vat)),
           const Divider(height: 14),
-          row('Total (sum of items)', _m(itemsTotal), bold: true),
+          row("Total", _m(displayTotal), bold: true),
           if (mismatch) ...[
             const SizedBox(height: 10),
             Container(
@@ -1495,9 +1532,7 @@ class _ItemsTotals extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Items don’t match the bill. The printed total is ${_m(billTotal!)}, '
-                      'the items add up to ${_m(itemsTotal)} (difference ${_m((billTotal! - itemsTotal).abs())}). '
-                      'Check the items: one may be missing or misread.',
+                      "Items don’t match the bill. The printed total is ${_m(billTotal!)}, the total here is ${_m(displayTotal)} (difference ${_m((billTotal! - displayTotal).abs())}). Check the items: one may be missing or misread.",
                       style: const TextStyle(fontSize: 12.5, height: 1.35),
                     ),
                   ),

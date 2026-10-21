@@ -63,14 +63,17 @@ class MyClaimsController extends StateNotifier<MyClaimsState> {
   final Ref _ref;
 
   Future<void> _fetch() async {
+    final api = _ref.read(apiClientProvider); // read before the await
     try {
-      final page = await _ref.read(apiClientProvider).myClaims(
+      final page = await api.myClaims(
             limit: _pageSize,
             offset: state.page * _pageSize,
             status: state.status,
           );
+      if (!mounted) return;
       state = state.copyWith(items: page.items, total: page.total, isLoading: false, clearError: true);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, error: e);
     }
   }

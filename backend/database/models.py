@@ -258,6 +258,9 @@ class ErpExpenseLineItem(Base):
     # Per-line project/OP override -- when null, the item belongs to the claim-level op_number.
     # New column on an existing table -- create_all() won't add it, see scripts/add_line_item_op_number_column.py.
     op_number: Mapped[Optional[str]] = mapped_column("opNumber", String(128), nullable=True)
+    # VAT % as printed on the bill for this line (e.g. 5.0). Null when the bill doesn't print per-line VAT.
+    # New column -- create_all() won't add it, see scripts/add_line_item_vat_percent_column.py.
+    vat_percent: Mapped[Optional[float]] = mapped_column("vatPercent", Float, nullable=True)
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
 
     transaction: Mapped["ErpExpenseTransaction"] = relationship(back_populates="line_items")

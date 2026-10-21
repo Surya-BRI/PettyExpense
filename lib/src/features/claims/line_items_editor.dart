@@ -12,6 +12,9 @@ final _amountFormatters = <TextInputFormatter>[
 final _qtyFormatters = <TextInputFormatter>[
   FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,3}')),
 ];
+final _vatFormatters = <TextInputFormatter>[
+  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+];
 
 String _fmt(double? v, {int digits = 2}) {
   if (v == null) return '';
@@ -27,23 +30,27 @@ class LineItemDraft {
     String description = '',
     double? quantity,
     double? amount,
+    double? vatPercent,
     this.categoryId,
     this.opResult,
   }) : description = TextEditingController(text: description),
        quantity = TextEditingController(text: _fmt(quantity, digits: 3)),
-       amount = TextEditingController(text: _fmt(amount));
+       amount = TextEditingController(text: _fmt(amount)),
+       vatPercent = TextEditingController(text: _fmt(vatPercent));
 
   factory LineItemDraft.fromOcr(OcrLineItem item, {int? categoryId}) =>
       LineItemDraft(
         description: item.description,
         quantity: item.quantity,
         amount: item.amount,
+        vatPercent: item.vatPercent,
         categoryId: categoryId,
       );
 
   final TextEditingController description;
   final TextEditingController quantity;
   final TextEditingController amount;
+  final TextEditingController vatPercent;
   int? categoryId;
   // The project/OP this item is allocated to -- null means "use the claim-level OP".
   // Kept as the resolved search result (not just the code) so a new line can copy it
@@ -51,6 +58,9 @@ class LineItemDraft {
   OpportunityResult? opResult;
 
   double? get amountValue => double.tryParse(amount.text.trim());
+  double? get vatPercentValue => vatPercent.text.trim().isEmpty
+      ? null
+      : double.tryParse(vatPercent.text.trim());
   double? get quantityValue => quantity.text.trim().isEmpty
       ? null
       : double.tryParse(quantity.text.trim());
@@ -77,6 +87,7 @@ class LineItemDraft {
     'description': description.text.trim(),
     'quantity': quantityValue,
     'amount': amountValue,
+    'vat_percent': vatPercentValue,
     'category_id': categoryId,
     'op_number': opResult?.opCode,
   };
@@ -85,6 +96,7 @@ class LineItemDraft {
     description.dispose();
     quantity.dispose();
     amount.dispose();
+    vatPercent.dispose();
   }
 }
 
@@ -332,6 +344,21 @@ class _LineCard extends StatelessWidget {
                     style: TextStyle(color: AppColors.orange, fontSize: 11.5),
                   ),
                 ],
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: 120,
+                  child: TextField(
+                    controller: line.vatPercent,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: _vatFormatters,
+                    decoration: const InputDecoration(
+                      labelText: 'VAT %',
+                      isDense: true,
+                      suffixText: '%',
+                    ),
+                    onChanged: (_) => onChanged(),
+                  ),
+                ),
                 const SizedBox(height: 10),
                 InputDecorator(
                   decoration: const InputDecoration(

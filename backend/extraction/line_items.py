@@ -473,6 +473,8 @@ def _attach_trailing_total_fragments(
         return items
     out = list(items)
     for orphan in orphans:
+        if orphan.decimals[-1] == 0:
+            continue  # 0.00 is VAT/discount column noise, not a real trailing total
         candidates = [
             (i, y) for i, (y, it) in enumerate(out)
             if 0 < orphan.y - y <= gap and (it.amount is None or it.amount <= 0 or orphan.decimals[-1] <= it.amount * 1.5)

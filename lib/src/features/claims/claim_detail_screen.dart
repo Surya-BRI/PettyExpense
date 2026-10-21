@@ -432,6 +432,7 @@ class ClaimLineItemsList extends StatelessWidget {
                         [
                           if (l.quantity != null) 'Qty ${_qty(l.quantity!)}',
                           if (l.categoryName != null) l.categoryName!,
+                          if (l.vatPercent != null) 'VAT ${l.vatPercent!.toStringAsFixed(l.vatPercent! == l.vatPercent!.roundToDouble() ? 0 : 2)}%',
                         ].join(' · '),
                         style: const TextStyle(
                           color: AppColors.textSecondary,

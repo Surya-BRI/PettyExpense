@@ -73,18 +73,20 @@ def _replace_line_items(db: Session, txn: ErpExpenseTransaction, lines: list[dic
         if amount is None or amount < 0:
             raise ValueError(f"Line item '{description}' needs an amount of 0 or more")
         op_number = (ln.get("op_number") or "").strip() or None
-        cleaned.append((description[:512], ln.get("quantity"), round(float(amount), 2), ln.get("category_id"), op_number))
+        vat_percent = ln.get("vat_percent")
+        vat_percent = float(vat_percent) if vat_percent is not None else None
+        cleaned.append((description[:512], ln.get("quantity"), round(float(amount), 2), ln.get("category_id"), op_number, vat_percent))
 
     txn.line_items.clear()
-    for i, (description, quantity, amount, category_id, op_number) in enumerate(cleaned, start=1):
+    for i, (description, quantity, amount, category_id, op_number, vat_percent) in enumerate(cleaned, start=1):
         txn.line_items.append(
             ErpExpenseLineItem(
                 line_no=i, description=description, quantity=quantity, amount=amount,
-                category_id=category_id, op_number=op_number,
+                category_id=category_id, op_number=op_number, vat_percent=vat_percent,
             )
         )
     if cleaned:
-        total = round(sum(a for _, _, a, _, _ in cleaned), 2)
+        total = round(sum(a for _, _, a, _, _, _ in cleaned), 2)
         vat = round(txn.vat_amount or 0.0, 2)
         if vat > total:
             raise ValueError("VAT can't be more than the total of the line items")
@@ -152,6 +154,7 @@ def transaction_to_dict(
                 "category_id": li.category_id,
                 "category_name": li.category.category_name if li.category else None,
                 "op_number": li.op_number,
+                "vat_percent": li.vat_percent,
             }
             for li in txn.line_items
         ],

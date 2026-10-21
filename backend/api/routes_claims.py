@@ -38,6 +38,7 @@ class LineItemIn(BaseModel):
     amount: float  # line total as printed on the bill
     category_id: Optional[int] = None
     op_number: Optional[str] = None  # overrides the claim-level op_number for this line
+    vat_percent: Optional[float] = None  # VAT % as printed on the bill for this line
 
 
 class CreateClaimRequest(BaseModel):
