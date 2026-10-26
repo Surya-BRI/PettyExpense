@@ -1,0 +1,303 @@
+{
+  "raw": {
+    "amount": 7416.36,
+    "bill_number": "19578",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.95,
+      "currency": 0.95,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "currency": "AED",
+    "date": "2026-07-21",
+    "line_items": [
+      {
+        "amount": 697.0,
+        "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 34,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 1198.5,
+        "description": "Bolt 30X120 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 102,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 104.0,
+        "description": "Bolt 24X100 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 20,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 756.0,
+        "description": "Bolt 20X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 252,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 705.6,
+        "description": "Bolt 20X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 252,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 579.2,
+        "description": "Bolt 16X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 362,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 1035.3,
+        "description": "Bolt 16X60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 714,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 683.2,
+        "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 488,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 1308.16,
+        "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 1752,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 75.4,
+        "description": "Bolt 10X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 130,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 274.0,
+        "description": "Bolt 6X25 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 1370,
+        "vat_percent": 5.0
+      }
+    ],
+    "line_items_include_vat": true,
+    "notes": "The date on the bill is 21-Jul-26, which is 21 July 2026. The bill is dated in the future relative to today's date (2026-10-23).",
+    "total_amount": 7416.36,
+    "vat_amount": 370.83,
+    "vat_percent": 5.0,
+    "vendor": "Jannat Al Naem Building Materials Trading LLC"
+  },
+  "mapped": {
+    "vendor": "Jannat Al Naem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": 7416.36,
+    "vat_amount": 370.83,
+    "total_amount": 7416.36,
+    "currency": "AED",
+    "date": "2026-07-21",
+    "confidence": 0.95,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.95,
+      "currency": 0.95,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount"
+    ],
+    "reconciliation_mismatch": true,
+    "fields": {
+      "invoice_number": {
+        "value": "19578",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [
+      {
+        "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 34,
+        "amount": 697.0,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 30X120 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 102,
+        "amount": 1198.5,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 24X100 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 20,
+        "amount": 104.0,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 20X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 252,
+        "amount": 756.0,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 20X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 252,
+        "amount": 705.6,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 16X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 362,
+        "amount": 579.2,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 16X60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 714,
+        "amount": 1035.3,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 488,
+        "amount": 683.2,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 1752,
+        "amount": 1308.16,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 10X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 130,
+        "amount": 75.4,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 6X25 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 1370,
+        "amount": 274.0,
+        "confidence": 0.95,
+        "vat_percent": 5.0
+      }
+    ],
+    "raw_text": "The date on the bill is 21-Jul-26, which is 21 July 2026. The bill is dated in the future relative to today's date (2026-10-23).",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 7416.36,
+        "bill_number": "19578",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.95,
+          "currency": 0.95,
+          "date": 0.95,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.95
+        },
+        "currency": "AED",
+        "date": "2026-07-21",
+        "line_items": [
+          {
+            "amount": 697.0,
+            "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 34,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 1198.5,
+            "description": "Bolt 30X120 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 102,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 104.0,
+            "description": "Bolt 24X100 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 20,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 756.0,
+            "description": "Bolt 20X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 252,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 705.6,
+            "description": "Bolt 20X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 252,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 579.2,
+            "description": "Bolt 16X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 362,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 1035.3,
+            "description": "Bolt 16X60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 714,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 683.2,
+            "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 488,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 1308.16,
+            "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 1752,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 75.4,
+            "description": "Bolt 10X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 130,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 274.0,
+            "description": "Bolt 6X25 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 1370,
+            "vat_percent": 5.0
+          }
+        ],
+        "line_items_include_vat": true,
+        "notes": "The date on the bill is 21-Jul-26, which is 21 July 2026. The bill is dated in the future relative to today's date (2026-10-23).",
+        "total_amount": 7416.36,
+        "vat_amount": 370.83,
+        "vat_percent": 5.0,
+        "vendor": "Jannat Al Naem Building Materials Trading LLC"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 1114,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1124,
+    "prompt_tokens_details": null,
+    "total_tokens": 2238
+  },
+  "seconds": 31.7,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

@@ -21,6 +21,7 @@ class AppNavDrawer extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).user;
     final role = UserRoleX.fromJson(user?.role);
     final isApprover = role.isApprover;
+    final isFinanceManager = role == UserRole.financeManager;
     final location = GoRouterState.of(context).uri.path;
     final unreadCount = ref.watch(unreadNotificationCountProvider).maybeWhen(data: (n) => n, orElse: () => 0);
 
@@ -52,6 +53,18 @@ class AppNavDrawer extends ConsumerWidget {
           label: 'Claims',
           selected: location == '/claims' || location.startsWith('/claim/'),
           onTap: () => go('/claims'),
+        ),
+      if (isFinanceManager)
+        _DrawerItem(
+          icon: PhosphorIcons.clock(),
+          selectedIcon: PhosphorIcons.clock(PhosphorIconsStyle.fill),
+          accent: AppColors.success,
+          label: 'Payment pending',
+          selected: false,
+          onTap: () {
+            Navigator.of(context).pop();
+            context.go('/approvals/finance_manager?filter=approved');
+          },
         ),
       _DrawerItem(
         icon: PhosphorIcons.bell(),

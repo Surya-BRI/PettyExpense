@@ -1,0 +1,88 @@
+{
+  "mapped": {
+    "vendor": "SHARTA",
+    "expense_type": null,
+    "amount": 45.0,
+    "vat_amount": 0.0,
+    "total_amount": 45.0,
+    "currency": "AED",
+    "date": "2026-06-22",
+    "confidence": 0.85,
+    "field_confidence": {
+      "vendor": 0.88,
+      "date": 0.72,
+      "amount": 0.93,
+      "vat_amount": 0.98,
+      "total_amount": 0.93,
+      "currency": 0.62,
+      "invoice_number": 0.91
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "99375",
+        "confidence": 0.91
+      }
+    },
+    "line_items": [
+      {
+        "description": "Fare",
+        "quantity": 1,
+        "amount": 45.0,
+        "confidence": 0.85,
+        "vat_percent": 0
+      }
+    ],
+    "raw_text": "Customer invoice from Sharta (taxi). Handwritten date appears to be 22/06/26 and handwritten fare 45. No VAT shown.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "SHARTA",
+        "date": "2026-06-22",
+        "amount": 45,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "total_amount": 45,
+        "currency": "AED",
+        "bill_number": "99375",
+        "line_items": [
+          {
+            "description": "Fare",
+            "quantity": 1,
+            "amount": 45,
+            "vat_percent": 0
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.88,
+          "date": 0.72,
+          "amount": 0.93,
+          "vat_amount": 0.98,
+          "total_amount": 0.93,
+          "currency": 0.62,
+          "bill_number": 0.91
+        },
+        "notes": "Customer invoice from Sharta (taxi). Handwritten date appears to be 22/06/26 and handwritten fare 45. No VAT shown."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1327,
+    "completion_tokens": 285,
+    "total_tokens": 1612,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 118,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.25,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

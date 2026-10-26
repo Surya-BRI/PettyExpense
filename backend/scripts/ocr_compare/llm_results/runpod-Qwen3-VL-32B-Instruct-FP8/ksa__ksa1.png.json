@@ -1,0 +1,109 @@
+{
+  "raw": {
+    "amount": 45,
+    "bill_number": "90375",
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.9,
+      "currency": 0.9,
+      "date": 0.8,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "currency": "SAR",
+    "date": "2026-06-24",
+    "line_items": [
+      {
+        "amount": 45,
+        "description": "KAPD 208 to Dalag",
+        "quantity": 1,
+        "vat_percent": 0
+      }
+    ],
+    "line_items_include_vat": true,
+    "notes": "KAPD 208 to Dalag",
+    "total_amount": 45,
+    "vat_amount": 0,
+    "vat_percent": 0,
+    "vendor": "Sharja"
+  },
+  "mapped": {
+    "vendor": "Sharja",
+    "expense_type": null,
+    "amount": 45.0,
+    "vat_amount": 0.0,
+    "total_amount": 45.0,
+    "currency": "SAR",
+    "date": "2026-06-24",
+    "confidence": 0.89,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.9,
+      "currency": 0.9,
+      "date": 0.8,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "90375",
+        "confidence": 0.9
+      }
+    },
+    "line_items": [
+      {
+        "description": "KAPD 208 to Dalag",
+        "quantity": 1,
+        "amount": 45.0,
+        "confidence": 0.89,
+        "vat_percent": 0
+      }
+    ],
+    "raw_text": "KAPD 208 to Dalag",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 45,
+        "bill_number": "90375",
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.9,
+          "currency": 0.9,
+          "date": 0.8,
+          "total_amount": 0.9,
+          "vat_amount": 0.9,
+          "vendor": 0.9
+        },
+        "currency": "SAR",
+        "date": "2026-06-24",
+        "line_items": [
+          {
+            "amount": 45,
+            "description": "KAPD 208 to Dalag",
+            "quantity": 1,
+            "vat_percent": 0
+          }
+        ],
+        "line_items_include_vat": true,
+        "notes": "KAPD 208 to Dalag",
+        "total_amount": 45,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "vendor": "Sharja"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 226,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1058,
+    "prompt_tokens_details": null,
+    "total_tokens": 1284
+  },
+  "seconds": 277.64,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

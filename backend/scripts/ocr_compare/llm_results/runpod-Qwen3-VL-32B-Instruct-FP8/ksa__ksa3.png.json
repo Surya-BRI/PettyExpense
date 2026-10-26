@@ -1,0 +1,87 @@
+{
+  "raw": {
+    "amount": 40,
+    "bill_number": "KAfd 208",
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.9,
+      "currency": 0.8,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "currency": "SAR",
+    "date": "2026-06-29",
+    "line_items": [],
+    "line_items_include_vat": true,
+    "notes": "The bill shows handwritten '40' in the Amount column, and 'KAfd 208' as the bill number. The date is written as '29-6-26', interpreted as 29 June 2026. No VAT is mentioned, and the total amount equals the amount, suggesting VAT is 0 or included. The vendor name is 'Shahad Tawik Company'. The currency is inferred from the context (Saudi Arabia, given the name and Arabic text).",
+    "total_amount": 40,
+    "vat_amount": 0,
+    "vat_percent": 0,
+    "vendor": "Shahad Tawik Company"
+  },
+  "mapped": {
+    "vendor": "Shahad Tawik Company",
+    "expense_type": null,
+    "amount": 40.0,
+    "vat_amount": 0.0,
+    "total_amount": 40.0,
+    "currency": "SAR",
+    "date": "2026-06-29",
+    "confidence": 0.89,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.9,
+      "currency": 0.8,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "KAfd 208",
+        "confidence": 0.9
+      }
+    },
+    "line_items": [],
+    "raw_text": "The bill shows handwritten '40' in the Amount column, and 'KAfd 208' as the bill number. The date is written as '29-6-26', interpreted as 29 June 2026. No VAT is mentioned, and the total amount equals the amount, suggesting VAT is 0 or included. The vendor name is 'Shahad Tawik Company'. The currency is inferred from the context (Saudi Arabia, given the name and Arabic text).",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 40,
+        "bill_number": "KAfd 208",
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.9,
+          "currency": 0.8,
+          "date": 0.9,
+          "total_amount": 0.9,
+          "vat_amount": 0.9,
+          "vendor": 0.9
+        },
+        "currency": "SAR",
+        "date": "2026-06-29",
+        "line_items": [],
+        "line_items_include_vat": true,
+        "notes": "The bill shows handwritten '40' in the Amount column, and 'KAfd 208' as the bill number. The date is written as '29-6-26', interpreted as 29 June 2026. No VAT is mentioned, and the total amount equals the amount, suggesting VAT is 0 or included. The vendor name is 'Shahad Tawik Company'. The currency is inferred from the context (Saudi Arabia, given the name and Arabic text).",
+        "total_amount": 40,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "vendor": "Shahad Tawik Company"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 281,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1104,
+    "prompt_tokens_details": null,
+    "total_tokens": 1385
+  },
+  "seconds": 264.97,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

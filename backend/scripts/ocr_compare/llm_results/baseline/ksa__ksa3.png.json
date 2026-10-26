@@ -1,0 +1,29 @@
+{
+  "vendor": "شركة شهد طويق رقم السيارة",
+  "amount": 0.01,
+  "vat_amount": 0.0,
+  "total_amount": 0.01,
+  "currency": "SAR",
+  "date": "29-6-26",
+  "low_confidence_fields": [
+    "vendor",
+    "currency",
+    "amount",
+    "vat_rate",
+    "vat_amount",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "total_amount",
+    "invoice_number",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": null,
+  "seconds": 2.19
+}

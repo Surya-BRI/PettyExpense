@@ -1,0 +1,114 @@
+{
+  "mapped": {
+    "vendor": "Standard Hardware Trading LLC",
+    "expense_type": null,
+    "amount": 732.6,
+    "vat_amount": 36.63,
+    "total_amount": 769.23,
+    "currency": "AED",
+    "date": "2026-07-29",
+    "confidence": 0.98,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.96,
+      "amount": 0.99,
+      "vat_amount": 0.99,
+      "total_amount": 0.99,
+      "currency": 0.95,
+      "invoice_number": 0.98
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "CASHHT/1205",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [
+      {
+        "description": "Welding Stud Aluminum 4mm x 16mm",
+        "quantity": 2000,
+        "amount": 480.0,
+        "confidence": 0.98,
+        "vat_percent": 5
+      },
+      {
+        "description": "Welding Stud Stainless Steel 4mm x 10mm",
+        "quantity": 365,
+        "amount": 87.6,
+        "confidence": 0.98,
+        "vat_percent": 5
+      },
+      {
+        "description": "S.S Allen Bolt 6mm x 40mm",
+        "quantity": 300,
+        "amount": 165.0,
+        "confidence": 0.98,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "Invoice shows amounts in AED / UAE Dirham. Printed total and VAT match line-item totals.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Standard Hardware Trading LLC",
+        "date": "2026-07-29",
+        "amount": 732.6,
+        "vat_amount": 36.63,
+        "vat_percent": 5,
+        "total_amount": 769.23,
+        "currency": "AED",
+        "bill_number": "CASHHT/1205",
+        "line_items": [
+          {
+            "description": "Welding Stud Aluminum 4mm x 16mm",
+            "quantity": 2000,
+            "amount": 480,
+            "vat_percent": 5
+          },
+          {
+            "description": "Welding Stud Stainless Steel 4mm x 10mm",
+            "quantity": 365,
+            "amount": 87.6,
+            "vat_percent": 5
+          },
+          {
+            "description": "S.S Allen Bolt 6mm x 40mm",
+            "quantity": 300,
+            "amount": 165,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.96,
+          "amount": 0.99,
+          "vat_amount": 0.99,
+          "total_amount": 0.99,
+          "currency": 0.95,
+          "bill_number": 0.98
+        },
+        "notes": "Invoice shows amounts in AED / UAE Dirham. Printed total and VAT match line-item totals."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 2983,
+    "completion_tokens": 351,
+    "total_tokens": 3334,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 116,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 4.03,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

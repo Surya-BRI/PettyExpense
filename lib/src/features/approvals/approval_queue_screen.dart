@@ -1,21 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/money.dart';
 import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/shimmer_box.dart';
-import '../shared/status_chip.dart';
 
-// 'submitted' (New) sorts ahead of 'disputed' -- fresh claims are the priority
-// queue item; disputed ones already had a round of feedback and are waiting
-// on the employee, not brand-new work for this approver.
-const _statusSortPriority = {'submitted': 0, 'disputed': 1};
+// 'submitted' (New) first, 'disputed' second, 'approved' (awaiting payment) last.
+const _statusSortPriority = {'submitted': 0, 'disputed': 1, 'approved': 2};
 
 DateTime? _parseDate(String? raw) => raw == null ? null : DateTime.tryParse(raw);
 
@@ -32,11 +29,14 @@ List<ExpenseClaim> _sortedForQueue(List<ExpenseClaim> claims) {
   return sorted;
 }
 
-String _formatDateTime(String? raw) {
+String _formatDate(String? raw) {
   final date = _parseDate(raw);
   if (date == null) return '';
-  return DateFormat('MMM d, yyyy · h:mm a').format(date.toLocal());
+  return DateFormat('MMM d, yyyy').format(date.toLocal());
 }
+
+String _formatAmount(double amount) =>
+    NumberFormat('#,##0.00').format(amount);
 
 final approvalsQueueProvider =
     FutureProvider.autoDispose.family<List<ExpenseClaim>, String>((ref, stage) {
@@ -50,29 +50,35 @@ const _stageLabels = {
   'finance_manager': 'Finance Manager queue',
 };
 
-// The backend only ever returns 'submitted' or 'disputed' claims for a queue
-// (ACTIONABLE_STATUSES) — this filter just lets the approver split those two
-// apart instead of scanning one mixed list.
-const _statusFilters = ['all', 'submitted', 'disputed'];
+// Status filters for the queue. Finance Manager also sees 'approved' (pending payment).
+const _statusFilters = ['all', 'submitted', 'disputed', 'approved'];
 const _statusFilterLabels = {
   'all': 'All',
   'submitted': 'New',
   'disputed': 'Disputed',
+  'approved': 'Pending payment',
 };
 
 /// One screen, parameterized by stage — an HOD and an Accountant see the same
 /// widget tree, just filtered to their own stage via the backend query.
 class ApprovalQueueScreen extends ConsumerStatefulWidget {
-  const ApprovalQueueScreen({super.key, required this.stage});
+  const ApprovalQueueScreen({super.key, required this.stage, this.initialFilter});
 
   final String stage;
+  final String? initialFilter;
 
   @override
   ConsumerState<ApprovalQueueScreen> createState() => _ApprovalQueueScreenState();
 }
 
 class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
-  String _statusFilter = 'all';
+  late String _statusFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _statusFilter = widget.initialFilter ?? 'all';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,19 +91,23 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Row(
-              children: _statusFilters
-                  .map(
-                    (s) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(_statusFilterLabels[s]!),
-                        selected: _statusFilter == s,
-                        onSelected: (_) => setState(() => _statusFilter = s),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _statusFilters
+                    .where((s) => s != 'approved' || widget.stage == 'finance_manager')
+                    .map(
+                      (s) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(_statusFilterLabels[s]!),
+                          selected: _statusFilter == s,
+                          onSelected: (_) => setState(() => _statusFilter = s),
+                        ),
                       ),
-                    ),
-                  )
-                  .toList(),
+                    )
+                    .toList(),
+              ),
             ),
           ),
           Expanded(
@@ -115,10 +125,15 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                 );
                 if (filtered.isEmpty) {
                   return Center(
-                    child: Text(
-                      claims.isEmpty
-                          ? 'Nothing waiting for your approval.'
-                          : 'No ${_statusFilterLabels[_statusFilter]!.toLowerCase()} claims right now.',
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Text(
+                        claims.isEmpty
+                            ? 'Nothing waiting for your action.'
+                            : 'No ${_statusFilterLabels[_statusFilter]!.toLowerCase()} claims right now.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
                     ),
                   );
                 }
@@ -128,46 +143,124 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                   separatorBuilder: (context, index) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
                     final c = filtered[i];
+                    final isPendingPayment = c.status == 'approved';
+                    final accentColor = isPendingPayment ? AppColors.success : AppColors.darkBlue;
+                    final buttonLabel = isPendingPayment ? 'Mark paid' : 'View claim';
                     return Material(
                       color: AppColors.card,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.zero,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.zero,
                         onTap: () => context.push('/approvals/${widget.stage}/${c.id}'),
                         child: Container(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
                             border: Border.all(color: AppColors.divider),
                           ),
-                          padding: const EdgeInsets.all(14),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      c.vendor,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: AppColors.textPrimary,
+                          child: ClipRect(
+                            child: IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Left accent bar — green for awaiting payment, blue for review
+                                  Container(
+                                    width: 4,
+                                    color: accentColor,
+                                  ),
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          // Vendor name
+                                          Text(
+                                            c.vendor,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 14.5,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 5),
+                                          // Employee · category
+                                          Text(
+                                            '${c.employeeDisplay} · ${c.category}',
+                                            style: const TextStyle(
+                                              color: AppColors.textSecondary,
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 10),
+                                          // Amount
+                                          Text(
+                                            '${_formatAmount(c.amount)} ${c.currency}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 15,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          // Region tag + date + View claim button
+                                          Row(
+                                            children: [
+                                              if (c.regionCode != null) ...[
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.lightBlue,
+                                                    borderRadius: BorderRadius.zero,
+                                                  ),
+                                                  child: Text(
+                                                    c.regionCode!,
+                                                    style: const TextStyle(
+                                                      color: AppColors.darkBlue,
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                              ],
+                                              Text(
+                                                _formatDate(c.submittedAt ?? c.createdAt),
+                                                style: const TextStyle(
+                                                  color: AppColors.textSecondary,
+                                                  fontSize: 11.5,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              FilledButton(
+                                                onPressed: () => context.push('/approvals/${widget.stage}/${c.id}'),
+                                                style: FilledButton.styleFrom(
+                                                  backgroundColor: isPendingPayment ? AppColors.success : AppColors.orange,
+                                                  shape: const RoundedRectangleBorder(),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                                  minimumSize: Size.zero,
+                                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                                  textStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text(buttonLabel),
+                                                    const SizedBox(width: 4),
+                                                    Icon(
+                                                      isPendingPayment ? PhosphorIcons.checkCircle() : PhosphorIcons.arrowRight(),
+                                                      size: 14,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${formatMoney(c.currency, c.amount)} · ${c.category} · ${c.employeeDisplay}',
-                                      style: const TextStyle(color: AppColors.textSecondary),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _formatDateTime(c.submittedAt ?? c.createdAt),
-                                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                              StatusChip(status: c.status),
-                            ],
+                            ),
                           ),
                         ),
                       ),

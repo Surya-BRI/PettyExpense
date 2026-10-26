@@ -13,6 +13,10 @@ class StatusChip extends StatelessWidget {
         return AppColors.textSecondary;
       case 'submitted':
         return AppColors.orange;
+      case 'pending_review':
+        return AppColors.darkBlue;
+      case 'in_progress':
+        return AppColors.textSecondary;
       case 'approved':
         return AppColors.success;
       case 'rejected':
@@ -35,7 +39,7 @@ class StatusChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
-        status.toUpperCase(),
+        status == 'pending_review' ? 'Review needed' : status == 'in_progress' ? 'In progress' : status.toUpperCase(),
         style: TextStyle(
           color: _color,
           fontWeight: FontWeight.w700,

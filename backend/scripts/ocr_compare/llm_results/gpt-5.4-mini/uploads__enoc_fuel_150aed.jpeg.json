@@ -1,0 +1,117 @@
+{
+  "raw": {
+    "vendor": "ENOC RETAIL LLC",
+    "date": "2026-08-20",
+    "amount": 142.86,
+    "vat_amount": 7.14,
+    "vat_percent": 5,
+    "total_amount": 150,
+    "currency": "AED",
+    "bill_number": "886117",
+    "line_items": [
+      {
+        "description": "SPECIAL",
+        "quantity": 42.98,
+        "amount": 142.86,
+        "vat_percent": 5
+      }
+    ],
+    "line_items_include_vat": false,
+    "confidence": {
+      "vendor": 0.99,
+      "date": 0.99,
+      "amount": 0.98,
+      "vat_amount": 0.98,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "bill_number": 0.98
+    },
+    "notes": "Receipt shows date 20/08/2026, total AED 150, VAT AED 7.14, VAT rate 5%."
+  },
+  "mapped": {
+    "vendor": "ENOC RETAIL LLC",
+    "expense_type": null,
+    "amount": 142.86,
+    "vat_amount": 7.14,
+    "total_amount": 150.0,
+    "currency": "AED",
+    "date": "2026-08-20",
+    "confidence": 0.99,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.99,
+      "amount": 0.98,
+      "vat_amount": 0.98,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "invoice_number": 0.98
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "886117",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [
+      {
+        "description": "SPECIAL",
+        "quantity": 42.98,
+        "amount": 150.0,
+        "confidence": 0.99,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "Receipt shows date 20/08/2026, total AED 150, VAT AED 7.14, VAT rate 5%.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "ENOC RETAIL LLC",
+        "date": "2026-08-20",
+        "amount": 142.86,
+        "vat_amount": 7.14,
+        "vat_percent": 5,
+        "total_amount": 150,
+        "currency": "AED",
+        "bill_number": "886117",
+        "line_items": [
+          {
+            "description": "SPECIAL",
+            "quantity": 42.98,
+            "amount": 142.86,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.99,
+          "amount": 0.98,
+          "vat_amount": 0.98,
+          "total_amount": 0.99,
+          "currency": 0.99,
+          "bill_number": 0.98
+        },
+        "notes": "Receipt shows date 20/08/2026, total AED 150, VAT AED 7.14, VAT rate 5%."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 2512,
+    "completion_tokens": 170,
+    "total_tokens": 2682,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.39,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

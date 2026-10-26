@@ -1,0 +1,90 @@
+{
+  "mapped": {
+    "vendor": "Qema Al-Khaleej Limited Co. For General Rent",
+    "expense_type": null,
+    "amount": 45.0,
+    "vat_amount": 0.0,
+    "total_amount": 45.0,
+    "currency": "SAR",
+    "date": "2026-06-25",
+    "confidence": 0.82,
+    "field_confidence": {
+      "vendor": 0.94,
+      "date": 0.72,
+      "amount": 0.98,
+      "vat_amount": 0.93,
+      "total_amount": 0.98,
+      "currency": 0.25,
+      "invoice_number": 0.96
+    },
+    "low_confidence_fields": [
+      "currency"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "0386",
+        "confidence": 0.96
+      }
+    },
+    "line_items": [
+      {
+        "description": "Kingdom towers to Dubai",
+        "quantity": null,
+        "amount": 45.0,
+        "confidence": 0.82,
+        "vat_percent": 0
+      }
+    ],
+    "raw_text": "Date is handwritten and appears to be 25/06/26. Handwritten item description is partially unclear; read as \"Kingdom towers to Dubai\". Amount handwritten as 45/.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Qema Al-Khaleej Limited Co. For General Rent",
+        "date": "2026-06-25",
+        "amount": 45,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "total_amount": 45,
+        "currency": null,
+        "bill_number": "0386",
+        "line_items": [
+          {
+            "description": "Kingdom towers to Dubai",
+            "quantity": null,
+            "amount": 45,
+            "vat_percent": 0
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.94,
+          "date": 0.72,
+          "amount": 0.98,
+          "vat_amount": 0.93,
+          "total_amount": 0.98,
+          "currency": 0.25,
+          "bill_number": 0.96
+        },
+        "notes": "Date is handwritten and appears to be 25/06/26. Handwritten item description is partially unclear; read as \"Kingdom towers to Dubai\". Amount handwritten as 45/."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1227,
+    "completion_tokens": 343,
+    "total_tokens": 1570,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 154,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.91,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

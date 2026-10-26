@@ -1,0 +1,113 @@
+{
+  "raw": {
+    "amount": 5516,
+    "bill_number": "18812",
+    "confidence": {
+      "amount": 0.98,
+      "bill_number": 0.99,
+      "currency": 0.99,
+      "date": 0.98,
+      "total_amount": 0.98,
+      "vat_amount": 0.98,
+      "vendor": 0.99
+    },
+    "currency": "AED",
+    "date": "2026-07-21",
+    "line_items": [
+      {
+        "amount": 5516,
+        "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 34,
+        "vat_percent": 5
+      }
+    ],
+    "line_items_include_vat": true,
+    "notes": "The bill shows 'VAT@ 5%' and total is 5,516 AED. Since VAT is shown as a percentage and the total includes VAT, line items include VAT. The date is 21-Jul-26, which is 2026-07-21. The vendor is 'Jannat Al Naem Building Materials Trading LLC'. The amount is 5,516 AED (total including VAT).",
+    "total_amount": 5516,
+    "vat_amount": 275.8,
+    "vat_percent": 5,
+    "vendor": "Jannat Al Naem Building Materials Trading LLC"
+  },
+  "mapped": {
+    "vendor": "Jannat Al Naem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": 5516.0,
+    "vat_amount": 275.8,
+    "total_amount": 5516.0,
+    "currency": "AED",
+    "date": "2026-07-21",
+    "confidence": 0.98,
+    "field_confidence": {
+      "amount": 0.98,
+      "invoice_number": 0.99,
+      "currency": 0.99,
+      "date": 0.98,
+      "total_amount": 0.98,
+      "vat_amount": 0.98,
+      "vendor": 0.99
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount"
+    ],
+    "reconciliation_mismatch": true,
+    "fields": {
+      "invoice_number": {
+        "value": "18812",
+        "confidence": 0.99
+      }
+    },
+    "line_items": [
+      {
+        "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 34,
+        "amount": 5516.0,
+        "confidence": 0.98,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "The bill shows 'VAT@ 5%' and total is 5,516 AED. Since VAT is shown as a percentage and the total includes VAT, line items include VAT. The date is 21-Jul-26, which is 2026-07-21. The vendor is 'Jannat Al Naem Building Materials Trading LLC'. The amount is 5,516 AED (total including VAT).",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 5516,
+        "bill_number": "18812",
+        "confidence": {
+          "amount": 0.98,
+          "bill_number": 0.99,
+          "currency": 0.99,
+          "date": 0.98,
+          "total_amount": 0.98,
+          "vat_amount": 0.98,
+          "vendor": 0.99
+        },
+        "currency": "AED",
+        "date": "2026-07-21",
+        "line_items": [
+          {
+            "amount": 5516,
+            "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 34,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": true,
+        "notes": "The bill shows 'VAT@ 5%' and total is 5,516 AED. Since VAT is shown as a percentage and the total includes VAT, line items include VAT. The date is 21-Jul-26, which is 2026-07-21. The vendor is 'Jannat Al Naem Building Materials Trading LLC'. The amount is 5,516 AED (total including VAT).",
+        "total_amount": 5516,
+        "vat_amount": 275.8,
+        "vat_percent": 5,
+        "vendor": "Jannat Al Naem Building Materials Trading LLC"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 374,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1110,
+    "prompt_tokens_details": null,
+    "total_tokens": 1484
+  },
+  "seconds": 13.42,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

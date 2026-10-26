@@ -1,0 +1,28 @@
+{
+  "vendor": "شركة قمة الخليج المحدودة للأجرة العامة",
+  "amount": 45.0,
+  "vat_amount": 0.0,
+  "total_amount": 45.0,
+  "currency": "SAR",
+  "date": "",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "amount",
+    "vat_rate",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "total_amount",
+    "invoice_number",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": "0386",
+  "seconds": 4.31
+}

@@ -17,7 +17,7 @@ class _FakeApi extends ApiClient {
   Map<String, dynamic>? createdBody;
 
   @override
-  Future<OcrResult> analyzeReceipt(int receiptId, {String ocrMode = 'auto'}) async => const OcrResult(
+  Future<OcrResult> analyzeReceipt(int receiptId) async => const OcrResult(
         receiptId: 7,
         s3Key: 'k',
         vendor: 'Bab Al Hayat Pharmacy',

@@ -1,0 +1,109 @@
+{
+  "raw": {
+    "amount": 45,
+    "bill_number": "0386",
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.9,
+      "currency": 0.9,
+      "date": 0.8,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "currency": "SAR",
+    "date": "2026-06-25",
+    "line_items": [
+      {
+        "amount": 45,
+        "description": "Kingdom Tower To Malaiz",
+        "quantity": 1,
+        "vat_percent": 0
+      }
+    ],
+    "line_items_include_vat": true,
+    "notes": "Handwritten description: 'Kingdom Tower To Malaiz'. Total amount is handwritten as '45/'. No VAT is indicated, and since line items include VAT, vat_amount is 0. Currency inferred from 'ريال' (Riyal) in the table header. Date format is DD/MM/YY, so 25/06/26 = 25 June 2026.",
+    "total_amount": 45,
+    "vat_amount": 0,
+    "vat_percent": 0,
+    "vendor": "Qema Al-Khaleej Limited Co. For General Rent"
+  },
+  "mapped": {
+    "vendor": "Qema Al-Khaleej Limited Co. For General Rent",
+    "expense_type": null,
+    "amount": 45.0,
+    "vat_amount": 0.0,
+    "total_amount": 45.0,
+    "currency": "SAR",
+    "date": "2026-06-25",
+    "confidence": 0.89,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.9,
+      "currency": 0.9,
+      "date": 0.8,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "0386",
+        "confidence": 0.9
+      }
+    },
+    "line_items": [
+      {
+        "description": "Kingdom Tower To Malaiz",
+        "quantity": 1,
+        "amount": 45.0,
+        "confidence": 0.89,
+        "vat_percent": 0
+      }
+    ],
+    "raw_text": "Handwritten description: 'Kingdom Tower To Malaiz'. Total amount is handwritten as '45/'. No VAT is indicated, and since line items include VAT, vat_amount is 0. Currency inferred from 'ريال' (Riyal) in the table header. Date format is DD/MM/YY, so 25/06/26 = 25 June 2026.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 45,
+        "bill_number": "0386",
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.9,
+          "currency": 0.9,
+          "date": 0.8,
+          "total_amount": 0.9,
+          "vat_amount": 0.9,
+          "vendor": 0.9
+        },
+        "currency": "SAR",
+        "date": "2026-06-25",
+        "line_items": [
+          {
+            "amount": 45,
+            "description": "Kingdom Tower To Malaiz",
+            "quantity": 1,
+            "vat_percent": 0
+          }
+        ],
+        "line_items_include_vat": true,
+        "notes": "Handwritten description: 'Kingdom Tower To Malaiz'. Total amount is handwritten as '45/'. No VAT is indicated, and since line items include VAT, vat_amount is 0. Currency inferred from 'ريال' (Riyal) in the table header. Date format is DD/MM/YY, so 25/06/26 = 25 June 2026.",
+        "total_amount": 45,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "vendor": "Qema Al-Khaleej Limited Co. For General Rent"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 316,
+    "completion_tokens_details": null,
+    "prompt_tokens": 982,
+    "prompt_tokens_details": null,
+    "total_tokens": 1298
+  },
+  "seconds": 17.83,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

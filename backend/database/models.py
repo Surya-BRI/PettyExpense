@@ -295,6 +295,7 @@ class ErpExpenseApprovalHistory(Base):
     acted_on: Mapped[datetime] = mapped_column("actedOn", DateTime, default=datetime.utcnow)
 
     transaction: Mapped[ErpExpenseTransaction] = relationship(back_populates="approval_history")
+    actor: Mapped["ErpAuthExpenseUsers"] = relationship(foreign_keys=[actor_id])
 
 
 class ErpExpenseApproverDelegation(Base):

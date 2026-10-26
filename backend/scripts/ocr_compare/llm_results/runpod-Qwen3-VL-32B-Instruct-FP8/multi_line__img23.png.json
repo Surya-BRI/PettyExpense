@@ -1,0 +1,223 @@
+{
+  "raw": {
+    "amount": 4704.2,
+    "bill_number": "RB 26/01008",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.95,
+      "currency": 0.95,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "currency": "AED",
+    "date": "2026-09-18",
+    "line_items": [
+      {
+        "amount": 3572.0,
+        "description": "P2.5 Dahua Indoor Module 1.5.01.98. 70425- IFS-LIA-2.5S-C-M6C02010",
+        "quantity": 76,
+        "vat_percent": 5
+      },
+      {
+        "amount": 486.0,
+        "description": "Receiving Card FS-LCE 7516",
+        "quantity": 9,
+        "vat_percent": 5
+      },
+      {
+        "amount": 299.0,
+        "description": "Power supply PRO-W200V5(40Pcs)",
+        "quantity": 13,
+        "vat_percent": 5
+      },
+      {
+        "amount": 151.2,
+        "description": "Magnet with Screw 14*17*1.2MM M4",
+        "quantity": 432,
+        "vat_percent": 5
+      },
+      {
+        "amount": 56.0,
+        "description": "Internet Cable 100 CM",
+        "quantity": 8,
+        "vat_percent": 5
+      },
+      {
+        "amount": 56.0,
+        "description": "Power Cable. 2 Core",
+        "quantity": 8,
+        "vat_percent": 5
+      },
+      {
+        "amount": 84.0,
+        "description": "Power Cable. 3 Core",
+        "quantity": 12,
+        "vat_percent": 5
+      }
+    ],
+    "line_items_include_vat": false,
+    "notes": "",
+    "total_amount": 4939.41,
+    "vat_amount": 235.21,
+    "vat_percent": 5,
+    "vendor": "Rainbow Led & Display Advertising"
+  },
+  "mapped": {
+    "vendor": "Rainbow Led & Display Advertising",
+    "expense_type": null,
+    "amount": 4704.2,
+    "vat_amount": 235.21,
+    "total_amount": 4939.41,
+    "currency": "AED",
+    "date": "2026-09-18",
+    "confidence": 0.95,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.95,
+      "currency": 0.95,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "RB 26/01008",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [
+      {
+        "description": "P2.5 Dahua Indoor Module 1.5.01.98. 70425- IFS-LIA-2.5S-C-M6C02010",
+        "quantity": 76,
+        "amount": 3750.6,
+        "confidence": 0.95,
+        "vat_percent": 5
+      },
+      {
+        "description": "Receiving Card FS-LCE 7516",
+        "quantity": 9,
+        "amount": 510.3,
+        "confidence": 0.95,
+        "vat_percent": 5
+      },
+      {
+        "description": "Power supply PRO-W200V5(40Pcs)",
+        "quantity": 13,
+        "amount": 313.95,
+        "confidence": 0.95,
+        "vat_percent": 5
+      },
+      {
+        "description": "Magnet with Screw 14*17*1.2MM M4",
+        "quantity": 432,
+        "amount": 158.76,
+        "confidence": 0.95,
+        "vat_percent": 5
+      },
+      {
+        "description": "Internet Cable 100 CM",
+        "quantity": 8,
+        "amount": 58.8,
+        "confidence": 0.95,
+        "vat_percent": 5
+      },
+      {
+        "description": "Power Cable. 2 Core",
+        "quantity": 8,
+        "amount": 58.8,
+        "confidence": 0.95,
+        "vat_percent": 5
+      },
+      {
+        "description": "Power Cable. 3 Core",
+        "quantity": 12,
+        "amount": 88.2,
+        "confidence": 0.95,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 4704.2,
+        "bill_number": "RB 26/01008",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.95,
+          "currency": 0.95,
+          "date": 0.95,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.95
+        },
+        "currency": "AED",
+        "date": "2026-09-18",
+        "line_items": [
+          {
+            "amount": 3572.0,
+            "description": "P2.5 Dahua Indoor Module 1.5.01.98. 70425- IFS-LIA-2.5S-C-M6C02010",
+            "quantity": 76,
+            "vat_percent": 5
+          },
+          {
+            "amount": 486.0,
+            "description": "Receiving Card FS-LCE 7516",
+            "quantity": 9,
+            "vat_percent": 5
+          },
+          {
+            "amount": 299.0,
+            "description": "Power supply PRO-W200V5(40Pcs)",
+            "quantity": 13,
+            "vat_percent": 5
+          },
+          {
+            "amount": 151.2,
+            "description": "Magnet with Screw 14*17*1.2MM M4",
+            "quantity": 432,
+            "vat_percent": 5
+          },
+          {
+            "amount": 56.0,
+            "description": "Internet Cable 100 CM",
+            "quantity": 8,
+            "vat_percent": 5
+          },
+          {
+            "amount": 56.0,
+            "description": "Power Cable. 2 Core",
+            "quantity": 8,
+            "vat_percent": 5
+          },
+          {
+            "amount": 84.0,
+            "description": "Power Cable. 3 Core",
+            "quantity": 12,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": false,
+        "notes": "",
+        "total_amount": 4939.41,
+        "vat_amount": 235.21,
+        "vat_percent": 5,
+        "vendor": "Rainbow Led & Display Advertising"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 561,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1344,
+    "prompt_tokens_details": null,
+    "total_tokens": 1905
+  },
+  "seconds": 282.09,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

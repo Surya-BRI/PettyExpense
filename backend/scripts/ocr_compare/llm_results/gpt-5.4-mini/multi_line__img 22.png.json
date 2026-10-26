@@ -1,0 +1,198 @@
+{
+  "raw": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "date": "2026-09-24",
+    "amount": null,
+    "vat_amount": null,
+    "vat_percent": 5,
+    "total_amount": null,
+    "currency": null,
+    "bill_number": "19065",
+    "line_items": [
+      {
+        "description": "Bolt 20X100",
+        "quantity": 50,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Bolt 24X150",
+        "quantity": 20,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Bolt 27X150",
+        "quantity": 20,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Thread Bar 4mm X 1 Mtr",
+        "quantity": 1000,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Drywall Screw 8x2\"",
+        "quantity": 60,
+        "amount": null,
+        "vat_percent": null
+      }
+    ],
+    "line_items_include_vat": null,
+    "confidence": {
+      "vendor": 0.98,
+      "date": 0.92,
+      "amount": 0.1,
+      "vat_amount": 0.1,
+      "total_amount": 0.1,
+      "currency": 0.05,
+      "bill_number": 0.99
+    },
+    "notes": "Delivery note. Date read from top-right as 24-Sep-26; today is 2026-10-26 so interpreted as 2026-09-24. No monetary totals are printed, only VAT 5%."
+  },
+  "mapped": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": null,
+    "vat_amount": null,
+    "total_amount": null,
+    "currency": "AED",
+    "date": "2026-09-24",
+    "confidence": 0.46,
+    "field_confidence": {
+      "vendor": 0.98,
+      "date": 0.92,
+      "amount": 0.1,
+      "vat_amount": 0.1,
+      "total_amount": 0.1,
+      "currency": 0.05,
+      "invoice_number": 0.99
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount",
+      "currency"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "19065",
+        "confidence": 0.99
+      }
+    },
+    "line_items": [
+      {
+        "description": "Bolt 20X100",
+        "quantity": 50,
+        "amount": null,
+        "confidence": 0.46,
+        "vat_percent": null
+      },
+      {
+        "description": "Bolt 24X150",
+        "quantity": 20,
+        "amount": null,
+        "confidence": 0.46,
+        "vat_percent": null
+      },
+      {
+        "description": "Bolt 27X150",
+        "quantity": 20,
+        "amount": null,
+        "confidence": 0.46,
+        "vat_percent": null
+      },
+      {
+        "description": "Thread Bar 4mm X 1 Mtr",
+        "quantity": 1000,
+        "amount": null,
+        "confidence": 0.46,
+        "vat_percent": null
+      },
+      {
+        "description": "Drywall Screw 8x2\"",
+        "quantity": 60,
+        "amount": null,
+        "confidence": 0.46,
+        "vat_percent": null
+      }
+    ],
+    "raw_text": "Delivery note. Date read from top-right as 24-Sep-26; today is 2026-10-26 so interpreted as 2026-09-24. No monetary totals are printed, only VAT 5%.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+        "date": "2026-09-24",
+        "amount": null,
+        "vat_amount": null,
+        "vat_percent": 5,
+        "total_amount": null,
+        "currency": null,
+        "bill_number": "19065",
+        "line_items": [
+          {
+            "description": "Bolt 20X100",
+            "quantity": 50,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Bolt 24X150",
+            "quantity": 20,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Bolt 27X150",
+            "quantity": 20,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Thread Bar 4mm X 1 Mtr",
+            "quantity": 1000,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Drywall Screw 8x2\"",
+            "quantity": 60,
+            "amount": null,
+            "vat_percent": null
+          }
+        ],
+        "line_items_include_vat": null,
+        "confidence": {
+          "vendor": 0.98,
+          "date": 0.92,
+          "amount": 0.1,
+          "vat_amount": 0.1,
+          "total_amount": 0.1,
+          "currency": 0.05,
+          "bill_number": 0.99
+        },
+        "notes": "Delivery note. Date read from top-right as 24-Sep-26; today is 2026-10-26 so interpreted as 2026-09-24. No monetary totals are printed, only VAT 5%."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1607,
+    "completion_tokens": 283,
+    "total_tokens": 1890,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 9.98,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

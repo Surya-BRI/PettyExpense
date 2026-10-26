@@ -9,7 +9,6 @@ import '../../theme/app_theme.dart';
 import '../../utils/money.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/shimmer_box.dart';
-import '../shared/status_chip.dart';
 
 final approverHistoryProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
   return ref.watch(apiClientProvider).approvalsHistory();
@@ -105,6 +104,7 @@ class ApproverHistoryScreen extends ConsumerWidget {
                 final category = item['category_name'] as String? ?? '';
                 final status = item['status'] as String? ?? '';
                 final stage = item['my_action_stage'] as String? ?? '';
+                final regionCode = item['region_code'] as String?;
                 final id = item['id'] as int?;
 
                 return Material(
@@ -112,7 +112,11 @@ class ApproverHistoryScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(14),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    onTap: id == null ? null : () => context.push('/claim/$id'),
+                    onTap: id == null
+                        ? null
+                        : () => stage.isNotEmpty
+                            ? context.push('/approvals/$stage/$id')
+                            : context.push('/claim/$id'),
                     child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(14),
@@ -154,7 +158,7 @@ class ApproverHistoryScreen extends ConsumerWidget {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${formatMoney(currency, amount)} · $category · $employee',
+                                      '${formatMoney(currency, amount)} · $category · $employee${regionCode != null ? ' · $regionCode' : ''}',
                                       style: const TextStyle(
                                         color: AppColors.textSecondary,
                                         fontSize: 13,
@@ -163,8 +167,7 @@ class ApproverHistoryScreen extends ConsumerWidget {
                                   ],
                                 ),
                               ),
-                              StatusChip(status: status),
-                            ],
+                              ],
                           ),
                           const SizedBox(height: 10),
                           Row(

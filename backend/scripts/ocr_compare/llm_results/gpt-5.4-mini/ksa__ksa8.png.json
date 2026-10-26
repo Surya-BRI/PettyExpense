@@ -1,0 +1,76 @@
+{
+  "mapped": {
+    "vendor": "Uber",
+    "expense_type": null,
+    "amount": 72.9,
+    "vat_amount": 0.0,
+    "total_amount": 72.9,
+    "currency": "SAR",
+    "date": "2026-02-08",
+    "confidence": 0.73,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.62,
+      "amount": 0.95,
+      "vat_amount": 0.55,
+      "total_amount": 0.95,
+      "currency": 0.98,
+      "invoice_number": 0.1
+    },
+    "low_confidence_fields": [
+      "vat_amount",
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 0.1
+      }
+    },
+    "line_items": [],
+    "raw_text": "Ride details screenshot for an UberX Saver reserve ride with Ali in Riyadh.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Uber",
+        "date": "2026-02-08",
+        "amount": 72.9,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "total_amount": 72.9,
+        "currency": "SAR",
+        "bill_number": null,
+        "line_items": [],
+        "line_items_include_vat": null,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.62,
+          "amount": 0.95,
+          "vat_amount": 0.55,
+          "total_amount": 0.95,
+          "currency": 0.98,
+          "bill_number": 0.1
+        },
+        "notes": "Ride details screenshot for an UberX Saver reserve ride with Ali in Riyadh."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1192,
+    "completion_tokens": 356,
+    "total_tokens": 1548,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 220,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 4.34,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

@@ -1,0 +1,73 @@
+{
+  "vendor": "Emirate : Dubai",
+  "amount": 4704.2,
+  "vat_amount": 235.21,
+  "total_amount": 4939.41,
+  "currency": "AED",
+  "date": "18-Sep-26",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "change",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [
+    {
+      "description": "P2.5 Dahua Indoor Module 1.5.01.98. 76 PCS",
+      "quantity": 76.0,
+      "amount": 3750.6,
+      "confidence": 0.93,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "Magnet with Screw 14*17*1.2MM M4 432 PCS",
+      "quantity": 432.0,
+      "amount": null,
+      "confidence": 0.96,
+      "vat_percent": null
+    },
+    {
+      "description": "Receiving Card FS-LCE 9 PCS",
+      "quantity": 9.0,
+      "amount": 510.3,
+      "confidence": 0.84,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "Power supply PRO-W200V5(40Pcs)",
+      "quantity": 13.0,
+      "amount": 313.95,
+      "confidence": 0.96,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "Internet Cable 100 CM",
+      "quantity": 8.0,
+      "amount": 158.76,
+      "confidence": 0.96,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "Power Cable.",
+      "quantity": 2.8,
+      "amount": 58.8,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "Power Cable. 12 PCS",
+      "quantity": 12.0,
+      "amount": 88.2,
+      "confidence": 0.97,
+      "vat_percent": 5.0
+    }
+  ],
+  "bill_number": "RB 26/01008",
+  "seconds": 5.16
+}

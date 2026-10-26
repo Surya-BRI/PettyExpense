@@ -1,0 +1,87 @@
+{
+  "raw": {
+    "amount": 40,
+    "bill_number": "KA+D 208",
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.9,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "currency": "AED",
+    "date": "2026-06-29",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "This appears to be a receipt for a car service. The amount is handwritten as '40' and the bill number is 'KA+D 208'. The date is written as '29-6-26', which is interpreted as 29 June 2026. The vendor is 'Shahad Tawik Company'. The receipt does not show any line items or VAT information, so these fields are empty. The currency is inferred as AED (Dirham) from the context of the UAE. The confidence is high for all fields based on the visible information.",
+    "total_amount": 40,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "Shahad Tawik Company"
+  },
+  "mapped": {
+    "vendor": "Shahad Tawik Company",
+    "expense_type": null,
+    "amount": 40.0,
+    "vat_amount": 0.0,
+    "total_amount": 40.0,
+    "currency": "AED",
+    "date": "2026-06-29",
+    "confidence": 0.9,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.9,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "KA+D 208",
+        "confidence": 0.9
+      }
+    },
+    "line_items": [],
+    "raw_text": "This appears to be a receipt for a car service. The amount is handwritten as '40' and the bill number is 'KA+D 208'. The date is written as '29-6-26', which is interpreted as 29 June 2026. The vendor is 'Shahad Tawik Company'. The receipt does not show any line items or VAT information, so these fields are empty. The currency is inferred as AED (Dirham) from the context of the UAE. The confidence is high for all fields based on the visible information.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 40,
+        "bill_number": "KA+D 208",
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.9,
+          "currency": 0.9,
+          "date": 0.9,
+          "total_amount": 0.9,
+          "vat_amount": 0.9,
+          "vendor": 0.9
+        },
+        "currency": "AED",
+        "date": "2026-06-29",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "This appears to be a receipt for a car service. The amount is handwritten as '40' and the bill number is 'KA+D 208'. The date is written as '29-6-26', which is interpreted as 29 June 2026. The vendor is 'Shahad Tawik Company'. The receipt does not show any line items or VAT information, so these fields are empty. The currency is inferred as AED (Dirham) from the context of the UAE. The confidence is high for all fields based on the visible information.",
+        "total_amount": 40,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "Shahad Tawik Company"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 306,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1104,
+    "prompt_tokens_details": null,
+    "total_tokens": 1410
+  },
+  "seconds": 147.95,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

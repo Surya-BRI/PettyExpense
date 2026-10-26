@@ -1,0 +1,166 @@
+{
+  "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+  "amount": 7416.36,
+  "vat_amount": 370.83,
+  "total_amount": 7787.19,
+  "currency": "AED",
+  "date": "21-Jul-26",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [
+    {
+      "description": "Bolt 36X150",
+      "quantity": 34.0,
+      "amount": 731.85,
+      "confidence": 0.85,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "Bolt 30X120",
+      "quantity": 102.0,
+      "amount": 1258.43,
+      "confidence": 0.97,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 0.97,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 24X100",
+      "quantity": 20.0,
+      "amount": 109.2,
+      "confidence": 0.97,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 0.96,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 20X70",
+      "quantity": 252.0,
+      "amount": 793.8,
+      "confidence": 0.96,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 0.94,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 20x60",
+      "quantity": 252.0,
+      "amount": 740.88,
+      "confidence": 0.94,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 0.97,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 16X70",
+      "quantity": 362.0,
+      "amount": 608.16,
+      "confidence": 0.97,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 0.88,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 16X60",
+      "quantity": 714.0,
+      "amount": 1087.07,
+      "confidence": 0.88,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 16X50 488 Pcs",
+      "quantity": 488.0,
+      "amount": 717.36,
+      "confidence": 0.88,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "9Bolt 12X50",
+      "quantity": 1792.0,
+      "amount": 1373.57,
+      "confidence": 0.86,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 0.9,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 10X50",
+      "quantity": 130.0,
+      "amount": 79.17,
+      "confidence": 0.9,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 0.97,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 6X25",
+      "quantity": 1370.0,
+      "amount": 287.7,
+      "confidence": 0.97,
+      "vat_percent": 5.0
+    },
+    {
+      "description": "FLAT WASHER GI 4.6 GRADE",
+      "quantity": 2.0,
+      "amount": 7.416,
+      "confidence": 0.97,
+      "vat_percent": null
+    }
+  ],
+  "bill_number": "19578",
+  "seconds": 7.14
+}

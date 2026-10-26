@@ -1,0 +1,109 @@
+{
+  "raw": {
+    "amount": 55,
+    "bill_number": "C/58444",
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.95,
+      "currency": 0.7,
+      "date": 0.6,
+      "total_amount": 0.9,
+      "vat_amount": 0.8,
+      "vendor": 0.8
+    },
+    "currency": "AED",
+    "date": "2026-06-30",
+    "line_items": [
+      {
+        "amount": 55,
+        "description": "Kingdom to Malaz",
+        "quantity": 1,
+        "vat_percent": null
+      }
+    ],
+    "line_items_include_vat": true,
+    "notes": "The receipt is handwritten with 'Kingdom to Malaz' and amount 55. The date is written as 30/06/26 in Arabic format (day/month/year), which corresponds to 2026-06-30. Currency inferred as AED based on common usage in UAE context and absence of other indicators. No VAT rate or breakdown is visible, so VAT amount is assumed 0. The vendor name is not printed, only 'Invoice' and 'فاتورة', so vendor is inferred as the issuer of the document, possibly a transportation or logistics service. The 'To' and 'From' fields are handwritten as 'Kingdom' and 'Malaz', respectively, and likely represent locations or parties involved.",
+    "total_amount": 55,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "Invoice"
+  },
+  "mapped": {
+    "vendor": "Invoice",
+    "expense_type": null,
+    "amount": 55.0,
+    "vat_amount": 0.0,
+    "total_amount": 55.0,
+    "currency": "AED",
+    "date": "2026-06-30",
+    "confidence": 0.81,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.95,
+      "currency": 0.7,
+      "date": 0.6,
+      "total_amount": 0.9,
+      "vat_amount": 0.8,
+      "vendor": 0.8
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "C/58444",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [
+      {
+        "description": "Kingdom to Malaz",
+        "quantity": 1,
+        "amount": 55.0,
+        "confidence": 0.81,
+        "vat_percent": null
+      }
+    ],
+    "raw_text": "The receipt is handwritten with 'Kingdom to Malaz' and amount 55. The date is written as 30/06/26 in Arabic format (day/month/year), which corresponds to 2026-06-30. Currency inferred as AED based on common usage in UAE context and absence of other indicators. No VAT rate or breakdown is visible, so VAT amount is assumed 0. The vendor name is not printed, only 'Invoice' and 'فاتورة', so vendor is inferred as the issuer of the document, possibly a transportation or logistics service. The 'To' and 'From' fields are handwritten as 'Kingdom' and 'Malaz', respectively, and likely represent locations or parties involved.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 55,
+        "bill_number": "C/58444",
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.95,
+          "currency": 0.7,
+          "date": 0.6,
+          "total_amount": 0.9,
+          "vat_amount": 0.8,
+          "vendor": 0.8
+        },
+        "currency": "AED",
+        "date": "2026-06-30",
+        "line_items": [
+          {
+            "amount": 55,
+            "description": "Kingdom to Malaz",
+            "quantity": 1,
+            "vat_percent": null
+          }
+        ],
+        "line_items_include_vat": true,
+        "notes": "The receipt is handwritten with 'Kingdom to Malaz' and amount 55. The date is written as 30/06/26 in Arabic format (day/month/year), which corresponds to 2026-06-30. Currency inferred as AED based on common usage in UAE context and absence of other indicators. No VAT rate or breakdown is visible, so VAT amount is assumed 0. The vendor name is not printed, only 'Invoice' and 'فاتورة', so vendor is inferred as the issuer of the document, possibly a transportation or logistics service. The 'To' and 'From' fields are handwritten as 'Kingdom' and 'Malaz', respectively, and likely represent locations or parties involved.",
+        "total_amount": 55,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "Invoice"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 372,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1024,
+    "prompt_tokens_details": null,
+    "total_tokens": 1396
+  },
+  "seconds": 20.09,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

@@ -1,0 +1,179 @@
+{
+  "raw": {
+    "vendor": "Blue Rhine General Trading L.L.C",
+    "date": "2026-10-06",
+    "amount": null,
+    "vat_amount": null,
+    "vat_percent": null,
+    "total_amount": null,
+    "currency": null,
+    "bill_number": "SO-DN-DIP-110042",
+    "line_items": [
+      {
+        "description": "LED-WH-10K-0.7W-2*1-ECO-LR LEDRAY LED MODULE 2*1 White 10000K 0.7W 12V",
+        "quantity": 2000,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "LED-WH-2835-1200-80W-24V-FX-TL WARM WHITE-3000K-FLEXIBLE-10MTR-1200LEDs-, WHITE PCB,24V-NON-WATERPROOF 80W / ROLL",
+        "quantity": 3,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "PLF 5.0-32-LX Photo luminescent Film Glow in the dark (printable)",
+        "quantity": 2,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "PCCL 5.0-32-DX Polycarbonate Sheet 3050 x 2050 x 5.0mm Clear EXELL™ D",
+        "quantity": 1,
+        "amount": null,
+        "vat_percent": null
+      }
+    ],
+    "line_items_include_vat": null,
+    "confidence": {
+      "vendor": 0.99,
+      "date": 0.99,
+      "amount": 0.2,
+      "vat_amount": 0.2,
+      "total_amount": 0.2,
+      "currency": 0.1,
+      "bill_number": 0.98
+    },
+    "notes": "Delivery note with item quantities only; no prices, VAT, or total shown."
+  },
+  "mapped": {
+    "vendor": "Blue Rhine General Trading L.L.C",
+    "expense_type": null,
+    "amount": null,
+    "vat_amount": null,
+    "total_amount": null,
+    "currency": "AED",
+    "date": "2026-10-06",
+    "confidence": 0.52,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.99,
+      "amount": 0.2,
+      "vat_amount": 0.2,
+      "total_amount": 0.2,
+      "currency": 0.1,
+      "invoice_number": 0.98
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount",
+      "currency"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "SO-DN-DIP-110042",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [
+      {
+        "description": "LED-WH-10K-0.7W-2*1-ECO-LR LEDRAY LED MODULE 2*1 White 10000K 0.7W 12V",
+        "quantity": 2000,
+        "amount": null,
+        "confidence": 0.52,
+        "vat_percent": null
+      },
+      {
+        "description": "LED-WH-2835-1200-80W-24V-FX-TL WARM WHITE-3000K-FLEXIBLE-10MTR-1200LEDs-, WHITE PCB,24V-NON-WATERPROOF 80W / ROLL",
+        "quantity": 3,
+        "amount": null,
+        "confidence": 0.52,
+        "vat_percent": null
+      },
+      {
+        "description": "PLF 5.0-32-LX Photo luminescent Film Glow in the dark (printable)",
+        "quantity": 2,
+        "amount": null,
+        "confidence": 0.52,
+        "vat_percent": null
+      },
+      {
+        "description": "PCCL 5.0-32-DX Polycarbonate Sheet 3050 x 2050 x 5.0mm Clear EXELL™ D",
+        "quantity": 1,
+        "amount": null,
+        "confidence": 0.52,
+        "vat_percent": null
+      }
+    ],
+    "raw_text": "Delivery note with item quantities only; no prices, VAT, or total shown.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Blue Rhine General Trading L.L.C",
+        "date": "2026-10-06",
+        "amount": null,
+        "vat_amount": null,
+        "vat_percent": null,
+        "total_amount": null,
+        "currency": null,
+        "bill_number": "SO-DN-DIP-110042",
+        "line_items": [
+          {
+            "description": "LED-WH-10K-0.7W-2*1-ECO-LR LEDRAY LED MODULE 2*1 White 10000K 0.7W 12V",
+            "quantity": 2000,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "LED-WH-2835-1200-80W-24V-FX-TL WARM WHITE-3000K-FLEXIBLE-10MTR-1200LEDs-, WHITE PCB,24V-NON-WATERPROOF 80W / ROLL",
+            "quantity": 3,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "PLF 5.0-32-LX Photo luminescent Film Glow in the dark (printable)",
+            "quantity": 2,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "PCCL 5.0-32-DX Polycarbonate Sheet 3050 x 2050 x 5.0mm Clear EXELL™ D",
+            "quantity": 1,
+            "amount": null,
+            "vat_percent": null
+          }
+        ],
+        "line_items_include_vat": null,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.99,
+          "amount": 0.2,
+          "vat_amount": 0.2,
+          "total_amount": 0.2,
+          "currency": 0.1,
+          "bill_number": 0.98
+        },
+        "notes": "Delivery note with item quantities only; no prices, VAT, or total shown."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1776,
+    "completion_tokens": 357,
+    "total_tokens": 2133,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 11.05,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 from sqlalchemy.orm import Session
 
-from config import get_settings
+from services.llm_vision_service import run_llm_vision
 from extraction.line_items import extract_line_items
 from extraction import (
     CategoryRef,
@@ -344,43 +344,11 @@ def _apply_currency_fallback(result: dict[str, Any], region_code: Optional[str])
 class OcrService:
     def run(
         self, image_bytes: bytes, filename: str = "receipt.jpg", mode: str = _DEFAULT_OCR_MODE,
-        region_code: Optional[str] = None,
+        region_code: Optional[str] = None, engine: str = "ai",
     ) -> dict[str, Any]:
-        settings = get_settings()
-        # "paddle" predates this engine rewrite; it now just means "run the real OCR pipeline".
-        if settings.ocr_backend == "paddle":
-            # Indra OCR (CPU, 18 MB ONNX) tried first — fast and no GPU required.
-            # Falls through to RapidOCR with Arabic retry when Indra confidence is too low
-            # (e.g. handwritten Arabic KSA bills) or on any Indra failure.
-            _INDRA_MIN_CONFIDENCE = 0.15
-            logger.warning("[OCR] Routing to Indra OCR (primary engine)")
-            indra_result = _run_indra_ocr(image_bytes, mode)
-            if indra_result:
-                conf = indra_result.get("confidence", 0)
-                logger.warning("[OCR] Indra result: conf=%.2f vendor=%s invoice=%s",
-                            conf, indra_result.get("vendor"), indra_result.get("invoice_number"))
-                if conf >= _INDRA_MIN_CONFIDENCE:
-                    logger.warning("[OCR] Indra confidence OK — returning Indra result")
-                    return _apply_currency_fallback(indra_result, region_code)
-                logger.warning("[OCR] Indra confidence %.2f below threshold %.2f — falling back to RapidOCR",
-                            conf, _INDRA_MIN_CONFIDENCE)
-            else:
-                logger.warning("[OCR] Indra returned no result — falling back to RapidOCR")
-
-            real = _run_ocr(image_bytes, mode="auto")
-            if real:
-                logger.warning("[OCR] RapidOCR result: conf=%.2f vendor=%s",
-                            real.get("confidence", 0), real.get("vendor"))
-                return _apply_currency_fallback(real, region_code)
-            # Both engines failed (already logged) — must NOT fall through to fake stub data; raise so the app's "enter manually" UX takes over.
-            raise RuntimeError(
-                "OCR pipeline failed to process this receipt — see server logs for the underlying exception."
-            )
-
-        # Only reached when ocr_backend is explicitly NOT "paddle" — never as a silent fallback from a real OCR failure.
-        stub = _stub_ocr(filename)
-        stub["raw_json"] = json.dumps(stub["raw_json"])
-        return stub
+        # Camera, gallery and scripts all go through GPT. engine/mode are ignored
+        # (kept so older clients that still send them keep working).
+        return run_llm_vision(image_bytes, region_code)
 
     def extract_from_text(self, text: str, words: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
         ocr_words = (

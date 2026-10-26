@@ -1,0 +1,145 @@
+{
+  "mapped": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": null,
+    "vat_amount": null,
+    "total_amount": null,
+    "currency": "AED",
+    "date": "2026-09-24",
+    "confidence": 0.64,
+    "field_confidence": {
+      "vendor": 0.98,
+      "date": 0.93,
+      "amount": 0.21,
+      "vat_amount": 0.18,
+      "total_amount": 0.2,
+      "currency": 0.99,
+      "invoice_number": 0.98
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount",
+      "currency"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "19065",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [
+      {
+        "description": "Bolt 20X100 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 50,
+        "amount": null,
+        "confidence": 0.64,
+        "vat_percent": null
+      },
+      {
+        "description": "Bolt 24X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 20,
+        "amount": null,
+        "confidence": 0.64,
+        "vat_percent": null
+      },
+      {
+        "description": "Bolt 27X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 20,
+        "amount": null,
+        "confidence": 0.64,
+        "vat_percent": null
+      },
+      {
+        "description": "Thread Bar 4mm X 1 Mtr GI",
+        "quantity": 1000,
+        "amount": null,
+        "confidence": 0.64,
+        "vat_percent": null
+      },
+      {
+        "description": "Drywall Screw 8x2\" DRYWALL SCREW 8\"2\" (FINE THREAD) 1 PKT PER 400 PCS 75 PKT X 400 PCS = 30000 PCS",
+        "quantity": 60,
+        "amount": null,
+        "confidence": 0.64,
+        "vat_percent": null
+      }
+    ],
+    "raw_text": "This is a delivery note, not a priced invoice. The document shows VAT @ 5% and a total quantity of 1,150 pcs, but no monetary amounts are printed.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+        "date": "2026-09-24",
+        "amount": null,
+        "vat_amount": null,
+        "vat_percent": 5,
+        "total_amount": null,
+        "currency": null,
+        "bill_number": "19065",
+        "line_items": [
+          {
+            "description": "Bolt 20X100 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+            "quantity": 50,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Bolt 24X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+            "quantity": 20,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Bolt 27X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+            "quantity": 20,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Thread Bar 4mm X 1 Mtr GI",
+            "quantity": 1000,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Drywall Screw 8x2\" DRYWALL SCREW 8\"2\" (FINE THREAD) 1 PKT PER 400 PCS 75 PKT X 400 PCS = 30000 PCS",
+            "quantity": 60,
+            "amount": null,
+            "vat_percent": null
+          }
+        ],
+        "line_items_include_vat": null,
+        "confidence": {
+          "vendor": 0.98,
+          "date": 0.93,
+          "amount": 0.21,
+          "vat_amount": 0.18,
+          "total_amount": 0.2,
+          "currency": 0.99,
+          "bill_number": 0.98
+        },
+        "notes": "This is a delivery note, not a priced invoice. The document shows VAT @ 5% and a total quantity of 1,150 pcs, but no monetary amounts are printed."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1503,
+    "completion_tokens": 515,
+    "total_tokens": 2018,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 151,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.02,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

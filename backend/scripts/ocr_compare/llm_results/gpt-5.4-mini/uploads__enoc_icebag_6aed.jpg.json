@@ -1,0 +1,121 @@
+{
+  "raw": {
+    "vendor": "ENOC RETAIL LLC",
+    "date": "2026-08-18",
+    "amount": 6.0,
+    "vat_amount": 0.29,
+    "vat_percent": 5,
+    "total_amount": 6.0,
+    "currency": "AED",
+    "bill_number": "584439",
+    "line_items": [
+      {
+        "description": "ICE BAG",
+        "quantity": 1,
+        "amount": 6.0,
+        "vat_percent": 5
+      }
+    ],
+    "line_items_include_vat": false,
+    "confidence": {
+      "vendor": 0.98,
+      "date": 0.99,
+      "amount": 0.97,
+      "vat_amount": 0.96,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "bill_number": 0.9
+    },
+    "notes": "Receipt shows Sale Amt AED6.00 and VAT Amt AED0.29, but total printed as AED6.00. Amount/total relationship is inconsistent with VAT; extracted fields follow the printed values."
+  },
+  "mapped": {
+    "vendor": "ENOC RETAIL LLC",
+    "expense_type": null,
+    "amount": 6.0,
+    "vat_amount": 0.29,
+    "total_amount": 6.0,
+    "currency": "AED",
+    "date": "2026-08-18",
+    "confidence": 0.97,
+    "field_confidence": {
+      "vendor": 0.98,
+      "date": 0.99,
+      "amount": 0.97,
+      "vat_amount": 0.96,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "invoice_number": 0.9
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount"
+    ],
+    "reconciliation_mismatch": true,
+    "fields": {
+      "invoice_number": {
+        "value": "584439",
+        "confidence": 0.9
+      }
+    },
+    "line_items": [
+      {
+        "description": "ICE BAG",
+        "quantity": 1,
+        "amount": 6.0,
+        "confidence": 0.97,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "Receipt shows Sale Amt AED6.00 and VAT Amt AED0.29, but total printed as AED6.00. Amount/total relationship is inconsistent with VAT; extracted fields follow the printed values.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "ENOC RETAIL LLC",
+        "date": "2026-08-18",
+        "amount": 6.0,
+        "vat_amount": 0.29,
+        "vat_percent": 5,
+        "total_amount": 6.0,
+        "currency": "AED",
+        "bill_number": "584439",
+        "line_items": [
+          {
+            "description": "ICE BAG",
+            "quantity": 1,
+            "amount": 6.0,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.98,
+          "date": 0.99,
+          "amount": 0.97,
+          "vat_amount": 0.96,
+          "total_amount": 0.99,
+          "currency": 0.99,
+          "bill_number": 0.9
+        },
+        "notes": "Receipt shows Sale Amt AED6.00 and VAT Amt AED0.29, but total printed as AED6.00. Amount/total relationship is inconsistent with VAT; extracted fields follow the printed values."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 3052,
+    "completion_tokens": 183,
+    "total_tokens": 3235,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 4.08,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

@@ -1,0 +1,128 @@
+{
+  "raw": {
+    "amount": 86.0,
+    "bill_number": "T-INV/26/1854",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.95,
+      "currency": 0.98,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.98
+    },
+    "currency": "AED",
+    "date": "2026-07-09",
+    "line_items": [
+      {
+        "amount": 56.0,
+        "description": "CABLE CONNECTOR,70-95 MALE - ASTRA OKC DKZ 35-50",
+        "quantity": 2.0,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 30.0,
+        "description": "OKC DKZ 35-50",
+        "quantity": 1.0,
+        "vat_percent": 5.0
+      }
+    ],
+    "line_items_include_vat": false,
+    "notes": "Handwritten note: 'Spase - Mig welding machine Production U.A.Q.'",
+    "total_amount": 90.3,
+    "vat_amount": 4.3,
+    "vat_percent": 5.0,
+    "vendor": "Fabricast FZC"
+  },
+  "mapped": {
+    "vendor": "Fabricast FZC",
+    "expense_type": null,
+    "amount": 86.0,
+    "vat_amount": 4.3,
+    "total_amount": 90.3,
+    "currency": "AED",
+    "date": "2026-07-09",
+    "confidence": 0.96,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.95,
+      "currency": 0.98,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.98
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "T-INV/26/1854",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [
+      {
+        "description": "CABLE CONNECTOR,70-95 MALE - ASTRA OKC DKZ 35-50",
+        "quantity": 2.0,
+        "amount": 58.8,
+        "confidence": 0.96,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "OKC DKZ 35-50",
+        "quantity": 1.0,
+        "amount": 31.5,
+        "confidence": 0.96,
+        "vat_percent": 5.0
+      }
+    ],
+    "raw_text": "Handwritten note: 'Spase - Mig welding machine Production U.A.Q.'",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 86.0,
+        "bill_number": "T-INV/26/1854",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.95,
+          "currency": 0.98,
+          "date": 0.95,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.98
+        },
+        "currency": "AED",
+        "date": "2026-07-09",
+        "line_items": [
+          {
+            "amount": 56.0,
+            "description": "CABLE CONNECTOR,70-95 MALE - ASTRA OKC DKZ 35-50",
+            "quantity": 2.0,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 30.0,
+            "description": "OKC DKZ 35-50",
+            "quantity": 1.0,
+            "vat_percent": 5.0
+          }
+        ],
+        "line_items_include_vat": false,
+        "notes": "Handwritten note: 'Spase - Mig welding machine Production U.A.Q.'",
+        "total_amount": 90.3,
+        "vat_amount": 4.3,
+        "vat_percent": 5.0,
+        "vendor": "Fabricast FZC"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 334,
+    "completion_tokens_details": null,
+    "prompt_tokens": 2114,
+    "prompt_tokens_details": null,
+    "total_tokens": 2448
+  },
+  "seconds": 13.58,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

@@ -58,7 +58,7 @@ bool _isArabicDominant(String text) {
   return arabicCount > latinCount;
 }
 
-const _maxOcrAttempts = 2;
+const _maxOcrAttempts = 1;
 
 // keyboardType only hints the on-screen keyboard, so this is the actual enforcement: at most one decimal point, digits only otherwise.
 final _decimalInputFormatters = <TextInputFormatter>[
@@ -105,7 +105,6 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   late final TextEditingController _remarks;
   int? _categoryId;
   String _type = 'reimbursement';
-  String _ocrMode = 'auto';
   String? _currency;
   bool _busy = false;
   // null when idle; true/false says which of Submit/Save-as-draft is the one in flight, so
@@ -344,6 +343,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     });
     _startTicker();
 
+    // GPT is a paid call that fails for reasons a silent retry won't fix (no key, credit,
+    // timeout) -- show the error once; the banner's Retry button is there if the employee wants it.
     Object? lastError;
     for (var i = 1; i <= maxAttempts; i++) {
       if (!mounted) return;
@@ -353,7 +354,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       try {
         final result = await ref
             .read(apiClientProvider)
-            .analyzeReceipt(_ocr.receiptId, ocrMode: _ocrMode);
+            .analyzeReceipt(_ocr.receiptId);
         if (!mounted) return;
         _applyOcr(result);
         _ticker?.cancel();
@@ -377,8 +378,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       _analyzing = false;
       _ocrFailed = true;
       _progress = 0;
-      final raw = lastError?.toString() ?? '';
-      _error = raw.startsWith('Exception: ') ? raw.substring(11) : raw;
+      _error = "Couldn't read this bill. Try again.";
     });
   }
 
@@ -823,24 +823,14 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
               visualDensity: VisualDensity.compact,
             ),
           ),
-          // No bill-language mode to pick when editing a saved claim -- there's no fresh OCR
-          // read happening at all, just a plain data fetch.
-          if (widget.existingClaimId == null) ...[
-            const SizedBox(height: 8),
-            _OcrModeSelector(
-              value: _ocrMode,
-              enabled: !_analyzing,
-              onChanged: (mode) {
-                setState(() => _ocrMode = mode);
-                _analyzeWithRetries();
-              },
-            ),
-          ],
           if (_analyzing) ...[
             const SizedBox(height: 12),
             widget.existingClaimId != null
                 ? const _LoadingDraftIndicator()
-                : _OcrProgress(progress: _progress),
+                : _OcrProgress(
+                    progress: _progress,
+                    label: 'Scanning…',
+                  ),
           ],
           if (_ocrFailed) ...[
             const SizedBox(height: 12),
@@ -1166,9 +1156,10 @@ class _LoadingDraftIndicator extends StatelessWidget {
 }
 
 class _OcrProgress extends StatelessWidget {
-  const _OcrProgress({required this.progress});
+  const _OcrProgress({required this.progress, this.label});
 
   final int progress;
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -1191,6 +1182,15 @@ class _OcrProgress extends StatelessWidget {
                   color: AppColors.darkBlue,
                 ),
               ),
+              if (label != null) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label!,
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
@@ -1210,9 +1210,11 @@ class _OcrProgress extends StatelessWidget {
 }
 
 class _ManualEntryBanner extends StatelessWidget {
-  const _ManualEntryBanner({this.onRetry});
+  const _ManualEntryBanner({this.onRetry, this.detail});
 
   final VoidCallback? onRetry;
+
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
@@ -1224,10 +1226,19 @@ class _ManualEntryBanner extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Expanded(
-              child: Text(
-                'Couldn’t read this bill. Enter the details below.',
-                style: TextStyle(fontWeight: FontWeight.w600, height: 1.3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Couldn’t read this bill. Enter the details below.',
+                    style: TextStyle(fontWeight: FontWeight.w600, height: 1.3),
+                  ),
+                  if (detail != null && detail!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(detail!, style: const TextStyle(height: 1.3)),
+                  ],
+                ],
               ),
             ),
             if (onRetry != null) ...[
@@ -1330,48 +1341,6 @@ class _OcrTextFieldState extends State<_OcrTextField> {
         label: widget.label,
         low: widget.lowConfidence,
         confidence: widget.confidence,
-      ),
-    );
-  }
-}
-
-class _OcrModeSelector extends StatelessWidget {
-  const _OcrModeSelector({
-    required this.value,
-    required this.enabled,
-    required this.onChanged,
-  });
-
-  final String value; // 'auto' | 'en' | 'ar'
-  final bool enabled;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(bottom: 4),
-            child: Text(
-              'Bill language',
-              style: TextStyle(fontSize: 12, color: AppColors.darkBlue),
-            ),
-          ),
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'auto', label: Text('Auto')),
-              ButtonSegment(value: 'en', label: Text('English')),
-              ButtonSegment(value: 'ar', label: Text('Arabic')),
-            ],
-            selected: {value},
-            onSelectionChanged: enabled
-                ? (selection) => onChanged(selection.first)
-                : null,
-          ),
-        ],
       ),
     );
   }

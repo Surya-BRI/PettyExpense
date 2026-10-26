@@ -201,18 +201,19 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
     for txn in unstaged:
         _ensure_stage(db, txn)
 
+    _eager_opts = [
+        joinedload(ErpExpenseTransaction.documents),
+        joinedload(ErpExpenseTransaction.region),
+        joinedload(ErpExpenseTransaction.category),
+        joinedload(ErpExpenseTransaction.vendor),
+        joinedload(ErpExpenseTransaction.employee),
+        # selectinload, not joinedload -- one-to-many would multiply rows per line item.
+        selectinload(ErpExpenseTransaction.line_items).joinedload(ErpExpenseLineItem.category),
+    ]
+
     candidates = (
         db.query(ErpExpenseTransaction)
-        .options(
-            joinedload(ErpExpenseTransaction.documents),
-            joinedload(ErpExpenseTransaction.region),
-            joinedload(ErpExpenseTransaction.category),
-            joinedload(ErpExpenseTransaction.vendor),
-            joinedload(ErpExpenseTransaction.employee),
-            # selectinload, not joinedload -- this is a one-to-many, and joining it in would
-            # multiply each transaction row per line item instead of fetching them separately.
-            selectinload(ErpExpenseTransaction.line_items).joinedload(ErpExpenseLineItem.category),
-        )
+        .options(*_eager_opts)
         .filter(
             ErpExpenseTransaction.status.in_(ACTIONABLE_STATUSES),
             ErpExpenseTransaction.current_stage == stage,
@@ -226,6 +227,31 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
         if not user.is_admin and user.id not in {a.user_id for a in approvers}:
             continue
         results.append(transaction_to_dict(txn, db=db))
+
+    # Finance Manager also sees approved-but-unpaid claims so they can mark them paid.
+    # These have status='approved' and current_stage=None (cleared after FM approval).
+    # Permission check: user must be an active finance_manager (same role query used for stage approvers).
+    if stage == "finance_manager":
+        is_fm = user.is_admin or any(
+            u.user_id == user.id
+            for u in db.query(ErpAuthExpenseUsers)
+            .join(ErpAuthExpenseUsers.role)
+            .filter(ErpAuthExpenseUsers.role.has(role_code="finance_manager"), ErpAuthExpenseUsers.is_active == 1)
+            .all()
+        )
+        if is_fm:
+            approved_txns = (
+                db.query(ErpExpenseTransaction)
+                .options(*_eager_opts)
+                .filter(ErpExpenseTransaction.status == "approved")
+                .order_by(ErpExpenseTransaction.created_on.desc())
+                .all()
+            )
+            existing_ids = {r["id"] for r in results}
+            for txn in approved_txns:
+                if txn.transaction_id not in existing_ids:
+                    results.append(transaction_to_dict(txn, db=db))
+
     return results
 
 

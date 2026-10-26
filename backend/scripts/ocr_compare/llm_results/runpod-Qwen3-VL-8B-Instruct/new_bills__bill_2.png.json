@@ -1,0 +1,189 @@
+{
+  "raw": {
+    "amount": 1150.0,
+    "bill_number": "19065",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.98,
+      "currency": 0.99,
+      "date": 0.98,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.99
+    },
+    "currency": "AED",
+    "date": "2026-09-24",
+    "line_items": [
+      {
+        "amount": 100.0,
+        "description": "Bolt 20X100 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 50,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 100.0,
+        "description": "Bolt 24X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 20,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 100.0,
+        "description": "Bolt 27X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 20,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 1000.0,
+        "description": "Thread Bar 4mm X 1 Mtr GI",
+        "quantity": 1000,
+        "vat_percent": 5.0
+      },
+      {
+        "amount": 60.0,
+        "description": "Drywall Screw 8x2\" DRYWALL SCREW 8X2\" (FINE THREAD) 1 PKT PER 400 PCS 75 PKT X 400 PCS = 30000 PCS",
+        "quantity": 60,
+        "vat_percent": 5.0
+      }
+    ],
+    "line_items_include_vat": false,
+    "notes": "The bill is a DELIVERY NOTE, not a tax invoice. The total amount is 1150 AED, which includes 5% VAT on the subtotal of 1100 AED. The VAT amount is 50 AED.",
+    "total_amount": 1150.0,
+    "vat_amount": 50.0,
+    "vat_percent": 5.0,
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC"
+  },
+  "mapped": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": 1150.0,
+    "vat_amount": 50.0,
+    "total_amount": 1150.0,
+    "currency": "AED",
+    "date": "2026-09-24",
+    "confidence": 0.97,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.98,
+      "currency": 0.99,
+      "date": 0.98,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.99
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount"
+    ],
+    "reconciliation_mismatch": true,
+    "fields": {
+      "invoice_number": {
+        "value": "19065",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [
+      {
+        "description": "Bolt 20X100 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 50,
+        "amount": 105.0,
+        "confidence": 0.97,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 24X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 20,
+        "amount": 105.0,
+        "confidence": 0.97,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Bolt 27X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+        "quantity": 20,
+        "amount": 105.0,
+        "confidence": 0.97,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Thread Bar 4mm X 1 Mtr GI",
+        "quantity": 1000,
+        "amount": 1050.0,
+        "confidence": 0.97,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "Drywall Screw 8x2\" DRYWALL SCREW 8X2\" (FINE THREAD) 1 PKT PER 400 PCS 75 PKT X 400 PCS = 30000 PCS",
+        "quantity": 60,
+        "amount": 63.0,
+        "confidence": 0.97,
+        "vat_percent": 5.0
+      }
+    ],
+    "raw_text": "The bill is a DELIVERY NOTE, not a tax invoice. The total amount is 1150 AED, which includes 5% VAT on the subtotal of 1100 AED. The VAT amount is 50 AED.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 1150.0,
+        "bill_number": "19065",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.98,
+          "currency": 0.99,
+          "date": 0.98,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.99
+        },
+        "currency": "AED",
+        "date": "2026-09-24",
+        "line_items": [
+          {
+            "amount": 100.0,
+            "description": "Bolt 20X100 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+            "quantity": 50,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 100.0,
+            "description": "Bolt 24X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+            "quantity": 20,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 100.0,
+            "description": "Bolt 27X150 GI 10.9 FULL THREAD WITH NUT AND FLAT WASHER",
+            "quantity": 20,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 1000.0,
+            "description": "Thread Bar 4mm X 1 Mtr GI",
+            "quantity": 1000,
+            "vat_percent": 5.0
+          },
+          {
+            "amount": 60.0,
+            "description": "Drywall Screw 8x2\" DRYWALL SCREW 8X2\" (FINE THREAD) 1 PKT PER 400 PCS 75 PKT X 400 PCS = 30000 PCS",
+            "quantity": 60,
+            "vat_percent": 5.0
+          }
+        ],
+        "line_items_include_vat": false,
+        "notes": "The bill is a DELIVERY NOTE, not a tax invoice. The total amount is 1150 AED, which includes 5% VAT on the subtotal of 1100 AED. The VAT amount is 50 AED.",
+        "total_amount": 1150.0,
+        "vat_amount": 50.0,
+        "vat_percent": 5.0,
+        "vendor": "Jannat Al Naeem Building Materials Trading LLC"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 597,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1202,
+    "prompt_tokens_details": null,
+    "total_tokens": 1799
+  },
+  "seconds": 19.02,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

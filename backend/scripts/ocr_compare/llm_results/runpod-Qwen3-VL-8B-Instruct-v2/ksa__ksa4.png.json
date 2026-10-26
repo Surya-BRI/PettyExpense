@@ -1,0 +1,90 @@
+{
+  "raw": {
+    "amount": null,
+    "bill_number": "C / 58444",
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.95,
+      "currency": 0.8,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.85
+    },
+    "currency": "SAR",
+    "date": "2026-06-30",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "The document appears to be a delivery note or service invoice without itemized charges. The amount '55' is handwritten and likely represents a service charge or delivery fee. No VAT is indicated, and no total amount is explicitly stated in the totals block. The vendor is not printed on the document.",
+    "total_amount": 55,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": null
+  },
+  "mapped": {
+    "vendor": "",
+    "expense_type": null,
+    "amount": 55.0,
+    "vat_amount": 0.0,
+    "total_amount": 55.0,
+    "currency": "SAR",
+    "date": "2026-06-30",
+    "confidence": 0.89,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.95,
+      "currency": 0.8,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.85
+    },
+    "low_confidence_fields": [
+      "vendor",
+      "amount"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "C / 58444",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [],
+    "raw_text": "The document appears to be a delivery note or service invoice without itemized charges. The amount '55' is handwritten and likely represents a service charge or delivery fee. No VAT is indicated, and no total amount is explicitly stated in the totals block. The vendor is not printed on the document.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": null,
+        "bill_number": "C / 58444",
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.95,
+          "currency": 0.8,
+          "date": 0.9,
+          "total_amount": 0.9,
+          "vat_amount": 0.9,
+          "vendor": 0.85
+        },
+        "currency": "SAR",
+        "date": "2026-06-30",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "The document appears to be a delivery note or service invoice without itemized charges. The amount '55' is handwritten and likely represents a service charge or delivery fee. No VAT is indicated, and no total amount is explicitly stated in the totals block. The vendor is not printed on the document.",
+        "total_amount": 55,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": null
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 240,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1339,
+    "prompt_tokens_details": null,
+    "total_tokens": 1579
+  },
+  "seconds": 9.31,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

@@ -1,0 +1,87 @@
+{
+  "raw": {
+    "amount": 45,
+    "bill_number": "0386",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.95,
+      "currency": 0.95,
+      "date": 0.9,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "currency": "SAR",
+    "date": "2026-06-25",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "The bill has no itemized line items, only a total amount of 45 SAR. The date is written as 25/06/26, which is interpreted as 25 June 2026. The vendor is 'Qema Al-Khaleej Limited Co.' as printed in the header. The total amount is 45 SAR, which is the only amount shown, so VAT is assumed to be 0. The currency is inferred as SAR from the word 'ريال' (Riyal) in the table header and the context of the bill being from the GCC region.",
+    "total_amount": 45,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "Qema Al-Khaleej Limited Co."
+  },
+  "mapped": {
+    "vendor": "Qema Al-Khaleej Limited Co.",
+    "expense_type": null,
+    "amount": 45.0,
+    "vat_amount": 0.0,
+    "total_amount": 45.0,
+    "currency": "SAR",
+    "date": "2026-06-25",
+    "confidence": 0.94,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.95,
+      "currency": 0.95,
+      "date": 0.9,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "0386",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [],
+    "raw_text": "The bill has no itemized line items, only a total amount of 45 SAR. The date is written as 25/06/26, which is interpreted as 25 June 2026. The vendor is 'Qema Al-Khaleej Limited Co.' as printed in the header. The total amount is 45 SAR, which is the only amount shown, so VAT is assumed to be 0. The currency is inferred as SAR from the word 'ريال' (Riyal) in the table header and the context of the bill being from the GCC region.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 45,
+        "bill_number": "0386",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.95,
+          "currency": 0.95,
+          "date": 0.9,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.95
+        },
+        "currency": "SAR",
+        "date": "2026-06-25",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "The bill has no itemized line items, only a total amount of 45 SAR. The date is written as 25/06/26, which is interpreted as 25 June 2026. The vendor is 'Qema Al-Khaleej Limited Co.' as printed in the header. The total amount is 45 SAR, which is the only amount shown, so VAT is assumed to be 0. The currency is inferred as SAR from the word 'ريال' (Riyal) in the table header and the context of the bill being from the GCC region.",
+        "total_amount": 45,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "Qema Al-Khaleej Limited Co."
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 318,
+    "completion_tokens_details": null,
+    "prompt_tokens": 982,
+    "prompt_tokens_details": null,
+    "total_tokens": 1300
+  },
+  "seconds": 11.5,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

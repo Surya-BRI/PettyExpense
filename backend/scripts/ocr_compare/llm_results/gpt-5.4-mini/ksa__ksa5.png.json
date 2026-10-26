@@ -1,0 +1,75 @@
+{
+  "mapped": {
+    "vendor": "TAXI AL-AJME",
+    "expense_type": null,
+    "amount": 50.0,
+    "vat_amount": 0.0,
+    "total_amount": 50.0,
+    "currency": "SAR",
+    "date": "2026-07-03",
+    "confidence": 0.9,
+    "field_confidence": {
+      "vendor": 0.97,
+      "date": 0.55,
+      "amount": 0.99,
+      "vat_amount": 0.9,
+      "total_amount": 0.99,
+      "currency": 0.98,
+      "invoice_number": 0.95
+    },
+    "low_confidence_fields": [
+      "date"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "20367",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [],
+    "raw_text": "Date is partially unclear; read as 03/07/26 with a leading Arabic '15' printed nearby, but the most legible main date appears to be 03/07/26.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "TAXI AL-AJME",
+        "date": "2026-07-03",
+        "amount": 50,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "total_amount": 50,
+        "currency": "SAR",
+        "bill_number": "20367",
+        "line_items": [],
+        "line_items_include_vat": null,
+        "confidence": {
+          "vendor": 0.97,
+          "date": 0.55,
+          "amount": 0.99,
+          "vat_amount": 0.9,
+          "total_amount": 0.99,
+          "currency": 0.98,
+          "bill_number": 0.95
+        },
+        "notes": "Date is partially unclear; read as 03/07/26 with a leading Arabic '15' printed nearby, but the most legible main date appears to be 03/07/26."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1207,
+    "completion_tokens": 389,
+    "total_tokens": 1596,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 226,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.22,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

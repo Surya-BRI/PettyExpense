@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from auth.security import CurrentUser, get_current_user
 from database.models import ErpExpenseCategory, ErpExpenseVendor, get_db
 from services import approval_service
+from services.llm_vision_service import LlmVisionError
 from services.storage import storage_service
 from services.transaction_service import transaction_service
 
@@ -86,14 +87,17 @@ async def ocr_receipt(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Store + OCR in one call (scripts / fallback). The app uses upload then analyze."""
+    """Store + GPT read in one call (scripts / fallback). The app uses upload then analyze."""
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     content_type = file.content_type or "image/jpeg"
-    return transaction_service.run_ocr(
-        db, data, content_type, file.filename or "receipt.jpg", employee_id=user.id, region_code=user.region_code,
-    )
+    try:
+        return transaction_service.run_ocr(
+            db, data, content_type, file.filename or "receipt.jpg", employee_id=user.id, region_code=user.region_code,
+        )
+    except LlmVisionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/ocr/upload")
@@ -113,17 +117,20 @@ async def upload_receipt(
 @router.post("/receipts/{receipt_id}/ocr")
 def analyze_receipt(
     receipt_id: int,
-    mode: str = "auto",  # auto | en | ar — optional; existing clients that omit it keep today's bilingual behavior
+    mode: str = "auto",  # ignored; kept so older app builds still work
+    engine: str = "ai",  # ignored; every scan uses GPT
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Run OCR on an already-stored receipt."""
+    """Read an already-stored receipt with GPT."""
     try:
         return transaction_service.analyze_receipt(
             db, receipt_id, mode=mode, employee_id=user.id, region_code=user.region_code,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LlmVisionError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("")

@@ -1,0 +1,75 @@
+{
+  "mapped": {
+    "vendor": "Uber",
+    "expense_type": null,
+    "amount": 42.0,
+    "vat_amount": 0.0,
+    "total_amount": 42.0,
+    "currency": "SAR",
+    "date": "2026-10-12",
+    "confidence": 0.81,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.72,
+      "amount": 0.98,
+      "vat_amount": 0.7,
+      "total_amount": 0.98,
+      "currency": 0.99,
+      "invoice_number": 0.3
+    },
+    "low_confidence_fields": [
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 0.3
+      }
+    },
+    "line_items": [],
+    "raw_text": "Uber ride details screenshot. Fare shown as SAR42.00. No VAT or invoice number visible on the screen.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Uber",
+        "date": "2026-10-12",
+        "amount": 42,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "total_amount": 42,
+        "currency": "SAR",
+        "bill_number": null,
+        "line_items": [],
+        "line_items_include_vat": null,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.72,
+          "amount": 0.98,
+          "vat_amount": 0.7,
+          "total_amount": 0.98,
+          "currency": 0.99,
+          "bill_number": 0.3
+        },
+        "notes": "Uber ride details screenshot. Fare shown as SAR42.00. No VAT or invoice number visible on the screen."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1358,
+    "completion_tokens": 350,
+    "total_tokens": 1708,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 211,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.05,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

@@ -1,0 +1,94 @@
+{
+  "raw": {
+    "amount": 72.9,
+    "bill_number": null,
+    "confidence": {
+      "amount": 72.9,
+      "bill_number": 0,
+      "currency": 0,
+      "date": 0,
+      "total_amount": 0,
+      "vat_amount": 0,
+      "vendor": 0
+    },
+    "currency": "SAR",
+    "date": "2026-02-08",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "The image is a screenshot of an Uber ride receipt. The amount is shown as SAR72.90, which is the total excluding VAT. Since it's an Uber ride, VAT is typically included in the fare, but the receipt doesn't show a separate VAT line. The vendor is Uber. The bill date is Feb 8, which is 2026-02-08. The bill number is not shown. There are no line items as it's a service charge. The total amount is SAR72.90, which is the same as the amount, implying VAT is included. The currency is SAR (Saudi Riyal) as indicated by the 'SAR' prefix and the location (Riyadh).",
+    "total_amount": 72.9,
+    "vat_amount": 0,
+    "vat_percent": 0,
+    "vendor": "Uber"
+  },
+  "mapped": {
+    "vendor": "Uber",
+    "expense_type": null,
+    "amount": 72.9,
+    "vat_amount": 0.0,
+    "total_amount": 72.9,
+    "currency": "SAR",
+    "date": "2026-02-08",
+    "confidence": 10.41,
+    "field_confidence": {
+      "amount": 72.9,
+      "invoice_number": 0.0,
+      "currency": 0.0,
+      "date": 0.0,
+      "total_amount": 0.0,
+      "vat_amount": 0.0,
+      "vendor": 0.0
+    },
+    "low_confidence_fields": [
+      "vendor",
+      "date",
+      "vat_amount",
+      "total_amount",
+      "currency",
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 0.0
+      }
+    },
+    "line_items": [],
+    "raw_text": "The image is a screenshot of an Uber ride receipt. The amount is shown as SAR72.90, which is the total excluding VAT. Since it's an Uber ride, VAT is typically included in the fare, but the receipt doesn't show a separate VAT line. The vendor is Uber. The bill date is Feb 8, which is 2026-02-08. The bill number is not shown. There are no line items as it's a service charge. The total amount is SAR72.90, which is the same as the amount, implying VAT is included. The currency is SAR (Saudi Riyal) as indicated by the 'SAR' prefix and the location (Riyadh).",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 72.9,
+        "bill_number": null,
+        "confidence": {
+          "amount": 72.9,
+          "bill_number": 0,
+          "currency": 0,
+          "date": 0,
+          "total_amount": 0,
+          "vat_amount": 0,
+          "vendor": 0
+        },
+        "currency": "SAR",
+        "date": "2026-02-08",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "The image is a screenshot of an Uber ride receipt. The amount is shown as SAR72.90, which is the total excluding VAT. Since it's an Uber ride, VAT is typically included in the fare, but the receipt doesn't show a separate VAT line. The vendor is Uber. The bill date is Feb 8, which is 2026-02-08. The bill number is not shown. There are no line items as it's a service charge. The total amount is SAR72.90, which is the same as the amount, implying VAT is included. The currency is SAR (Saudi Riyal) as indicated by the 'SAR' prefix and the location (Riyadh).",
+        "total_amount": 72.9,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "vendor": "Uber"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 323,
+    "completion_tokens_details": null,
+    "prompt_tokens": 972,
+    "prompt_tokens_details": null,
+    "total_tokens": 1295
+  },
+  "seconds": 11.0,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

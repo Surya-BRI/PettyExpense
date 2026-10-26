@@ -1,0 +1,151 @@
+{
+  "raw": {
+    "amount": 769.23,
+    "bill_number": "CASH/SHT/1205",
+    "confidence": {
+      "amount": 0.99,
+      "bill_number": 0.99,
+      "currency": 0.99,
+      "date": 0.99,
+      "total_amount": 0.99,
+      "vat_amount": 0.99,
+      "vendor": 0.99
+    },
+    "currency": "AED",
+    "date": "2026-07-29",
+    "line_items": [
+      {
+        "amount": 480,
+        "description": "Welding Stud Aluminum 4mm x 16mm",
+        "quantity": 2000,
+        "vat_percent": 5
+      },
+      {
+        "amount": 87.6,
+        "description": "Welding Stud Stainless Steel 4mm x 10mm",
+        "quantity": 365,
+        "vat_percent": 5
+      },
+      {
+        "amount": 165,
+        "description": "S.S Allen Bolt 6mm x 40mm",
+        "quantity": 300,
+        "vat_percent": 5
+      }
+    ],
+    "line_items_include_vat": true,
+    "notes": "The handwritten amounts for items 1, 2, and 3 are 29353, 27909, and 27909 respectively, but these do not match the printed amounts in the table. The printed amounts (480.000, 87.600, 165.000) are used as they are the official values on the invoice.",
+    "total_amount": 769.23,
+    "vat_amount": 36.63,
+    "vat_percent": 5,
+    "vendor": "Standard Hardware Trading LLC"
+  },
+  "mapped": {
+    "vendor": "Standard Hardware Trading LLC",
+    "expense_type": null,
+    "amount": 769.23,
+    "vat_amount": 36.63,
+    "total_amount": 769.23,
+    "currency": "AED",
+    "date": "2026-07-29",
+    "confidence": 0.99,
+    "field_confidence": {
+      "amount": 0.99,
+      "invoice_number": 0.99,
+      "currency": 0.99,
+      "date": 0.99,
+      "total_amount": 0.99,
+      "vat_amount": 0.99,
+      "vendor": 0.99
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount"
+    ],
+    "reconciliation_mismatch": true,
+    "fields": {
+      "invoice_number": {
+        "value": "CASH/SHT/1205",
+        "confidence": 0.99
+      }
+    },
+    "line_items": [
+      {
+        "description": "Welding Stud Aluminum 4mm x 16mm",
+        "quantity": 2000,
+        "amount": 480.0,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Welding Stud Stainless Steel 4mm x 10mm",
+        "quantity": 365,
+        "amount": 87.6,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "S.S Allen Bolt 6mm x 40mm",
+        "quantity": 300,
+        "amount": 165.0,
+        "confidence": 0.99,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "The handwritten amounts for items 1, 2, and 3 are 29353, 27909, and 27909 respectively, but these do not match the printed amounts in the table. The printed amounts (480.000, 87.600, 165.000) are used as they are the official values on the invoice.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 769.23,
+        "bill_number": "CASH/SHT/1205",
+        "confidence": {
+          "amount": 0.99,
+          "bill_number": 0.99,
+          "currency": 0.99,
+          "date": 0.99,
+          "total_amount": 0.99,
+          "vat_amount": 0.99,
+          "vendor": 0.99
+        },
+        "currency": "AED",
+        "date": "2026-07-29",
+        "line_items": [
+          {
+            "amount": 480,
+            "description": "Welding Stud Aluminum 4mm x 16mm",
+            "quantity": 2000,
+            "vat_percent": 5
+          },
+          {
+            "amount": 87.6,
+            "description": "Welding Stud Stainless Steel 4mm x 10mm",
+            "quantity": 365,
+            "vat_percent": 5
+          },
+          {
+            "amount": 165,
+            "description": "S.S Allen Bolt 6mm x 40mm",
+            "quantity": 300,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": true,
+        "notes": "The handwritten amounts for items 1, 2, and 3 are 29353, 27909, and 27909 respectively, but these do not match the printed amounts in the table. The printed amounts (480.000, 87.600, 165.000) are used as they are the official values on the invoice.",
+        "total_amount": 769.23,
+        "vat_amount": 36.63,
+        "vat_percent": 5,
+        "vendor": "Standard Hardware Trading LLC"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 336,
+    "completion_tokens_details": null,
+    "prompt_tokens": 2779,
+    "prompt_tokens_details": null,
+    "total_tokens": 3115
+  },
+  "seconds": 12.03,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

@@ -1,0 +1,299 @@
+{
+  "raw": {
+    "amount": 224.99,
+    "bill_number": "50A79618",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.95,
+      "currency": 0.95,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "currency": "AED",
+    "date": "2026-07-06",
+    "line_items": [
+      {
+        "amount": 19.15,
+        "description": "ADV MED GAUZE SWAB NON STERILE 5X5CM 8PLY 10",
+        "quantity": 2.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 23.94,
+        "description": "MEDI COTTON WOOL 50G",
+        "quantity": 5.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 23.94,
+        "description": "ADVANCE MED TRIANGULAR BANDAGE19*19*127",
+        "quantity": 5.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 22.98,
+        "description": "MED ADVANCE WOUND ADHESIVE 100S",
+        "quantity": 3.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 28.72,
+        "description": "MED ADVANCE NORMAL SCISSOR",
+        "quantity": 2.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 7.66,
+        "description": "ADV MED ZINC OXIDE PLASTER 1.25CMX5M TRANS",
+        "quantity": 1.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 2.87,
+        "description": "MED ADVANCE ZINC OXIDE ADHESIVE PLASTER 2.5*5",
+        "quantity": 1.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 19.15,
+        "description": "ADV MED CONFINING BANDAGES 7.5x 4.5CM",
+        "quantity": 4.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 19.15,
+        "description": "ADV MED CONFORMING BANDAGE 10CMX4.5M",
+        "quantity": 5.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 23.94,
+        "description": "ADV MED CONFORMING BANDAGE 5CMX4.5M",
+        "quantity": 5.0,
+        "vat_percent": 0.0
+      },
+      {
+        "amount": 14.36,
+        "description": "ADV MED AM0FS-102BX CPR MASK",
+        "quantity": 5.0,
+        "vat_percent": 0.0
+      }
+    ],
+    "line_items_include_vat": true,
+    "notes": "The first item (COTTON TIP APPLICATOR WOODEN 6 INCH 100S) has no quantity or amount listed in the table, so it is omitted from line_items. The subtotal before VAT is 235.00, but after discount of 10.01, the net total before VAT is 224.99, which matches the final amount. VAT is 0.00% on all items, so total_amount = amount = 224.99.",
+    "total_amount": 224.99,
+    "vat_amount": 0.0,
+    "vat_percent": 0.0,
+    "vendor": "BAB AL HAYAT PHARMACY LLC"
+  },
+  "mapped": {
+    "vendor": "BAB AL HAYAT PHARMACY LLC",
+    "expense_type": null,
+    "amount": 224.99,
+    "vat_amount": 0.0,
+    "total_amount": 224.99,
+    "currency": "AED",
+    "date": "2026-07-06",
+    "confidence": 0.95,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.95,
+      "currency": 0.95,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "50A79618",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [
+      {
+        "description": "ADV MED GAUZE SWAB NON STERILE 5X5CM 8PLY 10",
+        "quantity": 2.0,
+        "amount": 19.15,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "MEDI COTTON WOOL 50G",
+        "quantity": 5.0,
+        "amount": 23.94,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "ADVANCE MED TRIANGULAR BANDAGE19*19*127",
+        "quantity": 5.0,
+        "amount": 23.94,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "MED ADVANCE WOUND ADHESIVE 100S",
+        "quantity": 3.0,
+        "amount": 22.98,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "MED ADVANCE NORMAL SCISSOR",
+        "quantity": 2.0,
+        "amount": 28.72,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "ADV MED ZINC OXIDE PLASTER 1.25CMX5M TRANS",
+        "quantity": 1.0,
+        "amount": 7.66,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "MED ADVANCE ZINC OXIDE ADHESIVE PLASTER 2.5*5",
+        "quantity": 1.0,
+        "amount": 2.87,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "ADV MED CONFINING BANDAGES 7.5x 4.5CM",
+        "quantity": 4.0,
+        "amount": 19.15,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "ADV MED CONFORMING BANDAGE 10CMX4.5M",
+        "quantity": 5.0,
+        "amount": 19.15,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "ADV MED CONFORMING BANDAGE 5CMX4.5M",
+        "quantity": 5.0,
+        "amount": 23.94,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      },
+      {
+        "description": "ADV MED AM0FS-102BX CPR MASK",
+        "quantity": 5.0,
+        "amount": 14.36,
+        "confidence": 0.95,
+        "vat_percent": 0.0
+      }
+    ],
+    "raw_text": "The first item (COTTON TIP APPLICATOR WOODEN 6 INCH 100S) has no quantity or amount listed in the table, so it is omitted from line_items. The subtotal before VAT is 235.00, but after discount of 10.01, the net total before VAT is 224.99, which matches the final amount. VAT is 0.00% on all items, so total_amount = amount = 224.99.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 224.99,
+        "bill_number": "50A79618",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.95,
+          "currency": 0.95,
+          "date": 0.95,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.95
+        },
+        "currency": "AED",
+        "date": "2026-07-06",
+        "line_items": [
+          {
+            "amount": 19.15,
+            "description": "ADV MED GAUZE SWAB NON STERILE 5X5CM 8PLY 10",
+            "quantity": 2.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 23.94,
+            "description": "MEDI COTTON WOOL 50G",
+            "quantity": 5.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 23.94,
+            "description": "ADVANCE MED TRIANGULAR BANDAGE19*19*127",
+            "quantity": 5.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 22.98,
+            "description": "MED ADVANCE WOUND ADHESIVE 100S",
+            "quantity": 3.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 28.72,
+            "description": "MED ADVANCE NORMAL SCISSOR",
+            "quantity": 2.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 7.66,
+            "description": "ADV MED ZINC OXIDE PLASTER 1.25CMX5M TRANS",
+            "quantity": 1.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 2.87,
+            "description": "MED ADVANCE ZINC OXIDE ADHESIVE PLASTER 2.5*5",
+            "quantity": 1.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 19.15,
+            "description": "ADV MED CONFINING BANDAGES 7.5x 4.5CM",
+            "quantity": 4.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 19.15,
+            "description": "ADV MED CONFORMING BANDAGE 10CMX4.5M",
+            "quantity": 5.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 23.94,
+            "description": "ADV MED CONFORMING BANDAGE 5CMX4.5M",
+            "quantity": 5.0,
+            "vat_percent": 0.0
+          },
+          {
+            "amount": 14.36,
+            "description": "ADV MED AM0FS-102BX CPR MASK",
+            "quantity": 5.0,
+            "vat_percent": 0.0
+          }
+        ],
+        "line_items_include_vat": true,
+        "notes": "The first item (COTTON TIP APPLICATOR WOODEN 6 INCH 100S) has no quantity or amount listed in the table, so it is omitted from line_items. The subtotal before VAT is 235.00, but after discount of 10.01, the net total before VAT is 224.99, which matches the final amount. VAT is 0.00% on all items, so total_amount = amount = 224.99.",
+        "total_amount": 224.99,
+        "vat_amount": 0.0,
+        "vat_percent": 0.0,
+        "vendor": "BAB AL HAYAT PHARMACY LLC"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 937,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1964,
+    "prompt_tokens_details": null,
+    "total_tokens": 2901
+  },
+  "seconds": 47.84,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

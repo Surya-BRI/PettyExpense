@@ -1,0 +1,109 @@
+{
+  "raw": {
+    "amount": 55,
+    "bill_number": "C/58444",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.95,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.9
+    },
+    "currency": "SAR",
+    "date": "2026-06-30",
+    "line_items": [
+      {
+        "amount": 55,
+        "description": "Kingdom Centre to Doha",
+        "quantity": 1,
+        "vat_percent": null
+      }
+    ],
+    "line_items_include_vat": true,
+    "notes": "The vendor name is not printed on the bill. The bill is addressed to 'Kingdom Centre to Doha' and the amount is 55 SAR. The date is 30/06/26, which is interpreted as 30 June 2026. The currency is inferred as SAR based on the context (Saudi Arabia) and the word 'ريال' (Riyal) in the text. The total amount is 55 SAR, and since there is no separate VAT line, the line items include VAT.",
+    "total_amount": 55,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "Kingdom Centre"
+  },
+  "mapped": {
+    "vendor": "Kingdom Centre",
+    "expense_type": null,
+    "amount": 55.0,
+    "vat_amount": 0.0,
+    "total_amount": 55.0,
+    "currency": "SAR",
+    "date": "2026-06-30",
+    "confidence": 0.93,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.95,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "C/58444",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [
+      {
+        "description": "Kingdom Centre to Doha",
+        "quantity": 1,
+        "amount": 55.0,
+        "confidence": 0.93,
+        "vat_percent": null
+      }
+    ],
+    "raw_text": "The vendor name is not printed on the bill. The bill is addressed to 'Kingdom Centre to Doha' and the amount is 55 SAR. The date is 30/06/26, which is interpreted as 30 June 2026. The currency is inferred as SAR based on the context (Saudi Arabia) and the word 'ريال' (Riyal) in the text. The total amount is 55 SAR, and since there is no separate VAT line, the line items include VAT.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 55,
+        "bill_number": "C/58444",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.95,
+          "currency": 0.9,
+          "date": 0.9,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.9
+        },
+        "currency": "SAR",
+        "date": "2026-06-30",
+        "line_items": [
+          {
+            "amount": 55,
+            "description": "Kingdom Centre to Doha",
+            "quantity": 1,
+            "vat_percent": null
+          }
+        ],
+        "line_items_include_vat": true,
+        "notes": "The vendor name is not printed on the bill. The bill is addressed to 'Kingdom Centre to Doha' and the amount is 55 SAR. The date is 30/06/26, which is interpreted as 30 June 2026. The currency is inferred as SAR based on the context (Saudi Arabia) and the word 'ريال' (Riyal) in the text. The total amount is 55 SAR, and since there is no separate VAT line, the line items include VAT.",
+        "total_amount": 55,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "Kingdom Centre"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 336,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1024,
+    "prompt_tokens_details": null,
+    "total_tokens": 1360
+  },
+  "seconds": 12.05,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

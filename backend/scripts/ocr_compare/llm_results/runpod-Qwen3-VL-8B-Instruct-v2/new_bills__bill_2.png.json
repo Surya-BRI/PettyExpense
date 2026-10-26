@@ -1,0 +1,92 @@
+{
+  "raw": {
+    "amount": null,
+    "bill_number": "19065",
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.99,
+      "currency": 0.99,
+      "date": 0.99,
+      "total_amount": 0.99,
+      "vat_amount": 0.99,
+      "vendor": 0.99
+    },
+    "currency": null,
+    "date": "2026-09-24",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": null,
+    "total_amount": null,
+    "vat_amount": null,
+    "vat_percent": 5,
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC"
+  },
+  "mapped": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": null,
+    "vat_amount": null,
+    "total_amount": null,
+    "currency": "AED",
+    "date": "2026-09-24",
+    "confidence": 0.98,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.99,
+      "currency": 0.99,
+      "date": 0.99,
+      "total_amount": 0.99,
+      "vat_amount": 0.99,
+      "vendor": 0.99
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount",
+      "currency"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "19065",
+        "confidence": 0.99
+      }
+    },
+    "line_items": [],
+    "raw_text": "",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": null,
+        "bill_number": "19065",
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.99,
+          "currency": 0.99,
+          "date": 0.99,
+          "total_amount": 0.99,
+          "vat_amount": 0.99,
+          "vendor": 0.99
+        },
+        "currency": null,
+        "date": "2026-09-24",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": null,
+        "total_amount": null,
+        "vat_amount": null,
+        "vat_percent": 5,
+        "vendor": "Jannat Al Naeem Building Materials Trading LLC"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 134,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1517,
+    "prompt_tokens_details": null,
+    "total_tokens": 1651
+  },
+  "seconds": 7.44,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

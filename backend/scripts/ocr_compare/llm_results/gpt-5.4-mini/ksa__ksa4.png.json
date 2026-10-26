@@ -1,0 +1,91 @@
+{
+  "mapped": {
+    "vendor": "",
+    "expense_type": null,
+    "amount": 55.0,
+    "vat_amount": 0.0,
+    "total_amount": 55.0,
+    "currency": "SAR",
+    "date": "2026-06-30",
+    "confidence": 0.67,
+    "field_confidence": {
+      "vendor": 0.08,
+      "date": 0.87,
+      "amount": 0.93,
+      "vat_amount": 0.7,
+      "total_amount": 0.92,
+      "currency": 0.2,
+      "invoice_number": 0.96
+    },
+    "low_confidence_fields": [
+      "vendor",
+      "currency"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "C/58444",
+        "confidence": 0.96
+      }
+    },
+    "line_items": [
+      {
+        "description": "Kingdom / Molyz / Centre to",
+        "quantity": null,
+        "amount": 55.0,
+        "confidence": 0.67,
+        "vat_percent": null
+      }
+    ],
+    "raw_text": "No vendor name is visible on the receipt. Date appears to be the Gregorian date written as 30/06/26. Handwritten amount reads 55/-.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": null,
+        "date": "2026-06-30",
+        "amount": 55,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "total_amount": 55,
+        "currency": null,
+        "bill_number": "C/58444",
+        "line_items": [
+          {
+            "description": "Kingdom / Molyz / Centre to",
+            "quantity": null,
+            "amount": 55,
+            "vat_percent": null
+          }
+        ],
+        "line_items_include_vat": true,
+        "confidence": {
+          "vendor": 0.08,
+          "date": 0.87,
+          "amount": 0.93,
+          "vat_amount": 0.7,
+          "total_amount": 0.92,
+          "currency": 0.2,
+          "bill_number": 0.96
+        },
+        "notes": "No vendor name is visible on the receipt. Date appears to be the Gregorian date written as 30/06/26. Handwritten amount reads 55/-."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1307,
+    "completion_tokens": 521,
+    "total_tokens": 1828,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 343,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.26,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

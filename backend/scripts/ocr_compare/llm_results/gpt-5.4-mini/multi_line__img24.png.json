@@ -1,0 +1,235 @@
+{
+  "raw": {
+    "vendor": "Rainbow Led & Display Advertising",
+    "date": "2026-09-18",
+    "amount": null,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "total_amount": null,
+    "currency": null,
+    "bill_number": "2514",
+    "line_items": [
+      {
+        "description": "P.2.5 Dahua Indoor Module 1.5.01.98.70425- IFS-LIA-2.5S-C-M6C02010",
+        "quantity": 76,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Receiving Card FS-LCE 7516",
+        "quantity": 9,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Power supply PRO-W200V5(40Pcs)",
+        "quantity": 13,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Magnet with Screw 14*17*1.2MM M4",
+        "quantity": 432,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Internet Cable 100 CM",
+        "quantity": 8,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Power Cable. 2 Core",
+        "quantity": 8,
+        "amount": null,
+        "vat_percent": null
+      },
+      {
+        "description": "Power Cable. 3 Core",
+        "quantity": 12,
+        "amount": null,
+        "vat_percent": null
+      }
+    ],
+    "line_items_include_vat": null,
+    "confidence": {
+      "vendor": 0.98,
+      "date": 0.98,
+      "amount": 0.0,
+      "vat_amount": 0.9,
+      "total_amount": 0.0,
+      "currency": 0.1,
+      "bill_number": 0.97
+    },
+    "notes": "Delivery note, not a tax invoice. No monetary totals or VAT amount are printed; quantities are listed only."
+  },
+  "mapped": {
+    "vendor": "Rainbow Led & Display Advertising",
+    "expense_type": null,
+    "amount": null,
+    "vat_amount": 0.0,
+    "total_amount": null,
+    "currency": "AED",
+    "date": "2026-09-18",
+    "confidence": 0.56,
+    "field_confidence": {
+      "vendor": 0.98,
+      "date": 0.98,
+      "amount": 0.0,
+      "vat_amount": 0.9,
+      "total_amount": 0.0,
+      "currency": 0.1,
+      "invoice_number": 0.97
+    },
+    "low_confidence_fields": [
+      "amount",
+      "total_amount",
+      "currency"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "2514",
+        "confidence": 0.97
+      }
+    },
+    "line_items": [
+      {
+        "description": "P.2.5 Dahua Indoor Module 1.5.01.98.70425- IFS-LIA-2.5S-C-M6C02010",
+        "quantity": 76,
+        "amount": null,
+        "confidence": 0.56,
+        "vat_percent": null
+      },
+      {
+        "description": "Receiving Card FS-LCE 7516",
+        "quantity": 9,
+        "amount": null,
+        "confidence": 0.56,
+        "vat_percent": null
+      },
+      {
+        "description": "Power supply PRO-W200V5(40Pcs)",
+        "quantity": 13,
+        "amount": null,
+        "confidence": 0.56,
+        "vat_percent": null
+      },
+      {
+        "description": "Magnet with Screw 14*17*1.2MM M4",
+        "quantity": 432,
+        "amount": null,
+        "confidence": 0.56,
+        "vat_percent": null
+      },
+      {
+        "description": "Internet Cable 100 CM",
+        "quantity": 8,
+        "amount": null,
+        "confidence": 0.56,
+        "vat_percent": null
+      },
+      {
+        "description": "Power Cable. 2 Core",
+        "quantity": 8,
+        "amount": null,
+        "confidence": 0.56,
+        "vat_percent": null
+      },
+      {
+        "description": "Power Cable. 3 Core",
+        "quantity": 12,
+        "amount": null,
+        "confidence": 0.56,
+        "vat_percent": null
+      }
+    ],
+    "raw_text": "Delivery note, not a tax invoice. No monetary totals or VAT amount are printed; quantities are listed only.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Rainbow Led & Display Advertising",
+        "date": "2026-09-18",
+        "amount": null,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "total_amount": null,
+        "currency": null,
+        "bill_number": "2514",
+        "line_items": [
+          {
+            "description": "P.2.5 Dahua Indoor Module 1.5.01.98.70425- IFS-LIA-2.5S-C-M6C02010",
+            "quantity": 76,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Receiving Card FS-LCE 7516",
+            "quantity": 9,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Power supply PRO-W200V5(40Pcs)",
+            "quantity": 13,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Magnet with Screw 14*17*1.2MM M4",
+            "quantity": 432,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Internet Cable 100 CM",
+            "quantity": 8,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Power Cable. 2 Core",
+            "quantity": 8,
+            "amount": null,
+            "vat_percent": null
+          },
+          {
+            "description": "Power Cable. 3 Core",
+            "quantity": 12,
+            "amount": null,
+            "vat_percent": null
+          }
+        ],
+        "line_items_include_vat": null,
+        "confidence": {
+          "vendor": 0.98,
+          "date": 0.98,
+          "amount": 0.0,
+          "vat_amount": 0.9,
+          "total_amount": 0.0,
+          "currency": 0.1,
+          "bill_number": 0.97
+        },
+        "notes": "Delivery note, not a tax invoice. No monetary totals or VAT amount are printed; quantities are listed only."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1676,
+    "completion_tokens": 338,
+    "total_tokens": 2014,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 11.02,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

@@ -1,0 +1,212 @@
+{
+  "raw": {
+    "vendor": "BAB AL HAYAT PHARMACY LLC",
+    "date": "2026-09-29",
+    "amount": 297.75,
+    "vat_amount": 2.85,
+    "vat_percent": null,
+    "total_amount": 300.6,
+    "currency": "AED",
+    "bill_number": "50A88862",
+    "line_items": [
+      {
+        "description": "MED DISPOSABLE SYRINGE 20ML 50S",
+        "quantity": 4,
+        "amount": 160.0,
+        "vat_percent": 0
+      },
+      {
+        "description": "RELIWASH SALINE EYE WASH 500ML",
+        "quantity": 2,
+        "amount": 59.85,
+        "vat_percent": 5
+      },
+      {
+        "description": "COTTON TIP APPLICATOR WOODEN 6 INCH 100S",
+        "quantity": 2,
+        "amount": 19.0,
+        "vat_percent": 0
+      },
+      {
+        "description": "PRIME CALAMIN LOTION 200 ML",
+        "quantity": 2,
+        "amount": 26.6,
+        "vat_percent": 0
+      },
+      {
+        "description": "SILVADAZIN 1% CREAM 50G",
+        "quantity": 2,
+        "amount": 18.05,
+        "vat_percent": 0
+      },
+      {
+        "description": "EUROMED COTTON ROLL 100GM",
+        "quantity": 2,
+        "amount": 17.1,
+        "vat_percent": 0
+      }
+    ],
+    "line_items_include_vat": false,
+    "confidence": {
+      "vendor": 0.99,
+      "date": 0.99,
+      "amount": 0.98,
+      "vat_amount": 0.98,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "bill_number": 0.98
+    },
+    "notes": "Bill date interpreted as 29/09/2026. Line-item net totals sum to 300.60 before discount/rounding; invoice summary shows Net Total Before VAT 297.75, VAT 2.85, Round Net Total 300.60, Co-Pay/Paid 300.60."
+  },
+  "mapped": {
+    "vendor": "BAB AL HAYAT PHARMACY LLC",
+    "expense_type": null,
+    "amount": 297.75,
+    "vat_amount": 2.85,
+    "total_amount": 300.6,
+    "currency": "AED",
+    "date": "2026-09-29",
+    "confidence": 0.99,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.99,
+      "amount": 0.98,
+      "vat_amount": 0.98,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "invoice_number": 0.98
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "50A88862",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [
+      {
+        "description": "MED DISPOSABLE SYRINGE 20ML 50S",
+        "quantity": 4,
+        "amount": 160.0,
+        "confidence": 0.99,
+        "vat_percent": 0
+      },
+      {
+        "description": "RELIWASH SALINE EYE WASH 500ML",
+        "quantity": 2,
+        "amount": 59.85,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "COTTON TIP APPLICATOR WOODEN 6 INCH 100S",
+        "quantity": 2,
+        "amount": 19.0,
+        "confidence": 0.99,
+        "vat_percent": 0
+      },
+      {
+        "description": "PRIME CALAMIN LOTION 200 ML",
+        "quantity": 2,
+        "amount": 26.6,
+        "confidence": 0.99,
+        "vat_percent": 0
+      },
+      {
+        "description": "SILVADAZIN 1% CREAM 50G",
+        "quantity": 2,
+        "amount": 18.05,
+        "confidence": 0.99,
+        "vat_percent": 0
+      },
+      {
+        "description": "EUROMED COTTON ROLL 100GM",
+        "quantity": 2,
+        "amount": 17.1,
+        "confidence": 0.99,
+        "vat_percent": 0
+      }
+    ],
+    "raw_text": "Bill date interpreted as 29/09/2026. Line-item net totals sum to 300.60 before discount/rounding; invoice summary shows Net Total Before VAT 297.75, VAT 2.85, Round Net Total 300.60, Co-Pay/Paid 300.60.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "BAB AL HAYAT PHARMACY LLC",
+        "date": "2026-09-29",
+        "amount": 297.75,
+        "vat_amount": 2.85,
+        "vat_percent": null,
+        "total_amount": 300.6,
+        "currency": "AED",
+        "bill_number": "50A88862",
+        "line_items": [
+          {
+            "description": "MED DISPOSABLE SYRINGE 20ML 50S",
+            "quantity": 4,
+            "amount": 160.0,
+            "vat_percent": 0
+          },
+          {
+            "description": "RELIWASH SALINE EYE WASH 500ML",
+            "quantity": 2,
+            "amount": 59.85,
+            "vat_percent": 5
+          },
+          {
+            "description": "COTTON TIP APPLICATOR WOODEN 6 INCH 100S",
+            "quantity": 2,
+            "amount": 19.0,
+            "vat_percent": 0
+          },
+          {
+            "description": "PRIME CALAMIN LOTION 200 ML",
+            "quantity": 2,
+            "amount": 26.6,
+            "vat_percent": 0
+          },
+          {
+            "description": "SILVADAZIN 1% CREAM 50G",
+            "quantity": 2,
+            "amount": 18.05,
+            "vat_percent": 0
+          },
+          {
+            "description": "EUROMED COTTON ROLL 100GM",
+            "quantity": 2,
+            "amount": 17.1,
+            "vat_percent": 0
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.99,
+          "amount": 0.98,
+          "vat_amount": 0.98,
+          "total_amount": 0.99,
+          "currency": 0.99,
+          "bill_number": 0.98
+        },
+        "notes": "Bill date interpreted as 29/09/2026. Line-item net totals sum to 300.60 before discount/rounding; invoice summary shows Net Total Before VAT 297.75, VAT 2.85, Round Net Total 300.60, Co-Pay/Paid 300.60."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1572,
+    "completion_tokens": 379,
+    "total_tokens": 1951,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 10.47,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

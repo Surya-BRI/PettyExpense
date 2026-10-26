@@ -1,0 +1,88 @@
+{
+  "vendor": "BAB AL HAYAT PHARMACY LLC",
+  "amount": 224.99,
+  "vat_amount": 0.0,
+  "total_amount": 224.99,
+  "currency": "AED",
+  "date": "06/07/2026",
+  "low_confidence_fields": [
+    "vendor",
+    "currency",
+    "amount",
+    "vat_rate",
+    "vat_amount",
+    "service_charge",
+    "change",
+    "total_amount",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [
+    {
+      "description": "ADV MED GAUZE SWAB NON STERILE 5X5CM 8PLY 10",
+      "quantity": 2.0,
+      "amount": null,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "COTTON TIP APPLICATOR WOODEN 6 INCH 100S Item Code Qty VAT Net Total",
+      "quantity": null,
+      "amount": 19.15,
+      "confidence": 0.99,
+      "vat_percent": null
+    },
+    {
+      "description": "MEDI COTTON WOOL 50G",
+      "quantity": 5.0,
+      "amount": null,
+      "confidence": 0.99,
+      "vat_percent": null
+    },
+    {
+      "description": "ADVANCE MED TRIANGULAR BANDAGE19*19*127",
+      "quantity": 5.0,
+      "amount": 23.94,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "MED ADVANCE WOUND ADHESIVE 100S",
+      "quantity": 3.0,
+      "amount": 22.98,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "MED ADVANCE NORMAL SCISSOR",
+      "quantity": 2.0,
+      "amount": 28.72,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "MED ADVANCE ZINC OXIDE ADHESIVE PLASTER 2.5*5",
+      "quantity": 1.0,
+      "amount": 7.66,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "ADV MED CONFORMING BANDAGE 10CMX4.5M",
+      "quantity": 4.0,
+      "amount": 19.15,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "ADV MED AM0FS-102BX CPR MASK",
+      "quantity": 1.0,
+      "amount": 19.15,
+      "confidence": 0.99,
+      "vat_percent": null
+    }
+  ],
+  "bill_number": "50A79618",
+  "seconds": 9.08
+}

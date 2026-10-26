@@ -1,0 +1,75 @@
+{
+  "vendor": "FIDAAL MADINA HYPERMARKET LLC",
+  "amount": 29.0,
+  "vat_amount": 0.0,
+  "total_amount": 29.0,
+  "currency": "AED",
+  "date": "03-Aug-2026",
+  "low_confidence_fields": [
+    "vendor",
+    "currency",
+    "amount",
+    "vat_rate",
+    "discount",
+    "service_charge",
+    "tip",
+    "card_amount",
+    "total_amount",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [
+    {
+      "description": "CKCREER",
+      "quantity": 2.17,
+      "amount": 9.13,
+      "confidence": 0.72,
+      "vat_percent": null
+    },
+    {
+      "description": "CAPROT CHINO",
+      "quantity": 4.49,
+      "amount": 4.49,
+      "confidence": 0.78,
+      "vat_percent": null
+    },
+    {
+      "description": "CIPBOT CHIHI 2.0",
+      "quantity": 2.0,
+      "amount": 11.99,
+      "confidence": 0.79,
+      "vat_percent": null
+    },
+    {
+      "description": "BARMN PHILIFINE 163",
+      "quantity": null,
+      "amount": 6.0,
+      "confidence": 0.9,
+      "vat_percent": null
+    },
+    {
+      "description": "BRADN PHILIPINE 163 0.",
+      "quantity": 6.99,
+      "amount": 7.59,
+      "confidence": 0.87,
+      "vat_percent": null
+    },
+    {
+      "description": "SHIPPDG BE",
+      "quantity": null,
+      "amount": 7.59,
+      "confidence": 0.78,
+      "vat_percent": null
+    },
+    {
+      "description": "SHaPP ING B%E",
+      "quantity": 1.08,
+      "amount": 0.25,
+      "confidence": 0.77,
+      "vat_percent": null
+    }
+  ],
+  "bill_number": "236191",
+  "seconds": 5.44
+}

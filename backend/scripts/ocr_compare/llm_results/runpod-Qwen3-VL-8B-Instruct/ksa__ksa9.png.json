@@ -1,0 +1,90 @@
+{
+  "raw": {
+    "amount": 42.0,
+    "bill_number": null,
+    "confidence": {
+      "amount": 42.0,
+      "bill_number": 42.0,
+      "currency": 42.0,
+      "date": 42.0,
+      "total_amount": 42.0,
+      "vat_amount": 0.0,
+      "vendor": 42.0
+    },
+    "currency": "SAR",
+    "date": "2026-10-12",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "This is an Uber ride receipt. No itemized line items are present. The amount is 42.0 SAR. VAT is not shown, so vat_amount is 0.0. The total_amount equals the amount since no VAT is added.",
+    "total_amount": 42.0,
+    "vat_amount": 0.0,
+    "vat_percent": null,
+    "vendor": "Uber"
+  },
+  "mapped": {
+    "vendor": "Uber",
+    "expense_type": null,
+    "amount": 42.0,
+    "vat_amount": 0.0,
+    "total_amount": 42.0,
+    "currency": "SAR",
+    "date": "2026-10-12",
+    "confidence": 36.0,
+    "field_confidence": {
+      "amount": 42.0,
+      "invoice_number": 42.0,
+      "currency": 42.0,
+      "date": 42.0,
+      "total_amount": 42.0,
+      "vat_amount": 0.0,
+      "vendor": 42.0
+    },
+    "low_confidence_fields": [
+      "vat_amount",
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 42.0
+      }
+    },
+    "line_items": [],
+    "raw_text": "This is an Uber ride receipt. No itemized line items are present. The amount is 42.0 SAR. VAT is not shown, so vat_amount is 0.0. The total_amount equals the amount since no VAT is added.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 42.0,
+        "bill_number": null,
+        "confidence": {
+          "amount": 42.0,
+          "bill_number": 42.0,
+          "currency": 42.0,
+          "date": 42.0,
+          "total_amount": 42.0,
+          "vat_amount": 0.0,
+          "vendor": 42.0
+        },
+        "currency": "SAR",
+        "date": "2026-10-12",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "This is an Uber ride receipt. No itemized line items are present. The amount is 42.0 SAR. VAT is not shown, so vat_amount is 0.0. The total_amount equals the amount since no VAT is added.",
+        "total_amount": 42.0,
+        "vat_amount": 0.0,
+        "vat_percent": null,
+        "vendor": "Uber"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 239,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1089,
+    "prompt_tokens_details": null,
+    "total_tokens": 1328
+  },
+  "seconds": 8.84,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

@@ -1,0 +1,174 @@
+{
+  "raw": {
+    "vendor": "Blue Rhine",
+    "date": "2026-10-06",
+    "amount": 2802.0,
+    "vat_amount": 140.0,
+    "vat_percent": 5.0,
+    "total_amount": 2942.0,
+    "currency": "AED",
+    "bill_number": "INV-DIP-112954",
+    "line_items": [
+      {
+        "description": "LED-WH-10K-0.7W-2*1-ECO-1-W LED MODULE 2*1 White 10000K 0.7W 12V",
+        "quantity": 2000,
+        "amount": 1449.0,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "LED-WWH-2835-1200-80W-24V-FX-TL-WARM WHITE 3000K FLEXIBLE-TUMETR-1200 LEDS-WHITE PCB,24V-NON-WATERPROOF 80W / ROLL",
+        "quantity": 3,
+        "amount": 170.1,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "PLF Photo luminescent Film Glow in the dark (printable)",
+        "quantity": 2,
+        "amount": 216.3,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "PCCL 5.0-32-LX Polycarbonate Sheet 3050 x 2050 x 5.0mm Clear XLCL",
+        "quantity": 1,
+        "amount": 924.0,
+        "vat_percent": 5.0
+      }
+    ],
+    "line_items_include_vat": true,
+    "confidence": {
+      "vendor": 0.99,
+      "date": 0.95,
+      "amount": 0.7,
+      "vat_amount": 0.95,
+      "total_amount": 0.99,
+      "currency": 0.98,
+      "bill_number": 0.98
+    },
+    "notes": "Line item totals are the printed total amounts including VAT; sum matches total. Invoice date read as 06/10/2026 from the invoice date field."
+  },
+  "mapped": {
+    "vendor": "Blue Rhine",
+    "expense_type": null,
+    "amount": 2802.0,
+    "vat_amount": 140.0,
+    "total_amount": 2942.0,
+    "currency": "AED",
+    "date": "2026-10-06",
+    "confidence": 0.93,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.95,
+      "amount": 0.7,
+      "vat_amount": 0.95,
+      "total_amount": 0.99,
+      "currency": 0.98,
+      "invoice_number": 0.98
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "INV-DIP-112954",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [
+      {
+        "description": "LED-WH-10K-0.7W-2*1-ECO-1-W LED MODULE 2*1 White 10000K 0.7W 12V",
+        "quantity": 2000,
+        "amount": 1449.0,
+        "confidence": 0.93,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "LED-WWH-2835-1200-80W-24V-FX-TL-WARM WHITE 3000K FLEXIBLE-TUMETR-1200 LEDS-WHITE PCB,24V-NON-WATERPROOF 80W / ROLL",
+        "quantity": 3,
+        "amount": 170.1,
+        "confidence": 0.93,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "PLF Photo luminescent Film Glow in the dark (printable)",
+        "quantity": 2,
+        "amount": 216.3,
+        "confidence": 0.93,
+        "vat_percent": 5.0
+      },
+      {
+        "description": "PCCL 5.0-32-LX Polycarbonate Sheet 3050 x 2050 x 5.0mm Clear XLCL",
+        "quantity": 1,
+        "amount": 924.0,
+        "confidence": 0.93,
+        "vat_percent": 5.0
+      }
+    ],
+    "raw_text": "Line item totals are the printed total amounts including VAT; sum matches total. Invoice date read as 06/10/2026 from the invoice date field.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Blue Rhine",
+        "date": "2026-10-06",
+        "amount": 2802.0,
+        "vat_amount": 140.0,
+        "vat_percent": 5.0,
+        "total_amount": 2942.0,
+        "currency": "AED",
+        "bill_number": "INV-DIP-112954",
+        "line_items": [
+          {
+            "description": "LED-WH-10K-0.7W-2*1-ECO-1-W LED MODULE 2*1 White 10000K 0.7W 12V",
+            "quantity": 2000,
+            "amount": 1449.0,
+            "vat_percent": 5.0
+          },
+          {
+            "description": "LED-WWH-2835-1200-80W-24V-FX-TL-WARM WHITE 3000K FLEXIBLE-TUMETR-1200 LEDS-WHITE PCB,24V-NON-WATERPROOF 80W / ROLL",
+            "quantity": 3,
+            "amount": 170.1,
+            "vat_percent": 5.0
+          },
+          {
+            "description": "PLF Photo luminescent Film Glow in the dark (printable)",
+            "quantity": 2,
+            "amount": 216.3,
+            "vat_percent": 5.0
+          },
+          {
+            "description": "PCCL 5.0-32-LX Polycarbonate Sheet 3050 x 2050 x 5.0mm Clear XLCL",
+            "quantity": 1,
+            "amount": 924.0,
+            "vat_percent": 5.0
+          }
+        ],
+        "line_items_include_vat": true,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.95,
+          "amount": 0.7,
+          "vat_amount": 0.95,
+          "total_amount": 0.99,
+          "currency": 0.98,
+          "bill_number": 0.98
+        },
+        "notes": "Line item totals are the printed total amounts including VAT; sum matches total. Invoice date read as 06/10/2026 from the invoice date field."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1708,
+    "completion_tokens": 380,
+    "total_tokens": 2088,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 13.75,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

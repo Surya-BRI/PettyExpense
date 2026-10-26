@@ -1,0 +1,25 @@
+{
+  "vendor": "Fabricast FZC | License No.: 03281",
+  "amount": 86.0,
+  "vat_amount": 4.3,
+  "total_amount": 90.3,
+  "currency": "AED",
+  "date": "9-Jul-2026",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "discount",
+    "service_charge",
+    "tip",
+    "card_amount",
+    "change",
+    "invoice_number",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": "T-INV/26/1854",
+  "seconds": 4.88
+}

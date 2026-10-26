@@ -191,6 +191,7 @@ def transaction_to_dict(
                 "id": h.approval_history_id,
                 "stage": h.stage,
                 "actor_id": h.actor_id,
+                "actor_name": h.actor.display_name if h.actor else None,
                 "action": h.action,
                 "remarks": h.comment,
                 "created_at": h.acted_on.isoformat() if h.acted_on else None,
@@ -402,7 +403,7 @@ class TransactionService:
             db.query(ErpExpenseTransaction)
             .options(
                 joinedload(ErpExpenseTransaction.documents),
-                joinedload(ErpExpenseTransaction.approval_history),
+                joinedload(ErpExpenseTransaction.approval_history).joinedload(ErpExpenseApprovalHistory.actor),
                 joinedload(ErpExpenseTransaction.region),
                 joinedload(ErpExpenseTransaction.category),
                 joinedload(ErpExpenseTransaction.vendor),
@@ -528,10 +529,11 @@ class TransactionService:
             db.query(ErpExpenseTransaction)
             .options(
                 joinedload(ErpExpenseTransaction.documents),
-                joinedload(ErpExpenseTransaction.approval_history),
+                joinedload(ErpExpenseTransaction.approval_history).joinedload(ErpExpenseApprovalHistory.actor),
                 joinedload(ErpExpenseTransaction.region),
                 joinedload(ErpExpenseTransaction.category),
                 joinedload(ErpExpenseTransaction.vendor),
+                selectinload(ErpExpenseTransaction.line_items),
             )
             .filter(ErpExpenseTransaction.transaction_id == transaction_id)
             .first()
@@ -620,6 +622,7 @@ class TransactionService:
                 "vendor_name": (txn.vendor.vendor_name if txn.vendor else txn.vendor_raw_text) if txn else None,
                 "currency": txn.currency if txn else None,
                 "total_amount": txn.total_amount if txn else None,
+                "region_code": txn.region.region_code if txn and txn.region else None,
                 "created_at": r.acted_on.isoformat() if r.acted_on else None,
             })
         return result

@@ -1,0 +1,27 @@
+{
+  "vendor": "Al Jubaytas",
+  "amount": 72.9,
+  "vat_amount": 0.0,
+  "total_amount": 72.9,
+  "currency": "SAR",
+  "date": "Feb 8",
+  "low_confidence_fields": [
+    "vendor",
+    "amount",
+    "vat_rate",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "total_amount",
+    "invoice_number",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": null,
+  "seconds": 2.2
+}

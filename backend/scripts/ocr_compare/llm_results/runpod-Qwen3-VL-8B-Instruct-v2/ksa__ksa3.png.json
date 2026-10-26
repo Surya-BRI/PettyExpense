@@ -1,0 +1,90 @@
+{
+  "raw": {
+    "amount": 40,
+    "bill_number": null,
+    "confidence": {
+      "amount": 40,
+      "bill_number": 40,
+      "currency": 40,
+      "date": 40,
+      "total_amount": 40,
+      "vat_amount": 40,
+      "vendor": 40
+    },
+    "currency": null,
+    "date": "2026-06-29",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "The document appears to be a receipt or invoice for a car service, but it lacks detailed line items, VAT information, and a clear total amount. The amount is handwritten as '40', and the date is '29-6-26', which is interpreted as 2026-06-29. The vendor is 'Shahad Tawik Company'. No bill number is printed. The currency is not specified. No line items are present. VAT amount is not shown, so it is assumed to be 0. The total amount is assumed to be the same as the amount (40), since no VAT is shown. The confidence is low due to the lack of detailed information and the handwritten nature of some fields.",
+    "total_amount": 40,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "Shahad Tawik Company"
+  },
+  "mapped": {
+    "vendor": "Shahad Tawik Company",
+    "expense_type": null,
+    "amount": 40.0,
+    "vat_amount": 0.0,
+    "total_amount": 40.0,
+    "currency": "SAR",
+    "date": "2026-06-29",
+    "confidence": 40.0,
+    "field_confidence": {
+      "amount": 40.0,
+      "invoice_number": 40.0,
+      "currency": 40.0,
+      "date": 40.0,
+      "total_amount": 40.0,
+      "vat_amount": 40.0,
+      "vendor": 40.0
+    },
+    "low_confidence_fields": [
+      "currency",
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 40.0
+      }
+    },
+    "line_items": [],
+    "raw_text": "The document appears to be a receipt or invoice for a car service, but it lacks detailed line items, VAT information, and a clear total amount. The amount is handwritten as '40', and the date is '29-6-26', which is interpreted as 2026-06-29. The vendor is 'Shahad Tawik Company'. No bill number is printed. The currency is not specified. No line items are present. VAT amount is not shown, so it is assumed to be 0. The total amount is assumed to be the same as the amount (40), since no VAT is shown. The confidence is low due to the lack of detailed information and the handwritten nature of some fields.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 40,
+        "bill_number": null,
+        "confidence": {
+          "amount": 40,
+          "bill_number": 40,
+          "currency": 40,
+          "date": 40,
+          "total_amount": 40,
+          "vat_amount": 40,
+          "vendor": 40
+        },
+        "currency": null,
+        "date": "2026-06-29",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "The document appears to be a receipt or invoice for a car service, but it lacks detailed line items, VAT information, and a clear total amount. The amount is handwritten as '40', and the date is '29-6-26', which is interpreted as 2026-06-29. The vendor is 'Shahad Tawik Company'. No bill number is printed. The currency is not specified. No line items are present. VAT amount is not shown, so it is assumed to be 0. The total amount is assumed to be the same as the amount (40), since no VAT is shown. The confidence is low due to the lack of detailed information and the handwritten nature of some fields.",
+        "total_amount": 40,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "Shahad Tawik Company"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 325,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1419,
+    "prompt_tokens_details": null,
+    "total_tokens": 1744
+  },
+  "seconds": 11.66,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

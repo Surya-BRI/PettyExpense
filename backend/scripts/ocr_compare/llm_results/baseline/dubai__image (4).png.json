@@ -1,0 +1,82 @@
+{
+  "vendor": "OAMAR AL MADINA SUPERMARKETL.L.C",
+  "amount": 45.21,
+  "vat_amount": 2.28,
+  "total_amount": 47.49,
+  "currency": "AED",
+  "date": "",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "discount",
+    "service_charge",
+    "tip",
+    "card_amount",
+    "change",
+    "invoice_number",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [
+    {
+      "description": "CURRY LEAF",
+      "quantity": 1.0,
+      "amount": 1.0,
+      "confidence": 0.99,
+      "vat_percent": null
+    },
+    {
+      "description": "MINT LEAF",
+      "quantity": 2.0,
+      "amount": 2.0,
+      "confidence": 0.87,
+      "vat_percent": null
+    },
+    {
+      "description": "ONTON (INDIA)",
+      "quantity": 1.0,
+      "amount": 3.49,
+      "confidence": 0.91,
+      "vat_percent": null
+    },
+    {
+      "description": "CHELLY SMALL",
+      "quantity": 2.01,
+      "amount": 2.01,
+      "confidence": 0.85,
+      "vat_percent": null
+    },
+    {
+      "description": "CORIANDER LEAI",
+      "quantity": 1.0,
+      "amount": 0.99,
+      "confidence": 0.8,
+      "vat_percent": null
+    },
+    {
+      "description": "COREANDER 1EA]",
+      "quantity": 0.99,
+      "amount": 0.99,
+      "confidence": 0.83,
+      "vat_percent": null
+    },
+    {
+      "description": "SAFA YOGHURI 10RG 1.0) 38.",
+      "quantity": 1.0,
+      "amount": null,
+      "confidence": 0.81,
+      "vat_percent": null
+    },
+    {
+      "description": "Qiy: b.16",
+      "quantity": 0.01,
+      "amount": 0.01,
+      "confidence": 0.85,
+      "vat_percent": null
+    }
+  ],
+  "bill_number": null,
+  "seconds": 3.17
+}

@@ -1,0 +1,87 @@
+{
+  "raw": {
+    "amount": 45,
+    "bill_number": "0386",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.95,
+      "currency": 0.95,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "currency": "AED",
+    "date": "2026-06-25",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "The bill has no itemized list, only a total amount of 45 AED. VAT is not shown, so it is assumed to be 0. The total amount (45) equals the amount (45), so no VAT was added. The vendor is Qema Al-Khaleej Limited Co. For General Rent. The bill number is 0386. The date is 25/06/46, which is interpreted as 2026-06-25 based on the context of the current date (2026-10-23).",
+    "total_amount": 45,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "Qema Al-Khaleej Limited Co. For General Rent"
+  },
+  "mapped": {
+    "vendor": "Qema Al-Khaleej Limited Co. For General Rent",
+    "expense_type": null,
+    "amount": 45.0,
+    "vat_amount": 0.0,
+    "total_amount": 45.0,
+    "currency": "AED",
+    "date": "2026-06-25",
+    "confidence": 0.95,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.95,
+      "currency": 0.95,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.95
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "0386",
+        "confidence": 0.95
+      }
+    },
+    "line_items": [],
+    "raw_text": "The bill has no itemized list, only a total amount of 45 AED. VAT is not shown, so it is assumed to be 0. The total amount (45) equals the amount (45), so no VAT was added. The vendor is Qema Al-Khaleej Limited Co. For General Rent. The bill number is 0386. The date is 25/06/46, which is interpreted as 2026-06-25 based on the context of the current date (2026-10-23).",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 45,
+        "bill_number": "0386",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.95,
+          "currency": 0.95,
+          "date": 0.95,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.95
+        },
+        "currency": "AED",
+        "date": "2026-06-25",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "The bill has no itemized list, only a total amount of 45 AED. VAT is not shown, so it is assumed to be 0. The total amount (45) equals the amount (45), so no VAT was added. The vendor is Qema Al-Khaleej Limited Co. For General Rent. The bill number is 0386. The date is 25/06/46, which is interpreted as 2026-06-25 based on the context of the current date (2026-10-23).",
+        "total_amount": 45,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "Qema Al-Khaleej Limited Co. For General Rent"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 325,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1297,
+    "prompt_tokens_details": null,
+    "total_tokens": 1622
+  },
+  "seconds": 11.59,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

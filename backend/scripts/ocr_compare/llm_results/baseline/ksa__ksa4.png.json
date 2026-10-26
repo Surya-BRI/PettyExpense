@@ -1,0 +1,25 @@
+{
+  "vendor": "المطلوب من المكرم",
+  "amount": 55.0,
+  "vat_amount": 0.0,
+  "total_amount": 55.0,
+  "currency": "SAR",
+  "date": "",
+  "low_confidence_fields": [
+    "date",
+    "currency",
+    "vat_rate",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": "C/58444",
+  "seconds": 2.08
+}

@@ -1,0 +1,218 @@
+{
+  "mapped": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": 7416.36,
+    "vat_amount": 370.83,
+    "total_amount": 7787.19,
+    "currency": "AED",
+    "date": "2026-07-21",
+    "confidence": 0.99,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.98,
+      "amount": 0.99,
+      "vat_amount": 0.99,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "invoice_number": 0.99
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "19578",
+        "confidence": 0.99
+      }
+    },
+    "line_items": [
+      {
+        "description": "Bolt 36X150",
+        "quantity": 34,
+        "amount": 697.0,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 30X120",
+        "quantity": 102,
+        "amount": 1198.5,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 24X100",
+        "quantity": 20,
+        "amount": 104.0,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 20X70",
+        "quantity": 252,
+        "amount": 756.0,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 20X60",
+        "quantity": 252,
+        "amount": 705.6,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 16X70",
+        "quantity": 362,
+        "amount": 579.2,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 16X60",
+        "quantity": 714,
+        "amount": 1035.3,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 16X50",
+        "quantity": 488,
+        "amount": 683.2,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 12X50",
+        "quantity": 1792,
+        "amount": 1308.16,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 10X50",
+        "quantity": 130,
+        "amount": 75.4,
+        "confidence": 0.99,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 6X25",
+        "quantity": 1370,
+        "amount": 274.0,
+        "confidence": 0.99,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "VAT rate shown as 5%. Invoice date read as 21-Jul-26, interpreted as 2026-07-21.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+        "date": "2026-07-21",
+        "amount": 7416.36,
+        "vat_amount": 370.83,
+        "vat_percent": 5,
+        "total_amount": 7787.19,
+        "currency": "AED",
+        "bill_number": "19578",
+        "line_items": [
+          {
+            "description": "Bolt 36X150",
+            "quantity": 34,
+            "amount": 697,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 30X120",
+            "quantity": 102,
+            "amount": 1198.5,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 24X100",
+            "quantity": 20,
+            "amount": 104,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 20X70",
+            "quantity": 252,
+            "amount": 756,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 20X60",
+            "quantity": 252,
+            "amount": 705.6,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 16X70",
+            "quantity": 362,
+            "amount": 579.2,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 16X60",
+            "quantity": 714,
+            "amount": 1035.3,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 16X50",
+            "quantity": 488,
+            "amount": 683.2,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 12X50",
+            "quantity": 1792,
+            "amount": 1308.16,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 10X50",
+            "quantity": 130,
+            "amount": 75.4,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 6X25",
+            "quantity": 1370,
+            "amount": 274,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.98,
+          "amount": 0.99,
+          "vat_amount": 0.99,
+          "total_amount": 0.99,
+          "currency": 0.99,
+          "bill_number": 0.99
+        },
+        "notes": "VAT rate shown as 5%. Invoice date read as 21-Jul-26, interpreted as 2026-07-21."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1408,
+    "completion_tokens": 870,
+    "total_tokens": 2278,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 458,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 6.62,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

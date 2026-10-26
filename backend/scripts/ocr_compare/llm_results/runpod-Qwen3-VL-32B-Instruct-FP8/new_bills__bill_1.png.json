@@ -1,0 +1,304 @@
+{
+  "raw": {
+    "amount": null,
+    "bill_number": "18812",
+    "confidence": {
+      "amount": 0,
+      "bill_number": 0.9,
+      "currency": 0,
+      "date": 0.9,
+      "total_amount": 0,
+      "vat_amount": 0,
+      "vendor": 0.9
+    },
+    "currency": null,
+    "date": "2026-07-21",
+    "line_items": [
+      {
+        "amount": null,
+        "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 34,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 30X120 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 102,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 24X100 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 20,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 20X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 252,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 20x60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 252,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 16X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 362,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 16X60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 714,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 488,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 12X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 1792,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 10X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 130,
+        "vat_percent": 5
+      },
+      {
+        "amount": null,
+        "description": "Bolt 6X25 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 1370,
+        "vat_percent": 5
+      }
+    ],
+    "line_items_include_vat": false,
+    "notes": "The document is a delivery note, not a tax invoice, and does not show any monetary values (amounts, VAT, or total). The only numeric value shown is the total quantity: 5,616 Pcs. The currency is not specified. VAT is stated as 5%, but no amounts are given to calculate the total or VAT amount. The date is clearly printed as 21-Jul-26. The vendor is Jannat Al Naeem Building Materials Trading LLC. The bill number is Delivery Note No. 18812.",
+    "total_amount": null,
+    "vat_amount": null,
+    "vat_percent": 5,
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC"
+  },
+  "mapped": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": null,
+    "vat_amount": null,
+    "total_amount": null,
+    "currency": "AED",
+    "date": "2026-07-21",
+    "confidence": 0.39,
+    "field_confidence": {
+      "amount": 0.0,
+      "invoice_number": 0.9,
+      "currency": 0.0,
+      "date": 0.9,
+      "total_amount": 0.0,
+      "vat_amount": 0.0,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount",
+      "total_amount",
+      "currency"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "18812",
+        "confidence": 0.9
+      }
+    },
+    "line_items": [
+      {
+        "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 34,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 30X120 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 102,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 24X100 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 20,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 20X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 252,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 20x60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 252,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 16X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 362,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 16X60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 714,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 488,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 12X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 1792,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 10X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 130,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 6X25 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+        "quantity": 1370,
+        "amount": null,
+        "confidence": 0.39,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "The document is a delivery note, not a tax invoice, and does not show any monetary values (amounts, VAT, or total). The only numeric value shown is the total quantity: 5,616 Pcs. The currency is not specified. VAT is stated as 5%, but no amounts are given to calculate the total or VAT amount. The date is clearly printed as 21-Jul-26. The vendor is Jannat Al Naeem Building Materials Trading LLC. The bill number is Delivery Note No. 18812.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": null,
+        "bill_number": "18812",
+        "confidence": {
+          "amount": 0,
+          "bill_number": 0.9,
+          "currency": 0,
+          "date": 0.9,
+          "total_amount": 0,
+          "vat_amount": 0,
+          "vendor": 0.9
+        },
+        "currency": null,
+        "date": "2026-07-21",
+        "line_items": [
+          {
+            "amount": null,
+            "description": "Bolt 36X150 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 34,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 30X120 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 102,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 24X100 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 20,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 20X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 252,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 20x60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 252,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 16X70 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 362,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 16X60 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 714,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 16X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 488,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 12X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 1792,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 10X50 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 130,
+            "vat_percent": 5
+          },
+          {
+            "amount": null,
+            "description": "Bolt 6X25 GI 8.8 HEX BOLT FULL THREAD WITH NUT AND 2 PCS FLAT WASHER GI 4.6 GRADE",
+            "quantity": 1370,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": false,
+        "notes": "The document is a delivery note, not a tax invoice, and does not show any monetary values (amounts, VAT, or total). The only numeric value shown is the total quantity: 5,616 Pcs. The currency is not specified. VAT is stated as 5%, but no amounts are given to calculate the total or VAT amount. The date is clearly printed as 21-Jul-26. The vendor is Jannat Al Naeem Building Materials Trading LLC. The bill number is Delivery Note No. 18812.",
+        "total_amount": null,
+        "vat_amount": null,
+        "vat_percent": 5,
+        "vendor": "Jannat Al Naeem Building Materials Trading LLC"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 1049,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1110,
+    "prompt_tokens_details": null,
+    "total_tokens": 2159
+  },
+  "seconds": 53.25,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

@@ -1,0 +1,76 @@
+{
+  "mapped": {
+    "vendor": "Shahad Tawik Company",
+    "expense_type": null,
+    "amount": 40.0,
+    "vat_amount": 0.0,
+    "total_amount": 40.0,
+    "currency": "SAR",
+    "date": "2026-06-29",
+    "confidence": 0.75,
+    "field_confidence": {
+      "vendor": 0.98,
+      "date": 0.87,
+      "amount": 0.98,
+      "vat_amount": 0.93,
+      "total_amount": 0.96,
+      "currency": 0.35,
+      "invoice_number": 0.2
+    },
+    "low_confidence_fields": [
+      "currency",
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 0.2
+      }
+    },
+    "line_items": [],
+    "raw_text": "Handwritten amount appears to be 40/ and date appears to be 29-6-26. No VAT or invoice number clearly printed. Destination text is unclear.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Shahad Tawik Company",
+        "date": "2026-06-29",
+        "amount": 40,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "total_amount": 40,
+        "currency": null,
+        "bill_number": null,
+        "line_items": [],
+        "line_items_include_vat": null,
+        "confidence": {
+          "vendor": 0.98,
+          "date": 0.87,
+          "amount": 0.98,
+          "vat_amount": 0.93,
+          "total_amount": 0.96,
+          "currency": 0.35,
+          "bill_number": 0.2
+        },
+        "notes": "Handwritten amount appears to be 40/ and date appears to be 29-6-26. No VAT or invoice number clearly printed. Destination text is unclear."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1409,
+    "completion_tokens": 600,
+    "total_tokens": 2009,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 445,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.62,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

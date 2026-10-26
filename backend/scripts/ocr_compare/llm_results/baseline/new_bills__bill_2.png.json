@@ -1,0 +1,65 @@
+{
+  "vendor": "Jannat AI Naeem Building Materials Trading LLC",
+  "amount": null,
+  "vat_amount": null,
+  "total_amount": null,
+  "currency": "AED",
+  "date": "24-Sep-26",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "amount",
+    "vat_amount",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "total_amount",
+    "invoice_number",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [
+    {
+      "description": "Bolt 20X100 50 Pcs",
+      "quantity": 50.0,
+      "amount": null,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 24X150 20 Pcs",
+      "quantity": 20.0,
+      "amount": null,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "Bolt 27X150 20 Pcs",
+      "quantity": 20.0,
+      "amount": null,
+      "confidence": 0.98,
+      "vat_percent": null
+    },
+    {
+      "description": "Thread Bar 4mm X 1 Mtr",
+      "quantity": 1000.0,
+      "amount": 1.0,
+      "confidence": 0.97,
+      "vat_percent": null
+    },
+    {
+      "description": "Drywall Screw 8x2\" 60 Pcs",
+      "quantity": 60.0,
+      "amount": null,
+      "confidence": 0.95,
+      "vat_percent": null
+    }
+  ],
+  "bill_number": "19065",
+  "seconds": 3.69
+}

@@ -262,6 +262,7 @@ class ClaimHistoryItem {
     required this.id,
     required this.actorId,
     required this.action,
+    this.actorName,
     this.stage,
     this.remarks,
     this.createdAt,
@@ -269,6 +270,7 @@ class ClaimHistoryItem {
 
   final int id;
   final int actorId;
+  final String? actorName;
   final String action; // approve | dispute | reject | submitted | edited | paid
   final String? stage; // hod | department_hod | accountant | finance_manager | employee
   final String? remarks;
@@ -278,6 +280,7 @@ class ClaimHistoryItem {
     return ClaimHistoryItem(
       id: (json['id'] as num).toInt(),
       actorId: (json['actor_id'] as num).toInt(),
+      actorName: json['actor_name'] as String?,
       action: json['action'] as String,
       stage: json['stage'] as String?,
       remarks: json['remarks'] as String?,

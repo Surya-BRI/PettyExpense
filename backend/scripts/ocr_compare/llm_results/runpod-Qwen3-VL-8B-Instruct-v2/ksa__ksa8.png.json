@@ -1,0 +1,90 @@
+{
+  "raw": {
+    "amount": null,
+    "bill_number": null,
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.9,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "currency": "SAR",
+    "date": "2026-02-08",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": null,
+    "total_amount": 72.9,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "Uber"
+  },
+  "mapped": {
+    "vendor": "Uber",
+    "expense_type": null,
+    "amount": 72.9,
+    "vat_amount": 0.0,
+    "total_amount": 72.9,
+    "currency": "SAR",
+    "date": "2026-02-08",
+    "confidence": 0.9,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.9,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [
+      "amount",
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 0.9
+      }
+    },
+    "line_items": [],
+    "raw_text": "",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": null,
+        "bill_number": null,
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.9,
+          "currency": 0.9,
+          "date": 0.9,
+          "total_amount": 0.9,
+          "vat_amount": 0.9,
+          "vendor": 0.9
+        },
+        "currency": "SAR",
+        "date": "2026-02-08",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": null,
+        "total_amount": 72.9,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "Uber"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 117,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1287,
+    "prompt_tokens_details": null,
+    "total_tokens": 1404
+  },
+  "seconds": 7.5,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

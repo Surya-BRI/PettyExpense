@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
@@ -14,6 +15,22 @@ import '../../widgets/claim_stage_tracker.dart';
 import '../../widgets/claim_ui_helpers.dart';
 import '../../widgets/shimmer_box.dart';
 import '../shared/status_chip.dart';
+
+String _fmtDate(String? raw) {
+  if (raw == null || raw.isEmpty) return 'None';
+  DateTime? dt = DateTime.tryParse(raw);
+  if (dt == null) {
+    final p = raw.split('/');
+    if (p.length == 3) dt = DateTime.tryParse('${p[2]}-${p[1]}-${p[0]}');
+  }
+  return dt != null ? DateFormat('MMM d, yyyy').format(dt) : raw;
+}
+
+String _fmtDateTime(String? raw) {
+  if (raw == null) return 'None';
+  final dt = DateTime.tryParse(raw)?.toLocal();
+  return dt != null ? DateFormat('MMM d, yyyy · h:mm a').format(dt) : raw;
+}
 
 final claimDetailProvider = FutureProvider.autoDispose
     .family<ExpenseClaim, int>((ref, id) {
@@ -95,7 +112,7 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
               ],
               if (claim.isMultiItem) ...[
                 const SizedBox(height: 16),
-                AppCard(child: ClaimLineItemsList(claim: claim)),
+                ClaimLineItemsList(claim: claim),
               ],
               if (imagePath != null && imagePath.isNotEmpty) ...[
                 const SizedBox(height: 16),
@@ -130,30 +147,17 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                 ),
               ],
               const SizedBox(height: 16),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    KeyValueRow(
-                      'Type',
-                      claim.type == 'petty_cash'
-                          ? 'Petty cash'
-                          : 'Reimbursement',
-                    ),
-                    KeyValueRow('Category', claim.category),
-                    KeyValueRow('Bill date', claim.billDate ?? 'None'),
-                    KeyValueRow(
-                      'Project',
-                      claim.projectId?.toString() ?? 'None',
-                    ),
-                    KeyValueRow('OP', claim.opNumber ?? 'None'),
-                    KeyValueRow(
-                      'Remarks',
-                      claim.remarks ?? 'None',
-                      isLast: true,
-                    ),
-                  ],
-                ),
+              ClaimDetailsCard(
+                title: 'Details',
+                rows: [
+                  ClaimDetailRow(label: 'Type', value: claim.type == 'petty_cash' ? 'Petty cash' : 'Reimbursement'),
+                  ClaimDetailRow(label: 'Category', value: claim.category),
+                  if (claim.regionCode != null) ClaimDetailRow(label: 'Region', value: claim.regionCode!),
+                  ClaimDetailRow(label: 'Bill date', value: _fmtDate(claim.billDate)),
+                  if (claim.submittedAt != null) ClaimDetailRow(label: 'Submitted', value: _fmtDateTime(claim.submittedAt)),
+                  if (claim.opNumber != null) ClaimDetailRow(label: 'OP', value: claim.opNumber!),
+                  if (claim.remarks != null) ClaimDetailRow(label: 'Remarks', value: claim.remarks!),
+                ],
               ),
               if (claim.status == 'draft') ...[
                 const SizedBox(height: 16),
@@ -208,79 +212,7 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
               const SizedBox(height: 20),
               Text('History', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              AppCard(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: (claim.history ?? []).isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 8,
-                        ),
-                        child: Text(
-                          'None',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      )
-                    : Column(
-                        // Most recent activity first -- the backend returns oldest-first for
-                        // approval-chain logic, but a timeline reads better newest-on-top.
-                        children: [
-                          for (final (i, h) in claim.history!.reversed.indexed) ...[
-                            if (i > 0)
-                              const Divider(height: 1, indent: 8, endIndent: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 10,
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '${h.stage ?? 'None'} · ${h.action}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium,
-                                        ),
-                                        if (h.remarks != null &&
-                                            h.remarks!.isNotEmpty)
-                                          Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 2),
-                                            child: Text(
-                                              h.remarks!,
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color:
-                                                        AppColors.textSecondary,
-                                                  ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    formatDubaiTime(h.createdAt),
-                                    style: const TextStyle(
-                                      color: AppColors.textSecondary,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-              ),
+              ClaimHistoryList(history: claim.history ?? []),
             ],
           );
         },
@@ -396,76 +328,118 @@ class ClaimLineItemsList extends StatelessWidget {
   Widget build(BuildContext context) {
     final lines = claim.lineItems;
     final total = lines.fold(0.0, (sum, l) => sum + l.amount);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Text('Items', style: Theme.of(context).textTheme.titleSmall),
-            const Spacer(),
-            Text(
-              '${lines.length} item${lines.length == 1 ? '' : 's'}',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(12),
+        color: AppColors.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppColors.divider)),
             ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        for (final l in lines)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l.description,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        [
-                          if (l.quantity != null) 'Qty ${_qty(l.quantity!)}',
-                          if (l.categoryName != null) l.categoryName!,
-                          if (l.vatPercent != null) 'VAT ${l.vatPercent!.toStringAsFixed(l.vatPercent! == l.vatPercent!.roundToDouble() ? 0 : 2)}%',
-                        ].join(' · '),
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
+                Text('Items', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppColors.textSecondary)),
+                const Spacer(),
                 Text(
-                  formatMoney(claim.currency, l.amount),
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                  '${lines.length} item${lines.length == 1 ? '' : 's'}',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
               ],
             ),
           ),
-        const Divider(height: 18),
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Total',
-                style: TextStyle(fontWeight: FontWeight.w700),
+          // Line rows
+          for (final (i, l) in lines.indexed)
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: AppColors.divider),
+                ),
+              ),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Line number
+                    Container(
+                      width: 36,
+                      alignment: Alignment.center,
+                      decoration: const BoxDecoration(
+                        color: AppColors.background,
+                        border: Border(right: BorderSide(color: AppColors.divider)),
+                      ),
+                      child: Text(
+                        '${i + 1}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    // Description + meta
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(l.description, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                            if ([
+                              if (l.quantity != null) 'Qty ${_qty(l.quantity!)}',
+                              if (l.categoryName != null) l.categoryName!,
+                              if (l.vatPercent != null) 'VAT ${l.vatPercent!.toStringAsFixed(l.vatPercent! == l.vatPercent!.roundToDouble() ? 0 : 2)}%',
+                            ].isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Text(
+                                  [
+                                    if (l.quantity != null) 'Qty ${_qty(l.quantity!)}',
+                                    if (l.categoryName != null) l.categoryName!,
+                                    if (l.vatPercent != null) 'VAT ${l.vatPercent!.toStringAsFixed(l.vatPercent! == l.vatPercent!.roundToDouble() ? 0 : 2)}%',
+                                  ].join(' · '),
+                                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Amount
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: const BoxDecoration(
+                        border: Border(left: BorderSide(color: AppColors.divider)),
+                      ),
+                      child: Text(
+                        formatMoney(claim.currency, l.amount),
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            Text(
-              formatMoney(claim.currency, total),
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          // Total row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                ),
+                Text(
+                  formatMoney(claim.currency, total),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+              ],
             ),
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 }

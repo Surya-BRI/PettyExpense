@@ -368,10 +368,10 @@ against it (not guessing from final output alone).
 `match_label_concepts`). Several of those concepts' synonyms are bare, short words: `vat`
 (`vat_tax_amount`), `card` (`card`). Any item whose own text happens to contain one of those words
 ends the table right there:
-- `img 27.png` (13-item pharmacy bill): item 2 is `"ADV MED GUIDANCE CARD..."` → matches `CARD` →
+- `mage.png` (13-item pharmacy bill): item 2 is `"ADV MED GUIDANCE CARD..."` → matches `CARD` →
   table ends after item 1. Only 1/13 extracted.
 - `img23.png`: item 2 is `"Receiving Card FS-LCE"` → same `CARD` match → ends after item 1.
-- `img 25.png`: every row's own Tax Code column literally prints `"VAT_AE:S"` → bare `vat`
+- `amer.png`: every row's own Tax Code column literally prints `"VAT_AE:S"` → bare `vat`
   substring match on every item row → table truncates after item 2 of 4.
 
 **Fix:** `_is_end()` now only lets an `_END_CONCEPTS` match end the table when no real word
@@ -399,7 +399,7 @@ quantity-only rows are recognized as items at all. A row whose only "description
 the bare unit word itself (`"Pcs"`) now has its description cleared so it can rejoin with the real
 product name sitting on an adjacent OCR line instead of keeping the unit word as the final name.
 
-### Verified result (CPU path, ground-truth ratio): `img23.png` 1/7 → 7/7 items, `img 27.png`
+### Verified result (CPU path, ground-truth ratio): `img23.png` 1/7 → 7/7 items, `mage.png`
 (13-item pharmacy) 1/13 → 12/13 items. Field-level accuracy on items that do extract: amounts
 right ~70-80% of the time, quantities ~40-55% (still the weaker field — see §7).
 
@@ -426,7 +426,7 @@ failures throughout all of this session's changes).
 
 ## 7. Column/x-band number selection for dense multi-column invoices (implemented, bounded win)
 
-Real word-level geometry on `img 25.png`'s 9-column table (dumped and inspected directly) turned
+Real word-level geometry on `amer.png`'s 9-column table (dumped and inspected directly) turned
 out very clean: each column's x-position clusters within ~15px across all 4 rows. That makes
 column-band detection viable without a full table-layout rewrite -- implemented a bounded version
 scoped to just the two fields the API actually needs (`quantity`, `amount`), not a general column
@@ -446,12 +446,12 @@ parser:
   suite, unchanged at 155 passed / 5 skipped / same 8 pre-existing failures.
 
 **Result: net positive, not a clean sweep.** Four confirmed fixes against real bills: `img23.png`
-item 1 amount `3.75` -> `3750.60` (was reading the VAT% column); `img 25.png` item 1 amount
+item 1 amount `3.75` -> `3750.60` (was reading the VAT% column); `amer.png` item 1 amount
 `1.449` -> `1449.00` (a factor-of-1000 decimal bug); `img26.png` quantity on all 4 items
-`None` -> correct (previously the real value only appeared, mislabeled, in `amount`); `img 27.png`
+`None` -> correct (previously the real value only appeared, mislabeled, in `amount`); `mage.png`
 item 3 quantity `None` -> `5.0` (now fully correct, was amount-only before). Two new wrong-pairings
 appeared alongside these (`img23.png` item 5's amount pulled in a neighboring row's value;
-`img 27.png`'s item 6/7 merged row kept a wrong description against a now-different, also-wrong
+`mage.png`'s item 6/7 merged row kept a wrong description against a now-different, also-wrong
 number) -- both are the *same already-broken row* as before, just wrong in a different way, not a
 new failure mode; no item count regressed anywhere. Kept rather than tightening the x-tolerance to
 suppress them, since that would trade back genuine wins to patch cases that stay wrong either way.
@@ -518,7 +518,7 @@ real triple; and a global y-position tie-break picked `vat=10.0` over `0.48` on 
 restricting the tie-break to verified triples. Checking only the 4 target bills would have shipped
 both.
 
-**Still open:** `multi_line/img 25.png`, `img 27.png`, `img27.png` (dense multi-item invoices) still
+**Still open:** `multi_line/amer.png`, `mage.png`, `img27.png` (dense multi-item invoices) still
 produce incoherent totals before and after; their summary rows don't follow the single-rate
 5% pattern this detector targets.
 
@@ -618,7 +618,7 @@ the pharmacy/hardware bills this session's OCR fixes specifically targeted.
 
 **Status:** implemented, not yet tested against the app running end-to-end on an emulator or
 committed. Natural next step once verified: confirm add/remove navigation against a real 12+ item
-bill (e.g. `img 27.png`'s pharmacy case) and commit.
+bill (e.g. `mage.png`'s pharmacy case) and commit.
 
 ## 12. Real Arabic bills (`assets/ksa/*.png`): crash fix, vendor/money bugs, OCR-engine dead end
 

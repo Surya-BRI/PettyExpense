@@ -1,0 +1,87 @@
+{
+  "raw": {
+    "amount": 50,
+    "bill_number": "20367",
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.9,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "currency": "SAR",
+    "date": "2026-07-03",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "The receipt is for a taxi ride in Riyadh, Saudi Arabia. The handwritten amount '50/' is interpreted as 50 SAR. The date is in Hijri format '١٤٤٧/٠٧/٢٦' which converts to Gregorian 2026-07-03. The vendor is 'TAXI AL-AJME'. No line items are listed, only a total. VAT is not mentioned, so assumed 0.",
+    "total_amount": 50,
+    "vat_amount": 0,
+    "vat_percent": 0,
+    "vendor": "TAXI AL-AJME"
+  },
+  "mapped": {
+    "vendor": "TAXI AL-AJME",
+    "expense_type": null,
+    "amount": 50.0,
+    "vat_amount": 0.0,
+    "total_amount": 50.0,
+    "currency": "SAR",
+    "date": "2026-07-03",
+    "confidence": 0.9,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.9,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "20367",
+        "confidence": 0.9
+      }
+    },
+    "line_items": [],
+    "raw_text": "The receipt is for a taxi ride in Riyadh, Saudi Arabia. The handwritten amount '50/' is interpreted as 50 SAR. The date is in Hijri format '١٤٤٧/٠٧/٢٦' which converts to Gregorian 2026-07-03. The vendor is 'TAXI AL-AJME'. No line items are listed, only a total. VAT is not mentioned, so assumed 0.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 50,
+        "bill_number": "20367",
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.9,
+          "currency": 0.9,
+          "date": 0.9,
+          "total_amount": 0.9,
+          "vat_amount": 0.9,
+          "vendor": 0.9
+        },
+        "currency": "SAR",
+        "date": "2026-07-03",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "The receipt is for a taxi ride in Riyadh, Saudi Arabia. The handwritten amount '50/' is interpreted as 50 SAR. The date is in Hijri format '١٤٤٧/٠٧/٢٦' which converts to Gregorian 2026-07-03. The vendor is 'TAXI AL-AJME'. No line items are listed, only a total. VAT is not mentioned, so assumed 0.",
+        "total_amount": 50,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "vendor": "TAXI AL-AJME"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 276,
+    "completion_tokens_details": null,
+    "prompt_tokens": 984,
+    "prompt_tokens_details": null,
+    "total_tokens": 1260
+  },
+  "seconds": 15.83,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

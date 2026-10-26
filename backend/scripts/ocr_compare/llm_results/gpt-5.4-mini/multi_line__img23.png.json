@@ -1,0 +1,166 @@
+{
+  "mapped": {
+    "vendor": "Rainbow Led & Display Advertising",
+    "expense_type": null,
+    "amount": 4704.2,
+    "vat_amount": 235.21,
+    "total_amount": 4939.41,
+    "currency": "AED",
+    "date": "2026-09-18",
+    "confidence": 0.97,
+    "field_confidence": {
+      "vendor": 0.98,
+      "date": 0.97,
+      "amount": 0.99,
+      "vat_amount": 0.99,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "invoice_number": 0.9
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "RB 26/01008",
+        "confidence": 0.9
+      }
+    },
+    "line_items": [
+      {
+        "description": "P2.5 Dahua Indoor Module 1.5.01.98. 70425- IFS-LIA-2.5S-C-MC602010",
+        "quantity": 76,
+        "amount": 3572.0,
+        "confidence": 0.97,
+        "vat_percent": 5
+      },
+      {
+        "description": "Receiving Card FS-LCE 7516",
+        "quantity": 9,
+        "amount": 486.0,
+        "confidence": 0.97,
+        "vat_percent": 5
+      },
+      {
+        "description": "Power supply PRO-W200V5(40Pcs)",
+        "quantity": 13,
+        "amount": 299.0,
+        "confidence": 0.97,
+        "vat_percent": 5
+      },
+      {
+        "description": "Magnet with Screw 14*17*1.2MM M4",
+        "quantity": 432,
+        "amount": 151.2,
+        "confidence": 0.97,
+        "vat_percent": 5
+      },
+      {
+        "description": "Internet Cable 100 CM",
+        "quantity": 8,
+        "amount": 56.0,
+        "confidence": 0.97,
+        "vat_percent": 5
+      },
+      {
+        "description": "Power Cable. 2 Core",
+        "quantity": 8,
+        "amount": 56.0,
+        "confidence": 0.97,
+        "vat_percent": 5
+      },
+      {
+        "description": "Power Cable. 3 Core",
+        "quantity": 12,
+        "amount": 84.0,
+        "confidence": 0.97,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "Invoice shows total amount before VAT as AED 4,704.20 and total amount with VAT as AED 4,939.41.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Rainbow Led & Display Advertising",
+        "date": "2026-09-18",
+        "amount": 4704.2,
+        "vat_amount": 235.21,
+        "vat_percent": 5,
+        "total_amount": 4939.41,
+        "currency": "AED",
+        "bill_number": "RB 26/01008",
+        "line_items": [
+          {
+            "description": "P2.5 Dahua Indoor Module 1.5.01.98. 70425- IFS-LIA-2.5S-C-MC602010",
+            "quantity": 76,
+            "amount": 3572,
+            "vat_percent": 5
+          },
+          {
+            "description": "Receiving Card FS-LCE 7516",
+            "quantity": 9,
+            "amount": 486,
+            "vat_percent": 5
+          },
+          {
+            "description": "Power supply PRO-W200V5(40Pcs)",
+            "quantity": 13,
+            "amount": 299,
+            "vat_percent": 5
+          },
+          {
+            "description": "Magnet with Screw 14*17*1.2MM M4",
+            "quantity": 432,
+            "amount": 151.2,
+            "vat_percent": 5
+          },
+          {
+            "description": "Internet Cable 100 CM",
+            "quantity": 8,
+            "amount": 56,
+            "vat_percent": 5
+          },
+          {
+            "description": "Power Cable. 2 Core",
+            "quantity": 8,
+            "amount": 56,
+            "vat_percent": 5
+          },
+          {
+            "description": "Power Cable. 3 Core",
+            "quantity": 12,
+            "amount": 84,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.98,
+          "date": 0.97,
+          "amount": 0.99,
+          "vat_amount": 0.99,
+          "total_amount": 0.99,
+          "currency": 0.99,
+          "bill_number": 0.9
+        },
+        "notes": "Invoice shows total amount before VAT as AED 4,704.20 and total amount with VAT as AED 4,939.41."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1670,
+    "completion_tokens": 495,
+    "total_tokens": 2165,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 131,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.7,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

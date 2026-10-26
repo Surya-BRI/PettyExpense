@@ -1,0 +1,193 @@
+{
+  "raw": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "date": "2026-09-24",
+    "amount": 3820.0,
+    "vat_amount": 191.0,
+    "vat_percent": 5,
+    "total_amount": 4011.0,
+    "currency": "AED",
+    "bill_number": "19779",
+    "line_items": [
+      {
+        "description": "Bolt 20X100",
+        "quantity": 50,
+        "amount": 236.25,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 24X150",
+        "quantity": 20,
+        "amount": 294.0,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 27X150",
+        "quantity": 20,
+        "amount": 420.0,
+        "vat_percent": 5
+      },
+      {
+        "description": "Thread Bar 4mm X 1 Mtr",
+        "quantity": 1000,
+        "amount": 2100.0,
+        "vat_percent": 5
+      },
+      {
+        "description": "Drywall Screw 8x2\"",
+        "quantity": 60,
+        "amount": 960.75,
+        "vat_percent": 5
+      }
+    ],
+    "line_items_include_vat": true,
+    "confidence": {
+      "vendor": 0.97,
+      "date": 0.99,
+      "amount": 0.98,
+      "vat_amount": 0.99,
+      "total_amount": 0.99,
+      "currency": 0.98,
+      "bill_number": 0.98
+    },
+    "notes": "Top invoice only. The item row totals appear to include VAT, summing to 4011.00, while the net amount is 3820.00 and VAT is 191.00."
+  },
+  "mapped": {
+    "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+    "expense_type": null,
+    "amount": 3820.0,
+    "vat_amount": 191.0,
+    "total_amount": 4011.0,
+    "currency": "AED",
+    "date": "2026-09-24",
+    "confidence": 0.98,
+    "field_confidence": {
+      "vendor": 0.97,
+      "date": 0.99,
+      "amount": 0.98,
+      "vat_amount": 0.99,
+      "total_amount": 0.99,
+      "currency": 0.98,
+      "invoice_number": 0.98
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "19779",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [
+      {
+        "description": "Bolt 20X100",
+        "quantity": 50,
+        "amount": 236.25,
+        "confidence": 0.98,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 24X150",
+        "quantity": 20,
+        "amount": 294.0,
+        "confidence": 0.98,
+        "vat_percent": 5
+      },
+      {
+        "description": "Bolt 27X150",
+        "quantity": 20,
+        "amount": 420.0,
+        "confidence": 0.98,
+        "vat_percent": 5
+      },
+      {
+        "description": "Thread Bar 4mm X 1 Mtr",
+        "quantity": 1000,
+        "amount": 2100.0,
+        "confidence": 0.98,
+        "vat_percent": 5
+      },
+      {
+        "description": "Drywall Screw 8x2\"",
+        "quantity": 60,
+        "amount": 960.75,
+        "confidence": 0.98,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "Top invoice only. The item row totals appear to include VAT, summing to 4011.00, while the net amount is 3820.00 and VAT is 191.00.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Jannat Al Naeem Building Materials Trading LLC",
+        "date": "2026-09-24",
+        "amount": 3820.0,
+        "vat_amount": 191.0,
+        "vat_percent": 5,
+        "total_amount": 4011.0,
+        "currency": "AED",
+        "bill_number": "19779",
+        "line_items": [
+          {
+            "description": "Bolt 20X100",
+            "quantity": 50,
+            "amount": 236.25,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 24X150",
+            "quantity": 20,
+            "amount": 294.0,
+            "vat_percent": 5
+          },
+          {
+            "description": "Bolt 27X150",
+            "quantity": 20,
+            "amount": 420.0,
+            "vat_percent": 5
+          },
+          {
+            "description": "Thread Bar 4mm X 1 Mtr",
+            "quantity": 1000,
+            "amount": 2100.0,
+            "vat_percent": 5
+          },
+          {
+            "description": "Drywall Screw 8x2\"",
+            "quantity": 60,
+            "amount": 960.75,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": true,
+        "confidence": {
+          "vendor": 0.97,
+          "date": 0.99,
+          "amount": 0.98,
+          "vat_amount": 0.99,
+          "total_amount": 0.99,
+          "currency": 0.98,
+          "bill_number": 0.98
+        },
+        "notes": "Top invoice only. The item row totals appear to include VAT, summing to 4011.00, while the net amount is 3820.00 and VAT is 191.00."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1600,
+    "completion_tokens": 294,
+    "total_tokens": 1894,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 11.0,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

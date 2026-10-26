@@ -1,18 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
-import '../../utils/dubai_time.dart';
+import 'package:intl/intl.dart';
+
 import '../../utils/money.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/authenticated_image.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/claim_ui_helpers.dart';
-import '../claims/claim_detail_screen.dart';
+import '../claims/claim_detail_screen.dart' show ClaimLineItemsList, claimDetailProvider;
 import '../shared/status_chip.dart';
 import 'approval_queue_screen.dart';
+import 'approver_history_screen.dart' show approverHistoryProvider;
+
+String _formatSubmittedAt(String? raw) {
+  if (raw == null) return 'None';
+  final dt = DateTime.tryParse(raw)?.toLocal();
+  return dt != null ? DateFormat('MMM d, yyyy · h:mm a').format(dt) : raw;
+}
+
+String _formatBillDate(String? raw) {
+  if (raw == null || raw.isEmpty) return 'None';
+  // Try ISO (yyyy-MM-dd) first, then dd/MM/yyyy
+  DateTime? dt = DateTime.tryParse(raw);
+  if (dt == null) {
+    final parts = raw.split('/');
+    if (parts.length == 3) {
+      dt = DateTime.tryParse('${parts[2]}-${parts[1]}-${parts[0]}');
+    }
+  }
+  return dt != null ? DateFormat('MMM d, yyyy').format(dt) : raw;
+}
 
 final approvalDetailProvider =
     FutureProvider.autoDispose.family<ExpenseClaim, int>((ref, id) {
@@ -39,6 +61,7 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
   @override
   void dispose() {
     _comment.dispose();
+    _commentFocus.dispose();
     super.dispose();
   }
 
@@ -49,6 +72,7 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
       ref.invalidate(approvalDetailProvider(widget.transactionId));
       ref.invalidate(approvalsQueueProvider(widget.stage));
       ref.invalidate(claimDetailProvider(widget.transactionId));
+      ref.invalidate(approverHistoryProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Updated')));
       }
@@ -107,6 +131,10 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                   ],
                 ),
               ),
+              if (claim.isMultiItem) ...[
+                const SizedBox(height: 16),
+                ClaimLineItemsList(claim: claim),
+              ],
               if (imagePath != null && imagePath.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 AppCard(
@@ -126,20 +154,19 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                 ),
               ],
               const SizedBox(height: 16),
-              AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    KeyValueRow('Employee', claim.employeeDisplay),
-                    KeyValueRow('Category', claim.category),
-                    KeyValueRow('Bill date', claim.billDate ?? 'None'),
-                    KeyValueRow(
-                      'Current stage',
-                      _stageLabels[claim.currentStage] ?? claim.currentStage ?? 'None',
-                      isLast: true,
-                    ),
-                  ],
-                ),
+              ClaimDetailsCard(
+                title: 'Details',
+                rows: [
+                  ClaimDetailRow(label: 'Employee', value: claim.employeeDisplay),
+                  ClaimDetailRow(label: 'Category', value: claim.category),
+                  if (claim.regionCode != null) ClaimDetailRow(label: 'Region', value: claim.regionCode!),
+                  ClaimDetailRow(label: 'Bill date', value: _formatBillDate(claim.billDate)),
+                  if (claim.submittedAt != null) ClaimDetailRow(label: 'Submitted', value: _formatSubmittedAt(claim.submittedAt)),
+                  ClaimDetailRow(
+                    label: 'Current stage',
+                    value: _stageLabels[claim.currentStage] ?? claim.currentStage ?? 'None',
+                  ),
+                ],
               ),
               // Visible at every stage (employee-scoped -- see transaction_service._find_duplicate --
               // so it only ever fires against the SAME employee's own past claims, never a coincidence
@@ -196,13 +223,16 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
               if (awaitingThisStage) ...[
                 TextField(
                   controller: _comment,
+                  focusNode: _commentFocus,
                   maxLines: 2,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
                     labelText: 'Comment',
+                    hintText: 'Add a note…',
                     helperText: widget.stage == 'accountant' && claim.duplicateWarning != null
-                        ? 'Required to dispute, reject, or approve this duplicate-flagged claim'
-                        : 'Required when disputing or rejecting a claim',
+                        ? '* Required to approve, dispute or reject a duplicate-flagged claim'
+                        : '* Required to dispute or reject',
+                    helperStyle: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -212,87 +242,77 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                 Builder(builder: (context) {
                   final requiresJustification = widget.stage == 'accountant' && claim.duplicateWarning != null;
                   final blocked = _busy || (requiresJustification && _comment.text.trim().isEmpty);
-                  return FilledButton(
+                  return FilledButton.icon(
                     onPressed: blocked
                         ? null
                         : () => _act(() => api.approveTransaction(claim.id, comment: _comment.text.trim())),
-                    child: Text(requiresJustification ? 'Approve (justify the duplicate above)' : 'Approve'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.darkBlue,
+                      foregroundColor: Colors.white,
+                      textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    icon: Icon(PhosphorIcons.checkCircle(), size: 20),
+                    label: Text(requiresJustification ? 'Approve (justify duplicate above)' : 'Approve'),
                   );
                 }),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  onPressed: _busy || _comment.text.trim().isEmpty
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: _busy
                       ? null
                       : () => _requireComment(() => api.disputeTransaction(claim.id, comment: _comment.text.trim())),
-                  child: const Text('Dispute (send back to employee)'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.orange,
+                    foregroundColor: Colors.white,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: Icon(PhosphorIcons.arrowUUpLeft(), size: 20),
+                  label: const Text('Dispute (send back to employee)'),
                 ),
-                const SizedBox(height: 8),
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.danger),
-                  onPressed: _busy || _comment.text.trim().isEmpty
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: _busy
                       ? null
                       : () => _requireComment(() => api.rejectTransaction(claim.id, comment: _comment.text.trim())),
-                  child: const Text('Reject'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.danger,
+                    foregroundColor: Colors.white,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: Icon(PhosphorIcons.xCircle(), size: 20),
+                  label: const Text('Reject'),
                 ),
               ],
               if (awaitingPayment) ...[
-                FilledButton(
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _comment,
+                  focusNode: _commentFocus,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Remarks',
+                    hintText: 'Payment reference, note… (optional)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
                   onPressed: _busy ? null : () => _act(() => api.markPaid(claim.id, remarks: _comment.text.trim())),
-                  child: const Text('Mark paid'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.success,
+                    foregroundColor: Colors.white,
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: Icon(PhosphorIcons.checkCircle(), size: 20),
+                  label: const Text('Mark as paid'),
                 ),
               ],
               const SizedBox(height: 20),
               Text('History', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              AppCard(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: (claim.history ?? []).isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                        child: Text('None', style: TextStyle(color: AppColors.textSecondary)),
-                      )
-                    : Column(
-                        children: [
-                          for (final (i, h) in claim.history!.reversed.indexed) ...[
-                            if (i > 0) const Divider(height: 1, indent: 8, endIndent: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '${_stageLabels[h.stage] ?? h.stage ?? 'None'} · ${h.action}',
-                                          style: Theme.of(context).textTheme.bodyMedium,
-                                        ),
-                                        if (h.remarks != null && h.remarks!.isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 2),
-                                            child: Text(
-                                              h.remarks!,
-                                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                    color: AppColors.textSecondary,
-                                                  ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    formatDubaiTime(h.createdAt),
-                                    style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-              ),
+              ClaimHistoryList(history: claim.history ?? [], hideInternal: true),
             ],
           );
         },
@@ -300,10 +320,13 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
     );
   }
 
+  final _commentFocus = FocusNode();
+
   void _requireComment(Future<ExpenseClaim> Function() action) {
     if (_comment.text.trim().isEmpty) {
+      _commentFocus.requestFocus();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A comment is required for this action')),
+        const SnackBar(content: Text('Please add a comment before disputing or rejecting')),
       );
       return;
     }

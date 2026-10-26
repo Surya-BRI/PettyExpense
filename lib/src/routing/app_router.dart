@@ -139,7 +139,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/approvals/:stage',
             pageBuilder: (context, state) => NoTransitionPage(
-              child: ApprovalQueueScreen(stage: state.pathParameters['stage']!),
+              child: ApprovalQueueScreen(
+                stage: state.pathParameters['stage']!,
+                initialFilter: state.uri.queryParameters['filter'],
+              ),
             ),
           ),
           GoRoute(

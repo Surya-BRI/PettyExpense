@@ -1,0 +1,87 @@
+{
+  "raw": {
+    "amount": 45,
+    "bill_number": "90375",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.98,
+      "currency": 0.99,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.99
+    },
+    "currency": "AED",
+    "date": "2026-07-05",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "KARO 2.05 to Delay",
+    "total_amount": 45,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "SHARJA"
+  },
+  "mapped": {
+    "vendor": "SHARJA",
+    "expense_type": null,
+    "amount": 45.0,
+    "vat_amount": 0.0,
+    "total_amount": 45.0,
+    "currency": "AED",
+    "date": "2026-07-05",
+    "confidence": 0.97,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.98,
+      "currency": 0.99,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.99
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "90375",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [],
+    "raw_text": "KARO 2.05 to Delay",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 45,
+        "bill_number": "90375",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.98,
+          "currency": 0.99,
+          "date": 0.95,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.99
+        },
+        "currency": "AED",
+        "date": "2026-07-05",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "KARO 2.05 to Delay",
+        "total_amount": 45,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "SHARJA"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 195,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1058,
+    "prompt_tokens_details": null,
+    "total_tokens": 1253
+  },
+  "seconds": 127.28,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

@@ -1,0 +1,101 @@
+{
+  "mapped": {
+    "vendor": "Fabricast FZC",
+    "expense_type": null,
+    "amount": 86.0,
+    "vat_amount": 4.3,
+    "total_amount": 90.3,
+    "currency": "AED",
+    "date": "2026-07-09",
+    "confidence": 0.98,
+    "field_confidence": {
+      "vendor": 0.99,
+      "date": 0.98,
+      "amount": 0.99,
+      "vat_amount": 0.99,
+      "total_amount": 0.99,
+      "currency": 0.99,
+      "invoice_number": 0.96
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "T-INV/26/1854",
+        "confidence": 0.96
+      }
+    },
+    "line_items": [
+      {
+        "description": "CABLE CONNECTOR,70-95 MALE - ASTRA OKC DKZ 35-50",
+        "quantity": 2.0,
+        "amount": 56.0,
+        "confidence": 0.98,
+        "vat_percent": 5
+      },
+      {
+        "description": "0447107001",
+        "quantity": 1.0,
+        "amount": 30.0,
+        "confidence": 0.98,
+        "vat_percent": 5
+      }
+    ],
+    "raw_text": "Invoice date shown as 9-Jul-2026. Amounts and VAT match the printed totals: AED 86.00 + AED 4.30 = AED 90.30.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Fabricast FZC",
+        "date": "2026-07-09",
+        "amount": 86.0,
+        "vat_amount": 4.3,
+        "vat_percent": 5,
+        "total_amount": 90.3,
+        "currency": "AED",
+        "bill_number": "T-INV/26/1854",
+        "line_items": [
+          {
+            "description": "CABLE CONNECTOR,70-95 MALE - ASTRA OKC DKZ 35-50",
+            "quantity": 2.0,
+            "amount": 56.0,
+            "vat_percent": 5
+          },
+          {
+            "description": "0447107001",
+            "quantity": 1.0,
+            "amount": 30.0,
+            "vat_percent": 5
+          }
+        ],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.99,
+          "date": 0.98,
+          "amount": 0.99,
+          "vat_amount": 0.99,
+          "total_amount": 0.99,
+          "currency": 0.99,
+          "bill_number": 0.96
+        },
+        "notes": "Invoice date shown as 9-Jul-2026. Amounts and VAT match the printed totals: AED 86.00 + AED 4.30 = AED 90.30."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 2623,
+    "completion_tokens": 354,
+    "total_tokens": 2977,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 117,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 5.42,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}

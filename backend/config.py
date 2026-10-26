@@ -41,6 +41,17 @@ class Settings(BaseSettings):
     runpod_endpoint_id: str = ""  # RunPod GPU OCR endpoint id; blank disables the GPU path entirely
     runpod_api_key: str = ""
 
+    # GPT scan pipeline (services/llm_vision_service.py); blank key = every scan returns an error
+    ai_vision_provider: str = "openai"  # openai (hosted GPT) | runpod (self-hosted Qwen-VL, RUNPOD_API_KEY)
+    runpod_vision_endpoint_id: str = ""  # vLLM worker endpoint; separate from the old OCR RUNPOD_ENDPOINT_ID
+    runpod_vision_api_key: str = ""  # key scoped to that endpoint; blank = use RUNPOD_API_KEY
+    runpod_vision_model: str = "Qwen/Qwen3-VL-8B-Instruct"
+    runpod_vision_timeout_seconds: int = 300
+    openai_api_key: str = ""
+    openai_vision_model: str = "gpt-5.4-mini"
+    openai_reasoning_effort: str = "low"  # gpt-5*/o-series only; blank for non-reasoning models
+    openai_timeout_seconds: int = 60
+
     cors_origins: str = "*"
     public_base_url: str = "http://localhost:8000"  # used to build the "View this claim" link in HTML emails
 

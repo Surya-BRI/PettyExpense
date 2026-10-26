@@ -1,0 +1,109 @@
+{
+  "vendor": "BAB AL HAYAT PHARMACY LLC",
+  "amount": 438.91,
+  "vat_amount": 0.0,
+  "total_amount": 438.91,
+  "currency": "AED",
+  "date": "11/09/2026",
+  "low_confidence_fields": [
+    "vendor",
+    "currency",
+    "amount",
+    "vat_rate",
+    "vat_amount",
+    "service_charge",
+    "change",
+    "total_amount",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [
+    {
+      "description": "MED ADVANCE WOUND ADHESIVE 100S",
+      "quantity": 2.0,
+      "amount": 27.15,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "ADV MED GUIDANCE CARD (FIRST AID BOOK)",
+      "quantity": 3.0,
+      "amount": 22.81,
+      "confidence": 0.96,
+      "vat_percent": null
+    },
+    {
+      "description": "ADV MED GAUZE BANDAGE 5CM 6598-659878",
+      "quantity": 5.0,
+      "amount": 13.57,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "ADV MED GAUZE BANDAGE 7.5CMX4.5M 1S",
+      "quantity": 5.0,
+      "amount": 18.1,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "ADV MED COTTON 50G",
+      "quantity": 5.0,
+      "amount": 22.62,
+      "confidence": 0.99,
+      "vat_percent": null
+    },
+    {
+      "description": "MED ADVANCE ZINC OXIDE ADHESIVE PLASTER 2.5*5",
+      "quantity": 4.0,
+      "amount": 10.86,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "COTTON TIP APPLICATOR WOODEN 6 INCH 100S",
+      "quantity": 2.0,
+      "amount": 18.1,
+      "confidence": 0.92,
+      "vat_percent": null
+    },
+    {
+      "description": "ADV MED GAUZE SWAB NON STERILE 7.5X7.5CM 8PLY",
+      "quantity": 5.0,
+      "amount": 54.3,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "ADVANCE MED TRIANGULAR BANDAGE19*19*127",
+      "quantity": 3.0,
+      "amount": 21.72,
+      "confidence": 1.0,
+      "vat_percent": null
+    },
+    {
+      "description": "ADV MED AM0FS-102BX CPR MASK",
+      "quantity": 1.0,
+      "amount": 18.1,
+      "confidence": 0.97,
+      "vat_percent": null
+    },
+    {
+      "description": "SCISSORS NORMAL LARGE",
+      "quantity": 1.0,
+      "amount": 13.57,
+      "confidence": 0.99,
+      "vat_percent": null
+    },
+    {
+      "description": "MED DISPOSIBLE SYRINGE 20ML 50S",
+      "quantity": 4.0,
+      "amount": 180.99,
+      "confidence": 0.99,
+      "vat_percent": null
+    }
+  ],
+  "bill_number": "50A86803",
+  "seconds": 5.74
+}

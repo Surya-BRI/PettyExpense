@@ -1,0 +1,28 @@
+{
+  "vendor": "TAXI AL-AJME",
+  "amount": 1.0,
+  "vat_amount": 0.0,
+  "total_amount": 1.0,
+  "currency": "SAR",
+  "date": "",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "amount",
+    "vat_rate",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "total_amount",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": "20367",
+  "seconds": 1.62
+}

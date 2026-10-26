@@ -1,0 +1,27 @@
+{
+  "vendor": "Riyadh",
+  "amount": 42.0,
+  "vat_amount": 0.0,
+  "total_amount": 42.0,
+  "currency": "SAR",
+  "date": "Oct 12",
+  "low_confidence_fields": [
+    "vendor",
+    "amount",
+    "vat_rate",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "total_amount",
+    "invoice_number",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": null,
+  "seconds": 1.66
+}

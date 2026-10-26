@@ -1,0 +1,22 @@
+{
+  "vendor": "ENOC RETAIL",
+  "amount": 5.71,
+  "vat_amount": 0.29,
+  "total_amount": 6.0,
+  "currency": "AED",
+  "date": "8/18/2026",
+  "low_confidence_fields": [
+    "vendor",
+    "currency",
+    "discount",
+    "service_charge",
+    "tip",
+    "card_amount",
+    "invoice_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": null,
+  "seconds": 2.59
+}

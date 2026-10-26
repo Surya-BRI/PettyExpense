@@ -1,0 +1,87 @@
+{
+  "raw": {
+    "amount": 50,
+    "bill_number": "20367",
+    "confidence": {
+      "amount": 0.95,
+      "bill_number": 0.98,
+      "currency": 0.98,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.98
+    },
+    "currency": "SAR",
+    "date": "2026-07-05",
+    "line_items": [],
+    "line_items_include_vat": true,
+    "notes": "",
+    "total_amount": 50,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "TAXI AL-AJME"
+  },
+  "mapped": {
+    "vendor": "TAXI AL-AJME",
+    "expense_type": null,
+    "amount": 50.0,
+    "vat_amount": 0.0,
+    "total_amount": 50.0,
+    "currency": "SAR",
+    "date": "2026-07-05",
+    "confidence": 0.96,
+    "field_confidence": {
+      "amount": 0.95,
+      "invoice_number": 0.98,
+      "currency": 0.98,
+      "date": 0.95,
+      "total_amount": 0.95,
+      "vat_amount": 0.95,
+      "vendor": 0.98
+    },
+    "low_confidence_fields": [],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "20367",
+        "confidence": 0.98
+      }
+    },
+    "line_items": [],
+    "raw_text": "",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 50,
+        "bill_number": "20367",
+        "confidence": {
+          "amount": 0.95,
+          "bill_number": 0.98,
+          "currency": 0.98,
+          "date": 0.95,
+          "total_amount": 0.95,
+          "vat_amount": 0.95,
+          "vendor": 0.98
+        },
+        "currency": "SAR",
+        "date": "2026-07-05",
+        "line_items": [],
+        "line_items_include_vat": true,
+        "notes": "",
+        "total_amount": 50,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "TAXI AL-AJME"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 189,
+    "completion_tokens_details": null,
+    "prompt_tokens": 984,
+    "prompt_tokens_details": null,
+    "total_tokens": 1173
+  },
+  "seconds": 8.44,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

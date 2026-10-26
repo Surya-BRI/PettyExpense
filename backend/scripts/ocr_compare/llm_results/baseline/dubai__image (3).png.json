@@ -1,0 +1,65 @@
+{
+  "vendor": "OAMAR AL MADINA SUPERMARKETL.L.C",
+  "amount": 46.84,
+  "vat_amount": 2.34,
+  "total_amount": 49.18,
+  "currency": "AED",
+  "date": "",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "amount",
+    "vat_rate",
+    "vat_amount",
+    "discount",
+    "service_charge",
+    "tip",
+    "card_amount",
+    "change",
+    "total_amount",
+    "invoice_number",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [
+    {
+      "description": "CURIANDER LEAF",
+      "quantity": 200.0,
+      "amount": 1.98,
+      "confidence": 0.93,
+      "vat_percent": null
+    },
+    {
+      "description": "ONION (INDTA)",
+      "quantity": 1.06,
+      "amount": 3.7,
+      "confidence": 0.96,
+      "vat_percent": null
+    },
+    {
+      "description": "SAFA YOGHURT 10KG",
+      "quantity": 1.0,
+      "amount": 1.0,
+      "confidence": 0.87,
+      "vat_percent": null
+    },
+    {
+      "description": "GINGER (PRC)",
+      "quantity": 0.53,
+      "amount": 4.5,
+      "confidence": 0.97,
+      "vat_percent": null
+    },
+    {
+      "description": "CURRY LEAF",
+      "quantity": 1.0,
+      "amount": 1.0,
+      "confidence": 0.91,
+      "vat_percent": null
+    }
+  ],
+  "bill_number": null,
+  "seconds": 3.25
+}

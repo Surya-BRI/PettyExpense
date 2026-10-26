@@ -1,0 +1,90 @@
+{
+  "raw": {
+    "amount": null,
+    "bill_number": "90375",
+    "confidence": {
+      "amount": 45,
+      "bill_number": 90375,
+      "currency": 0.95,
+      "date": 2026,
+      "total_amount": 45,
+      "vat_amount": 0,
+      "vendor": 0.95
+    },
+    "currency": "AED",
+    "date": "2026-06-24",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "KARO 2.05 to Dally",
+    "total_amount": 45,
+    "vat_amount": 0,
+    "vat_percent": null,
+    "vendor": "SHARJA"
+  },
+  "mapped": {
+    "vendor": "SHARJA",
+    "expense_type": null,
+    "amount": 45.0,
+    "vat_amount": 0.0,
+    "total_amount": 45.0,
+    "currency": "AED",
+    "date": "2026-06-24",
+    "confidence": 13213.27,
+    "field_confidence": {
+      "amount": 45.0,
+      "invoice_number": 90375.0,
+      "currency": 0.95,
+      "date": 2026.0,
+      "total_amount": 45.0,
+      "vat_amount": 0.0,
+      "vendor": 0.95
+    },
+    "low_confidence_fields": [
+      "amount",
+      "vat_amount"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": "90375",
+        "confidence": 90375.0
+      }
+    },
+    "line_items": [],
+    "raw_text": "KARO 2.05 to Dally",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": null,
+        "bill_number": "90375",
+        "confidence": {
+          "amount": 45,
+          "bill_number": 90375,
+          "currency": 0.95,
+          "date": 2026,
+          "total_amount": 45,
+          "vat_amount": 0,
+          "vendor": 0.95
+        },
+        "currency": "AED",
+        "date": "2026-06-24",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "KARO 2.05 to Dally",
+        "total_amount": 45,
+        "vat_amount": 0,
+        "vat_percent": null,
+        "vendor": "SHARJA"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 198,
+    "completion_tokens_details": null,
+    "prompt_tokens": 1373,
+    "prompt_tokens_details": null,
+    "total_tokens": 1571
+  },
+  "seconds": 123.2,
+  "served_model": "Qwen/Qwen3-VL-8B-Instruct"
+}

@@ -11,7 +11,7 @@ import '../../theme/app_theme.dart';
 import 'bill_line_mode.dart';
 import 'guided_capture_screen.dart';
 
-/// Simple sheet: camera or gallery only (no tech/OCR wording).
+/// Simple sheet: camera or gallery. Every scan is read by GPT.
 Future<void> showCaptureReceiptSheet(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<void>(
     context: context,

@@ -1,0 +1,28 @@
+{
+  "vendor": "Standard Hardware Trading LLC",
+  "amount": null,
+  "vat_amount": 252.0,
+  "total_amount": 77.0,
+  "currency": "AED",
+  "date": "29-Jul-26",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "amount",
+    "vat_rate",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "total_amount",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": false,
+  "line_items": [],
+  "bill_number": "CASH/SHT/1205",
+  "seconds": 4.19
+}

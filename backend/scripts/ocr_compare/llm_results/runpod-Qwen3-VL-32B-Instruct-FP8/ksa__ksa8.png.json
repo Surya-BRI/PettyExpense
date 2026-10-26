@@ -1,0 +1,89 @@
+{
+  "raw": {
+    "amount": 72.9,
+    "bill_number": null,
+    "confidence": {
+      "amount": 0.9,
+      "bill_number": 0.0,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "currency": "SAR",
+    "date": "2026-02-08",
+    "line_items": [],
+    "line_items_include_vat": false,
+    "notes": "The bill shows a ride from 7926 Zayd Ibn Thabit Street, Riyadh to Terminal 5, King Khalid International Airport (RUH) - Riyadh. The total amount is SAR72.90, which is likely the final amount including VAT, but no VAT rate or breakdown is provided. The vendor is Uber, as indicated by the app interface and ride details.",
+    "total_amount": 72.9,
+    "vat_amount": 0,
+    "vat_percent": 0,
+    "vendor": "Uber"
+  },
+  "mapped": {
+    "vendor": "Uber",
+    "expense_type": null,
+    "amount": 72.9,
+    "vat_amount": 0.0,
+    "total_amount": 72.9,
+    "currency": "SAR",
+    "date": "2026-02-08",
+    "confidence": 0.77,
+    "field_confidence": {
+      "amount": 0.9,
+      "invoice_number": 0.0,
+      "currency": 0.9,
+      "date": 0.9,
+      "total_amount": 0.9,
+      "vat_amount": 0.9,
+      "vendor": 0.9
+    },
+    "low_confidence_fields": [
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 0.0
+      }
+    },
+    "line_items": [],
+    "raw_text": "The bill shows a ride from 7926 Zayd Ibn Thabit Street, Riyadh to Terminal 5, King Khalid International Airport (RUH) - Riyadh. The total amount is SAR72.90, which is likely the final amount including VAT, but no VAT rate or breakdown is provided. The vendor is Uber, as indicated by the app interface and ride details.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "amount": 72.9,
+        "bill_number": null,
+        "confidence": {
+          "amount": 0.9,
+          "bill_number": 0.0,
+          "currency": 0.9,
+          "date": 0.9,
+          "total_amount": 0.9,
+          "vat_amount": 0.9,
+          "vendor": 0.9
+        },
+        "currency": "SAR",
+        "date": "2026-02-08",
+        "line_items": [],
+        "line_items_include_vat": false,
+        "notes": "The bill shows a ride from 7926 Zayd Ibn Thabit Street, Riyadh to Terminal 5, King Khalid International Airport (RUH) - Riyadh. The total amount is SAR72.90, which is likely the final amount including VAT, but no VAT rate or breakdown is provided. The vendor is Uber, as indicated by the app interface and ride details.",
+        "total_amount": 72.9,
+        "vat_amount": 0,
+        "vat_percent": 0,
+        "vendor": "Uber"
+      }
+    }
+  },
+  "usage": {
+    "completion_tokens": 255,
+    "completion_tokens_details": null,
+    "prompt_tokens": 972,
+    "prompt_tokens_details": null,
+    "total_tokens": 1227
+  },
+  "seconds": 14.25,
+  "served_model": "Qwen/Qwen3-VL-32B-Instruct-FP8"
+}

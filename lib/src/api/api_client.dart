@@ -102,13 +102,16 @@ class ApiClient {
     return OcrResult.fromJson(_decodeMap(res));
   }
 
-  Future<OcrResult> analyzeReceipt(int receiptId, {String ocrMode = 'auto'}) async {
+  Future<OcrResult> analyzeReceipt(int receiptId) async {
     final res = await _authorized(() {
       final headers = <String, String>{
         if (_accessToken != null && _accessToken!.isNotEmpty) 'Authorization': 'Bearer $_accessToken',
       };
       return http
-          .post(_uri('/api/claims/receipts/$receiptId/ocr', {'mode': ocrMode}), headers: headers)
+          .post(
+            _uri('/api/claims/receipts/$receiptId/ocr'),
+            headers: headers,
+          )
           .timeout(const Duration(seconds: 120));
     });
     return OcrResult.fromJson(_decodeMap(res));

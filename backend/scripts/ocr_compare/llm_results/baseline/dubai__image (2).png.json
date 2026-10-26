@@ -1,0 +1,37 @@
+{
+  "vendor": "TUFFCO BUILDING MATERIALS TRADING L.L.C",
+  "amount": 21.0,
+  "vat_amount": 0.0,
+  "total_amount": 21.0,
+  "currency": "AED",
+  "date": "",
+  "low_confidence_fields": [
+    "vendor",
+    "date",
+    "currency",
+    "amount",
+    "vat_rate",
+    "vat_amount",
+    "discount",
+    "service_charge",
+    "tip",
+    "cash_tendered",
+    "card_amount",
+    "change",
+    "total_amount",
+    "transaction_number",
+    "expense_category"
+  ],
+  "reconciliation_mismatch": true,
+  "line_items": [
+    {
+      "description": "Shuttaff",
+      "quantity": 20.0,
+      "amount": 21.0,
+      "confidence": 0.97,
+      "vat_percent": null
+    }
+  ],
+  "bill_number": "1383",
+  "seconds": 2.47
+}

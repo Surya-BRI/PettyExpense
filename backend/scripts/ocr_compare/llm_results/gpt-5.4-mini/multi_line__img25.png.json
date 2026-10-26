@@ -1,0 +1,97 @@
+{
+  "raw": {
+    "vendor": "Blue Rhine",
+    "date": "2026-10-06",
+    "amount": 2628.0,
+    "vat_amount": 131.4,
+    "vat_percent": 5.0,
+    "total_amount": 2759.4,
+    "currency": "AED",
+    "bill_number": null,
+    "line_items": [],
+    "line_items_include_vat": false,
+    "confidence": {
+      "vendor": 0.98,
+      "date": 0.93,
+      "amount": 0.99,
+      "vat_amount": 0.99,
+      "total_amount": 0.99,
+      "currency": 0.98,
+      "bill_number": 0.2
+    },
+    "notes": "Page 2 of 2 shown. Date at bottom reads 06 October 2026; invoice has no clear bill number visible on this page."
+  },
+  "mapped": {
+    "vendor": "Blue Rhine",
+    "expense_type": null,
+    "amount": 2628.0,
+    "vat_amount": 131.4,
+    "total_amount": 2759.4,
+    "currency": "AED",
+    "date": "2026-10-06",
+    "confidence": 0.87,
+    "field_confidence": {
+      "vendor": 0.98,
+      "date": 0.93,
+      "amount": 0.99,
+      "vat_amount": 0.99,
+      "total_amount": 0.99,
+      "currency": 0.98,
+      "invoice_number": 0.2
+    },
+    "low_confidence_fields": [
+      "invoice_number"
+    ],
+    "reconciliation_mismatch": false,
+    "fields": {
+      "invoice_number": {
+        "value": null,
+        "confidence": 0.2
+      }
+    },
+    "line_items": [],
+    "raw_text": "Page 2 of 2 shown. Date at bottom reads 06 October 2026; invoice has no clear bill number visible on this page.",
+    "raw_json": {
+      "engine": "openai_vision",
+      "llm": {
+        "vendor": "Blue Rhine",
+        "date": "2026-10-06",
+        "amount": 2628.0,
+        "vat_amount": 131.4,
+        "vat_percent": 5.0,
+        "total_amount": 2759.4,
+        "currency": "AED",
+        "bill_number": null,
+        "line_items": [],
+        "line_items_include_vat": false,
+        "confidence": {
+          "vendor": 0.98,
+          "date": 0.93,
+          "amount": 0.99,
+          "vat_amount": 0.99,
+          "total_amount": 0.99,
+          "currency": 0.98,
+          "bill_number": 0.2
+        },
+        "notes": "Page 2 of 2 shown. Date at bottom reads 06 October 2026; invoice has no clear bill number visible on this page."
+      }
+    }
+  },
+  "usage": {
+    "prompt_tokens": 1813,
+    "completion_tokens": 151,
+    "total_tokens": 1964,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "seconds": 9.51,
+  "served_model": "gpt-5.4-mini-2026-03-17"
+}
