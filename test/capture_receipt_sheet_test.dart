@@ -3,7 +3,7 @@ import 'package:expense_app/src/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:phosphor_icons/phosphor_icons.dart';
 
 Future<void> _openSheet(WidgetTester tester) async {
   await tester.pumpWidget(

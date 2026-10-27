@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:phosphor_icons/phosphor_icons.dart';
 
 /// Full-screen, pinch-to-zoom view of a bill photo — used both for a freshly
 /// captured local file (confirm screen) and a fetched receipt image

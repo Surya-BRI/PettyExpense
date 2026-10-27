@@ -46,7 +46,7 @@ dependencies:
   google_fonts: ^6.2.1
   image: ^4.5.4
   doclens: ^0.0.12
-  phosphor_flutter: ^2.1.0
+  phosphor_icons: ^3.0.1
 
 dev_dependencies:
   flutter_test:

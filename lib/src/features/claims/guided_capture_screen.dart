@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:doclens/doclens.dart' as doclens;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../services/document_capture/capture_state_machine.dart';
 import '../../services/document_capture/doclens_bridge.dart';
