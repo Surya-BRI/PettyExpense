@@ -65,10 +65,23 @@ String _bodyOf(String message) {
 // notification falls back to the read-only claim view instead of a stage you no longer own.
 const _approverFacingTypes = {'submission', 'approval_pending', 'resubmit'};
 
+// Petty-cash top-up steps ('topup_verified_12') and low-fund alerts ('fund_low_3_0') carry
+// their id in the type, aren't tied to a claim, and open the Top-ups / Funds screen.
+bool _isFundType(String? type) => type != null && (type.startsWith('topup_') || type.startsWith('fund_low_'));
+
+String _subjectOf(String message) => message.split('\n\n').first.trim();
+
+String _fundKind(String type) {
+  if (type.startsWith('topup_approved')) return 'approved';
+  if (type.startsWith('topup_rejected') || type.startsWith('topup_returned')) return 'rejected';
+  return 'info';
+}
+
 String? _routeFor(Map<String, dynamic> row, UserRole role) {
+  final type = row['type'] as String?;
+  if (_isFundType(type)) return '/topups';
   final txnId = row['transaction_id'];
   if (txnId == null) return null;
-  final type = row['type'] as String?;
   if (type == 'test') return null;
   if (_approverFacingTypes.contains(type) && row['actionable'] == true) {
     final stage = (row['current_stage'] as String?) ?? defaultStageFor(role);
@@ -89,10 +102,10 @@ final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(
       final message = row['message'] as String? ?? '';
       return AppNotification(
         id: row['id'] as int,
-        title: _titleByType[type] ?? 'Notification',
+        title: _titleByType[type] ?? (_isFundType(type) ? _subjectOf(message) : 'Notification'),
         body: _bodyOf(message),
         createdAt: _parseDate(row['sent_at'] as String?),
-        kind: _kindByType[type] ?? 'info',
+        kind: _kindByType[type] ?? (_isFundType(type) ? _fundKind(type) : 'info'),
         unread: row['status'] != 'read',
         route: _routeFor(row, role),
       );

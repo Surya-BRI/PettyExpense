@@ -114,6 +114,7 @@ class ApproverHistoryScreen extends ConsumerWidget {
                 final stage = item['my_action_stage'] as String? ?? '';
                 final regionCode = item['region_code'] as String?;
                 final id = item['id'] as int?;
+                final comment = (item['my_comment'] as String?)?.trim() ?? '';
 
                 return Material(
                   color: AppColors.card,
@@ -202,6 +203,21 @@ class ApproverHistoryScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
+                          // Each entry is one action, so its own comment (e.g. why it was
+                          // disputed) belongs with it.
+                          if (comment.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '“$comment”',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

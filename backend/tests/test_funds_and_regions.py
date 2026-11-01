@@ -222,14 +222,25 @@ def test_admin_can_change_opening(db):
     assert changed["remaining"] == 8000
 
 
-def test_admin_cannot_request_topup(db):
+def test_admin_can_request_topup_on_departments_behalf(db):
     _, _, admin, _, uae, _, sales, _ = _setup(db)
     fund = fund_service.create(
         db, region_id=uae.region_id, owner_type="department",
         opening_balance=5000, department_id=sales.department_id,
     )
-    with pytest.raises(PermissionError, match="HOD"):
-        fund_service.request_topup(db, admin, fund["id"], 1500, "month top-up")
+    req = fund_service.request_topup(db, admin, fund["id"], 1500, "month top-up")
+    assert req["status"] == "submitted"
+    assert req["requester_name"] == "Arjun Admin"
+
+
+def test_employee_cannot_request_topup(db):
+    employee, _, _, _, uae, _, sales, _ = _setup(db)
+    fund = fund_service.create(
+        db, region_id=uae.region_id, owner_type="department",
+        opening_balance=5000, department_id=sales.department_id,
+    )
+    with pytest.raises(PermissionError, match="HOD or Admin"):
+        fund_service.request_topup(db, employee, fund["id"], 100, None)
 
 
 def test_hod_assignment_allows_topup_for_other_department(db):

@@ -69,7 +69,9 @@ class CreateClaimRequest(BaseModel):
     exchange_rate: float = 1.0
     bill_date: Optional[str] = None
     category_id: int
-    region_code: str = "UAE"
+    # Company the bill is charged to. Required to submit; a draft without one is saved under
+    # the company the user is signed in under (never a hard-coded default).
+    region_code: Optional[str] = None
     type: str = "reimbursement"  # petty_cash | reimbursement
     project_id: Optional[int] = None
     op_number: Optional[str] = None

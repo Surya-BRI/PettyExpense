@@ -190,6 +190,37 @@ def test_employee_cannot_file_under_a_company_not_assigned(db, world):
         _claim(db, world, currency="AED", total=10.0, region="KSA")
 
 
+def test_submit_without_a_company_is_rejected_not_defaulted(db, world):
+    with pytest.raises(ValueError, match="company"):
+        _claim(db, world, currency="AED", total=10.0, region=None)
+
+
+def test_draft_without_a_company_is_saved_under_signed_in_company(db, world):
+    claim = _claim(db, world, currency="AED", total=10.0, region=None, submit=False)
+    assert claim["region_code"] == "UAE"
+
+
+def test_company_can_change_on_a_draft_but_not_after_submit(db, world):
+    db.add(ErpExpenseMultiRegionUserRegion(user_id=world["emp"].user_id, region_id=world["ksa"].region_id))
+    db.commit()
+    emp = _as(world["emp"], "employee", "UAE")
+
+    draft = _claim(db, world, currency="AED", total=10.0, submit=False, bill_number="DRAFT-1")
+    moved = transaction_service.update_draft(db, emp, draft["id"], {"region_code": "KSA"})
+    assert moved["region_code"] == "KSA" and moved["base_currency"] == "SAR"
+
+    # A disputed bill keeps its company: its earlier approvals came from that company's team.
+    txn = _txn(db, _claim(db, world, currency="AED", total=20.0, bill_number="SUB-1"))
+    txn.status = "disputed"
+    db.commit()
+    with pytest.raises(ValueError, match="can't be changed after the bill was submitted"):
+        transaction_service.update_draft(db, emp, txn.transaction_id, {"region_code": "KSA"})
+    db.rollback()
+    # Sending the same company back (the app always sends it) is fine.
+    same = transaction_service.update_draft(db, emp, txn.transaction_id, {"region_code": "UAE", "amount": 25.0})
+    assert same["region_code"] == "UAE"
+
+
 # -- Phase B: region-scoped approvers ----------------------------------------------------
 
 

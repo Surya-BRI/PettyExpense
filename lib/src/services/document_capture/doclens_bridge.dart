@@ -23,10 +23,8 @@ capture.DetectionStatus mapDetectionStatus(doclens.DetectionStatus status) {
     case doclens.DetectionStatus.noPaper:
       return capture.DetectionStatus.noPaper;
     case doclens.DetectionStatus.focusing:
-      // Only ever emitted by doclens' own auto-capture focus-lock, which is
-      // disabled here (capture is self-driven via CaptureStateMachine) -- kept
-      // as a defensive mapping rather than assumed unreachable. "Hold steady"
-      // is the closest existing guidance message.
+      // Emitted in Auto capture mode while doclens holds the shutter for focus
+      // (aligned, waiting for sharpness). "Hold steady" is the right hint.
       return capture.DetectionStatus.tilted;
   }
 }

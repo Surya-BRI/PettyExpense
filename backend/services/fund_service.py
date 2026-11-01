@@ -21,6 +21,7 @@ from database.models import (
     ErpExpenseLineItem,
     ErpExpensePettyCashFund,
     ErpExpenseRegionConfig,
+    ErpExpenseTopupHistory,
     ErpExpenseTransaction,
 )
 from services.currency import default_base_currency, region_base_currency
@@ -207,10 +208,13 @@ def fund_to_dict(
 ) -> dict[str, Any]:
     """exclude_transaction_id leaves one bill out of every figure, so a bill being
     (re)submitted can be checked against what's left without counting itself."""
-    if spent is None:
-        spent = _sum_bills(db, fund, _SPEND_STATUSES, exclude_transaction_id)
-    if pending_bills is None:
-        pending_bills = _sum_bills(db, fund, _PENDING_STATUSES, exclude_transaction_id)
+    if spent is None or pending_bills is None:
+        # One pass over the fund's bills for both figures (each pass is several queries).
+        rows = _fund_bills(db, fund, _SPEND_STATUSES + _PENDING_STATUSES, exclude_transaction_id)
+        if spent is None:
+            spent = round(sum(p for tx, p in rows if tx.status in _SPEND_STATUSES), 2)
+        if pending_bills is None:
+            pending_bills = round(sum(p for tx, p in rows if tx.status in _PENDING_STATUSES), 2)
     replenished = _approved_topups(fund)
     pending = _pending_topups(fund)
     limit = float(fund.opening_balance or 0)
@@ -326,6 +330,157 @@ def _load_fund(db: Session, fund_id: int) -> ErpExpensePettyCashFund:
     return fund
 
 
+# A department fund below this share of its approved limit alerts its HODs (and Admin) to raise
+# a top-up -- once per replenishment cycle.
+LOW_FUND_RATIO = 0.20
+
+
+def _topup_history(db: Session, row: ErpExpenseFundTopupRequest, actor_id: int, action: str, comment: Optional[str]) -> None:
+    """One audit row per top-up step; the step's comment lives here, not appended to remarks."""
+    db.add(
+        ErpExpenseTopupHistory(
+            topup_id=row.topup_id,
+            actor_id=actor_id,
+            action=action,
+            comment=(comment or "").strip() or None,
+        )
+    )
+
+
+def _people_with_role(db: Session, role: str, region_id: Optional[int] = None) -> list[ErpAuthExpenseUsers]:
+    # Same region-scoped lookup the claim approval chain uses (lazy import: approval_service
+    # imports this module).
+    from services.approval_service import _active_with_role
+
+    return _active_with_role(db, role, region_id)
+
+
+def _role_or_admin(db: Session, role: str, region_id: Optional[int]) -> list[ErpAuthExpenseUsers]:
+    """Who does this step for a company; Admin when nobody covers it (so nothing gets stuck)."""
+    return _people_with_role(db, role, region_id) or _people_with_role(db, "admin")
+
+
+def _department_hods(db: Session, fund: ErpExpensePettyCashFund) -> list[ErpAuthExpenseUsers]:
+    if not fund.department_id:
+        return []
+    from services.approval_service import _hods_for_department
+
+    return _hods_for_department(db, fund.department_id, fund.region_id)
+
+
+def _notify_people(
+    db: Session,
+    people: list[Optional[ErpAuthExpenseUsers]],
+    type_: str,
+    subject: str,
+    body: str,
+    skip_user_id: Optional[int] = None,
+) -> None:
+    """Notifications aren't tied to a claim (transaction_id None), so `type_` carries the
+    top-up / fund id to keep the per-user dedup from swallowing later events."""
+    seen: set[int] = set()
+    for person in people:
+        if person is None or person.user_id in seen or person.user_id == skip_user_id:
+            continue
+        seen.add(person.user_id)
+        send(db, person, type_, None, subject_en=subject, subject_ar=subject, body_en=body, body_ar=body)
+
+
+def _topup_summary(row: ErpExpenseFundTopupRequest, fund: ErpExpensePettyCashFund) -> str:
+    dept = fund.department.department_name if fund.department else "Department"
+    region = fund.region.region_code if fund.region else ""
+    return f"{fund.currency} {row.amount:,.2f} for {dept} petty cash ({region})"
+
+
+def _notify_topup(db: Session, row: ErpExpenseFundTopupRequest, step: str, actor_id: int, comment: Optional[str]) -> None:
+    fund = _load_fund(db, row.fund_id)
+    requester = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == row.requester_id).first()
+    what = _topup_summary(row, fund)
+    note = f" Comment: {comment.strip()}" if comment and comment.strip() else ""
+    admins = _people_with_role(db, "admin")
+    if step == "requested":
+        who = requester.display_name if requester else "Someone"
+        _notify_people(
+            db, [*_role_or_admin(db, "accountant", fund.region_id), *admins],
+            f"topup_requested_{row.topup_id}", "Petty cash top-up to verify",
+            f"{who} requested a top-up of {what}. Accounts: please verify the bills.{note}",
+            skip_user_id=actor_id,
+        )
+    elif step == "verified":
+        _notify_people(
+            db, _role_or_admin(db, "finance_manager", fund.region_id),
+            f"topup_verified_{row.topup_id}", "Petty cash top-up to approve",
+            f"Accounts verified the top-up of {what}. Please approve and record the payment.{note}",
+            skip_user_id=actor_id,
+        )
+    elif step == "returned":
+        _notify_people(
+            db, [requester, *_department_hods(db, fund)],
+            f"topup_returned_{row.topup_id}", "Petty cash top-up returned",
+            f"Your top-up of {what} was returned by Accounts.{note} Fix it and raise a new request.",
+            skip_user_id=actor_id,
+        )
+    else:  # approved | rejected
+        _notify_people(
+            db, [requester, *_department_hods(db, fund), *admins],
+            f"topup_{step}_{row.topup_id}", f"Petty cash top-up {step}",
+            f"The top-up of {what} was {step}.{note}",
+            skip_user_id=actor_id,
+        )
+
+
+def check_low_fund(db: Session, fund_id: int) -> bool:
+    """Alerts the department's HODs (and Admin) once the fund's available cash drops below
+    LOW_FUND_RATIO of its limit. Fires once per cycle: the type carries the number of approved
+    top-ups, so the next alert only comes after a replenishment. Returns True if it alerted."""
+    fund = _load_fund(db, fund_id)
+    if fund.owner_type != "department" or not fund.is_active:
+        return False
+    limit = float(fund.opening_balance or 0)
+    if limit <= 0:
+        return False
+    available = fund_to_dict(db, fund)["available"]
+    if available >= limit * LOW_FUND_RATIO:
+        return False
+    cycle = sum(1 for t in fund.topups if t.status == "approved" and t.is_active == 1)
+    dept = fund.department.department_name if fund.department else "Department"
+    region = fund.region.region_code if fund.region else ""
+    _notify_people(
+        db, [*_department_hods(db, fund), *_people_with_role(db, "admin")],
+        f"fund_low_{fund.fund_id}_{cycle}", f"{dept} petty cash is running low",
+        f"{dept} petty cash ({region}) has {fund.currency} {available:,.2f} left of its "
+        f"{fund.currency} {limit:,.2f} limit. Raise a top-up with the approved bills.",
+    )
+    return True
+
+
+def check_low_funds_for_bill(db: Session, txn: ErpExpenseTransaction) -> None:
+    """After a petty-cash bill's final approval: check every department fund it drew on
+    (the employee's own department plus any cross-department lines). Never raises."""
+    try:
+        own = txn.employee.department_id if txn.employee else None
+        dept_ids = {own} | {d for d in department_shares(txn) if d}
+        dept_ids.discard(None)
+        if not dept_ids:
+            return
+        funds = (
+            db.query(ErpExpensePettyCashFund.fund_id)
+            .filter(
+                ErpExpensePettyCashFund.region_id == txn.region_id,
+                ErpExpensePettyCashFund.owner_type == "department",
+                ErpExpensePettyCashFund.is_active == 1,
+                ErpExpensePettyCashFund.department_id.in_(dept_ids),
+            )
+            .all()
+        )
+        for (fund_id,) in funds:
+            check_low_fund(db, fund_id)
+    except Exception:  # an alert must never break an approval
+        import logging
+
+        logging.getLogger(__name__).exception("Low-fund check failed for claim %s", txn.transaction_id)
+
+
 class FundService:
     def list_all(self, db: Session) -> list[dict[str, Any]]:
         funds = (
@@ -356,31 +511,40 @@ class FundService:
         ids.update(row.department_id for row in assigned)
         return ids
 
+    def _my_funds_query(self, db: Session, user: ErpAuthExpenseUsers):
+        """The user's own pot plus their departments' pots, in the companies they cover (home
+        company plus Admin-assigned). Filtered in SQL -- not by loading every fund."""
+        dept_ids = self._department_ids_for(db, user)
+        owned = [
+            (ErpExpensePettyCashFund.owner_type == "employee") & (ErpExpensePettyCashFund.employee_id == user.user_id)
+        ]
+        if dept_ids:
+            owned.append(
+                (ErpExpensePettyCashFund.owner_type == "department")
+                & (ErpExpensePettyCashFund.department_id.in_(dept_ids))
+            )
+        q = db.query(ErpExpensePettyCashFund).filter(ErpExpensePettyCashFund.is_active == 1, or_(*owned))
+        region_ids = user_region_ids(db, user.user_id)
+        if region_ids is not None:
+            q = q.filter(ErpExpensePettyCashFund.region_id.in_(region_ids or {-1}))
+        return q
+
+    def _my_fund_ids(self, db: Session, user: ErpAuthExpenseUsers) -> set[int]:
+        """Permission check only: which funds are this user's (no balances worked out)."""
+        return {fid for (fid,) in self._my_funds_query(db, user).with_entities(ErpExpensePettyCashFund.fund_id)}
+
     def list_mine(self, db: Session, user: ErpAuthExpenseUsers) -> list[dict[str, Any]]:
         funds = (
-            db.query(ErpExpensePettyCashFund)
+            self._my_funds_query(db, user)
             .options(
                 joinedload(ErpExpensePettyCashFund.region),
                 joinedload(ErpExpensePettyCashFund.department),
                 joinedload(ErpExpensePettyCashFund.employee),
-                joinedload(ErpExpensePettyCashFund.topups),
+                selectinload(ErpExpensePettyCashFund.topups),
             )
-            .filter(ErpExpensePettyCashFund.is_active == 1)
             .all()
         )
-        dept_ids = self._department_ids_for(db, user)
-        # An HOD runs their department's pot only in the companies they cover (home company
-        # plus those Admin assigned them).
-        region_ids = user_region_ids(db, user.user_id)
-        mine = []
-        for f in funds:
-            if region_ids is not None and f.region_id not in region_ids:
-                continue
-            if f.owner_type == "employee" and f.employee_id == user.user_id:
-                mine.append(f)
-            elif f.owner_type == "department" and f.department_id in dept_ids:
-                mine.append(f)
-        return [fund_to_dict(db, f) for f in mine]
+        return [fund_to_dict(db, f) for f in funds]
 
     def require_petty_cash_within_limit(
         self,
@@ -644,7 +808,7 @@ class FundService:
         fund = _load_fund(db, fund_id)
         role = user.role.role_code if user.role else ""
         if role == "hod":
-            mine_ids = {f["id"] for f in self.list_mine(db, user)}
+            mine_ids = self._my_fund_ids(db, user)
             if fund_id not in mine_ids:
                 raise PermissionError("HOD can only see bills for their own department")
         taken = self._linked_transaction_ids(db, fund_id)
@@ -679,11 +843,16 @@ class FundService:
     ) -> dict[str, Any]:
         fund = _load_fund(db, fund_id)
         role = user.role.role_code if user.role else ""
-        if role != "hod":
-            raise PermissionError("Only the department HOD can request a top-up")
-        mine_ids = {f["id"] for f in self.list_mine(db, user)}
-        if fund_id not in mine_ids:
-            raise PermissionError("HOD can only request a top-up for their own department")
+        if role == "admin":
+            # Admin raises on a department's behalf (HOD away, or no HOD), for any department pot.
+            if fund.owner_type != "department":
+                raise ValueError("Top-ups are raised for department petty cash")
+        elif role == "hod":
+            mine_ids = self._my_fund_ids(db, user)
+            if fund_id not in mine_ids:
+                raise PermissionError("HOD can only request a top-up for their own department")
+        else:
+            raise PermissionError("Only the department HOD or Admin can request a top-up")
         ids = [int(i) for i in (transaction_ids or []) if i]
         bill_amount = 0.0
         portions: dict[int, float] = {}
@@ -732,25 +901,30 @@ class FundService:
                     amount=portion,
                 )
             )
+        _topup_history(db, row, user.user_id, "requested", remarks)
         db.commit()
+        _notify_topup(db, row, "requested", user.user_id, remarks)
         return self.topup_to_dict(db, row.topup_id)
 
     def list_topups(
         self, db: Session, status: Optional[str] = None, user: Optional[ErpAuthExpenseUsers] = None
     ) -> list[dict[str, Any]]:
-        q = db.query(ErpExpenseFundTopupRequest)
+        """One query for every visible top-up, filtered in SQL. Each row carries its fund's
+        name / company / currency only -- working out every fund's balance per row was
+        several queries per top-up and made this list take ages on a remote DB."""
+        q = db.query(ErpExpenseFundTopupRequest).options(*_TOPUP_LOAD)
         if status:
             q = q.filter(ErpExpenseFundTopupRequest.status == status)
-        rows = q.order_by(ErpExpenseFundTopupRequest.created_on.desc()).all()
         role = user.role.role_code if user and user.role else ""
         if role == "hod":
-            mine_ids = {f["id"] for f in self.list_mine(db, user)}
-            rows = [r for r in rows if r.fund_id in mine_ids]
+            q = q.filter(ErpExpenseFundTopupRequest.fund_id.in_(self._my_fund_ids(db, user) or {-1}))
         elif role in ("accountant", "finance_manager"):
             region_ids = user_region_ids(db, user.user_id)
             if region_ids is not None:
-                rows = [r for r in rows if r.fund and r.fund.region_id in region_ids]
-        return [self.topup_to_dict(db, r.topup_id) for r in rows]
+                q = q.join(ErpExpensePettyCashFund, ErpExpensePettyCashFund.fund_id == ErpExpenseFundTopupRequest.fund_id)
+                q = q.filter(ErpExpensePettyCashFund.region_id.in_(region_ids or {-1}))
+        rows = q.order_by(ErpExpenseFundTopupRequest.created_on.desc()).all()
+        return [_topup_dict(db, r, full_fund=False) for r in rows]
 
     def _require_region_role(self, db: Session, user: ErpAuthExpenseUsers, row: ErpExpenseFundTopupRequest) -> None:
         """Accounts and Finance act only on top-ups of companies they cover; Admin on any."""
@@ -772,9 +946,28 @@ class FundService:
         row.status = "verified"
         row.verified_by = user.user_id
         row.verified_on = datetime.utcnow()
-        if remarks:
-            row.remarks = ((row.remarks or "") + "\n" + remarks).strip()
+        _topup_history(db, row, user.user_id, "verified", remarks)
         db.commit()
+        _notify_topup(db, row, "verified", user.user_id, remarks)
+        return self.topup_to_dict(db, row.topup_id)
+
+    def return_topup(self, db: Session, user: ErpAuthExpenseUsers, topup_id: int, comment: Optional[str]) -> dict[str, Any]:
+        """Accounts sends a top-up back to the HOD (wrong bills, missing receipt...). The bills
+        are freed (a returned top-up no longer holds them), so the HOD raises a corrected one."""
+        if not user.role or user.role.role_code not in ("accountant", "admin"):
+            raise PermissionError("Only Accounts or Admin can return a top-up")
+        if not comment or not comment.strip():
+            raise ValueError("Say why the top-up is being returned")
+        row = db.query(ErpExpenseFundTopupRequest).filter(ErpExpenseFundTopupRequest.topup_id == topup_id).first()
+        if not row:
+            raise LookupError("Top-up not found")
+        self._require_region_role(db, user, row)
+        if row.status != "submitted":
+            raise ValueError("Only a top-up waiting for Accounts can be returned")
+        row.status = "returned"
+        _topup_history(db, row, user.user_id, "returned", comment)
+        db.commit()
+        _notify_topup(db, row, "returned", user.user_id, comment)
         return self.topup_to_dict(db, row.topup_id)
 
     def decide_topup(
@@ -813,63 +1006,122 @@ class FundService:
                     row.payment_date = datetime.utcnow()
             else:
                 row.payment_date = datetime.utcnow()
-        if remarks:
-            row.remarks = ((row.remarks or "") + "\n" + remarks).strip()
-        db.commit()
-        requester = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == row.requester_id).first()
-        fund = _load_fund(db, row.fund_id)
         action = "approved" if approve else "rejected"
-        send(
-            db,
-            requester,
-            f"topup_{action}_{row.topup_id}",
-            None,
-            subject_en=f"Petty cash top-up {action}",
-            subject_ar=f"Petty cash top-up {action}",
-            body_en=f"Your top-up of {row.amount:.2f} {fund.currency} for {_fund_label(fund)} was {action}.",
-            body_ar=f"Your top-up of {row.amount:.2f} {fund.currency} for {_fund_label(fund)} was {action}.",
-        )
+        if row.verified_by == user.user_id and role == "admin" and row.verified_on and not any(
+            h.action == "verified" for h in row.history
+        ):
+            # Admin decided straight from "submitted": record the implied verification too.
+            _topup_history(db, row, user.user_id, "verified", None)
+        comment = remarks
+        if approve and payment_reference:
+            comment = " · ".join(p for p in [f"Paid ({row.payment_method}, ref {payment_reference})", remarks] if p)
+        _topup_history(db, row, user.user_id, action, comment)
+        db.commit()
+        _notify_topup(db, row, action, user.user_id, remarks)
         return self.topup_to_dict(db, row.topup_id)
 
     def topup_to_dict(self, db: Session, topup_id: int) -> dict[str, Any]:
+        """One top-up with its fund's full figures (after an action, the screen refreshes
+        the fund's balance from this)."""
         row = (
             db.query(ErpExpenseFundTopupRequest)
-            .options(
-                joinedload(ErpExpenseFundTopupRequest.requester),
-                joinedload(ErpExpenseFundTopupRequest.verifier),
-                joinedload(ErpExpenseFundTopupRequest.decider),
-                joinedload(ErpExpenseFundTopupRequest.bills),
-                joinedload(ErpExpenseFundTopupRequest.fund).joinedload(ErpExpensePettyCashFund.region),
-                joinedload(ErpExpenseFundTopupRequest.fund).joinedload(ErpExpensePettyCashFund.department),
-                joinedload(ErpExpenseFundTopupRequest.fund).joinedload(ErpExpensePettyCashFund.employee),
-            )
+            .options(*_TOPUP_LOAD)
             .filter(ErpExpenseFundTopupRequest.topup_id == topup_id)
             .first()
         )
         if not row:
             raise LookupError("Top-up not found")
-        fund = row.fund
+        return _topup_dict(db, row, full_fund=True)
+
+
+# Everything a top-up row shows, loaded with it (selectin for the one-to-many lists so rows
+# aren't multiplied).
+_TOPUP_LOAD = (
+    joinedload(ErpExpenseFundTopupRequest.requester),
+    joinedload(ErpExpenseFundTopupRequest.verifier),
+    joinedload(ErpExpenseFundTopupRequest.decider),
+    selectinload(ErpExpenseFundTopupRequest.bills),
+    selectinload(ErpExpenseFundTopupRequest.history).joinedload(ErpExpenseTopupHistory.actor),
+    joinedload(ErpExpenseFundTopupRequest.fund).joinedload(ErpExpensePettyCashFund.region),
+    joinedload(ErpExpenseFundTopupRequest.fund).joinedload(ErpExpensePettyCashFund.department),
+    joinedload(ErpExpenseFundTopupRequest.fund).joinedload(ErpExpensePettyCashFund.employee),
+)
+
+
+def _fund_identity(fund: ErpExpensePettyCashFund) -> dict[str, Any]:
+    """Which fund this is (no balances): enough for a list row's name, company and currency."""
+    region = fund.region
+    return {
+        "id": fund.fund_id,
+        "region_id": fund.region_id,
+        "region_code": region.region_code if region else None,
+        "region_name": region.region_name if region else None,
+        "company_name": (region.company_name or region.region_name) if region else None,
+        "owner_type": fund.owner_type,
+        "department_id": fund.department_id,
+        "department_name": fund.department.department_name if fund.department else None,
+        "employee_id": fund.employee_id,
+        "employee_name": fund.employee.display_name if fund.employee else None,
+        "currency": fund.currency,
+        "approved_limit": float(fund.opening_balance or 0),
+        "label": _fund_label(fund),
+        "is_active": bool(fund.is_active),
+    }
+
+
+def _topup_dict(db: Session, row: ErpExpenseFundTopupRequest, *, full_fund: bool) -> dict[str, Any]:
+    fund = row.fund
+    if fund is None:
+        fund_payload = None
+    elif full_fund:
+        fund_payload = fund_to_dict(db, _load_fund(db, fund.fund_id))
+    else:
+        fund_payload = _fund_identity(fund)
+    return {
+        "id": row.topup_id,
+        "fund_id": row.fund_id,
+        "amount": row.amount,
+        "status": row.status,
+        "remarks": row.remarks,
+        "requester_id": row.requester_id,
+        "requester_name": row.requester.display_name if row.requester else None,
+        "verified_by": row.verified_by,
+        "verified_by_name": row.verifier.display_name if row.verifier else None,
+        "verified_on": row.verified_on.isoformat() if row.verified_on else None,
+        "decided_by": row.decided_by,
+        "decided_by_name": row.decider.display_name if row.decider else None,
+        "decided_on": row.decided_on.isoformat() if row.decided_on else None,
+        "payment_method": row.payment_method,
+        "payment_reference": row.payment_reference,
+        "payment_date": row.payment_date.isoformat() if row.payment_date else None,
+        "transaction_ids": [b.transaction_id for b in (row.bills or [])],
+        "created_on": row.created_on.isoformat() if row.created_on else None,
+        "department_name": fund.department.department_name if fund and fund.department else None,
+        "region_code": fund.region.region_code if fund and fund.region else None,
+        "history": _history_entries(row),
+        "fund": fund_payload,
+    }
+
+
+def _history_entries(row: ErpExpenseFundTopupRequest) -> list[dict[str, Any]]:
+    """Audit trail, oldest first. Top-ups created before ErpExpenseTopupHistory existed get
+    their steps rebuilt from the request's own who/when columns."""
+    def entry(action, actor, at, comment=None):
         return {
-            "id": row.topup_id,
-            "fund_id": row.fund_id,
-            "amount": row.amount,
-            "status": row.status,
-            "remarks": row.remarks,
-            "requester_id": row.requester_id,
-            "requester_name": row.requester.display_name if row.requester else None,
-            "verified_by": row.verified_by,
-            "verified_by_name": row.verifier.display_name if row.verifier else None,
-            "verified_on": row.verified_on.isoformat() if row.verified_on else None,
-            "decided_by": row.decided_by,
-            "decided_by_name": row.decider.display_name if row.decider else None,
-            "decided_on": row.decided_on.isoformat() if row.decided_on else None,
-            "payment_method": row.payment_method,
-            "payment_reference": row.payment_reference,
-            "payment_date": row.payment_date.isoformat() if row.payment_date else None,
-            "transaction_ids": [b.transaction_id for b in (row.bills or [])],
-            "created_on": row.created_on.isoformat() if row.created_on else None,
-            "fund": fund_to_dict(db, _load_fund(db, fund.fund_id)) if fund else None,
+            "action": action,
+            "actor_name": actor.display_name if actor else None,
+            "comment": comment,
+            "at": at.isoformat() if at else None,
         }
+
+    if row.history:
+        return [entry(h.action, h.actor, h.acted_on, h.comment) for h in row.history]
+    legacy = [entry("requested", row.requester, row.created_on, row.remarks)]
+    if row.verified_on:
+        legacy.append(entry("verified", row.verifier, row.verified_on))
+    if row.decided_on and row.status in ("approved", "rejected"):
+        legacy.append(entry(row.status, row.decider, row.decided_on))
+    return legacy
 
 
 fund_service = FundService()

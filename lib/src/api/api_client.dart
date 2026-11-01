@@ -564,6 +564,16 @@ class ApiClient {
     return TopupRequest.fromJson(_decodeMap(res));
   }
 
+  /// Accounts sends a top-up back to the HOD; [remarks] (the reason) is required.
+  Future<TopupRequest> returnTopup(int id, {required String remarks}) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/topups/$id/return'),
+          headers: _headers,
+          body: jsonEncode({'remarks': remarks}),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
   Future<TopupRequest> decideTopup(
     int id, {
     required bool approve,

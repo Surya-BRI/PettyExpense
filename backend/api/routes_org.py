@@ -284,6 +284,24 @@ def verify_topup(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.post("/api/topups/{topup_id}/return")
+def return_topup(
+    topup_id: int,
+    body: TopupDecideRequest,
+    user: CurrentUser = Depends(require_role("accountant", "admin")),
+    db: Session = Depends(get_db),
+):
+    """Accounts sends a top-up back to the HOD with a reason; its bills are freed."""
+    try:
+        return fund_service.return_topup(db, _orm_user(db, user), topup_id, body.remarks)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.post("/api/topups/{topup_id}/approve")
 def approve_topup(
     topup_id: int,

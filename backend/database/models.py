@@ -190,6 +190,9 @@ class ErpExpenseFundTopupRequest(Base, AuditColumns):
     verifier: Mapped[Optional[ErpAuthExpenseUsers]] = relationship(foreign_keys=[verified_by])
     decider: Mapped[Optional[ErpAuthExpenseUsers]] = relationship(foreign_keys=[decided_by])
     bills: Mapped[list["ErpExpenseFundTopupBill"]] = relationship(back_populates="topup")
+    history: Mapped[list["ErpExpenseTopupHistory"]] = relationship(
+        back_populates="topup", order_by="ErpExpenseTopupHistory.history_id"
+    )
 
 
 class ErpExpenseFundTopupBill(Base):
@@ -208,6 +211,25 @@ class ErpExpenseFundTopupBill(Base):
 
     topup: Mapped[ErpExpenseFundTopupRequest] = relationship(back_populates="bills")
     transaction: Mapped["ErpExpenseTransaction"] = relationship()
+
+
+class ErpExpenseTopupHistory(Base):
+    """Audit log of a PCA top-up: one row per step (requested, verified, returned, approved,
+    rejected) with who, when and their comment. New table -- create_all() creates it on startup."""
+
+    __tablename__ = "ErpExpenseTopupHistory"
+
+    history_id: Mapped[int] = mapped_column("historyId", Integer, primary_key=True, autoincrement=True)
+    topup_id: Mapped[int] = mapped_column(
+        "topupId", Integer, ForeignKey("ErpExpenseFundTopupRequest.topupId"), index=True
+    )
+    actor_id: Mapped[int] = mapped_column("actorId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"))
+    action: Mapped[str] = mapped_column("action", String(16))
+    comment: Mapped[Optional[str]] = mapped_column("comment", UnicodeText, nullable=True)
+    acted_on: Mapped[datetime] = mapped_column("actedOn", DateTime, default=datetime.utcnow)
+
+    topup: Mapped[ErpExpenseFundTopupRequest] = relationship(back_populates="history")
+    actor: Mapped[ErpAuthExpenseUsers] = relationship()
 
 
 class ErpExpenseEmployeeCache(Base):

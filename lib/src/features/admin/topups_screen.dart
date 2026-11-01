@@ -10,6 +10,7 @@ import '../../utils/money.dart';
 import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/pca_fund_figures.dart';
+import '../../widgets/shimmer_box.dart';
 import '../authentication/auth_controller.dart';
 import 'admin_providers.dart';
 import 'my_funds_screen.dart';
@@ -28,8 +29,27 @@ String topupStatusLabel(String status) {
       return 'Approved';
     case 'rejected':
       return 'Rejected';
+    case 'returned':
+      return 'Returned to HOD';
     default:
       return status;
+  }
+}
+
+String topupActionLabel(String action) {
+  switch (action) {
+    case 'requested':
+      return 'Requested';
+    case 'verified':
+      return 'Verified by Accounts';
+    case 'returned':
+      return 'Returned to HOD';
+    case 'approved':
+      return 'Approved';
+    case 'rejected':
+      return 'Rejected';
+    default:
+      return action;
   }
 }
 
@@ -54,6 +74,17 @@ class TopupsScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       drawer: const AppNavDrawer(),
       appBar: BrandAppBar(title: isHod ? 'Funds' : 'Top-ups', automaticallyImplyLeading: true),
+      // Admin raises top-ups on a department's behalf (HOD away, or no HOD).
+      floatingActionButton: role == UserRole.admin
+          ? FloatingActionButton.extended(
+              onPressed: () async {
+                await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RaiseTopupScreen()));
+                invalidateFundProviders(ref);
+              },
+              icon: Icon(PhosphorIcons.plus(), size: 18),
+              label: const Text('Request top-up'),
+            )
+          : null,
       body: isHod
           ? _hodBody(context, ref, fundsAsync!, topupsAsync)
           : topupsAsync.when(
@@ -86,14 +117,15 @@ class TopupsScreen extends ConsumerWidget {
     if (fundsAsync.hasError) return Center(child: Text('${fundsAsync.error}'));
     if (topupsAsync.hasError) return Center(child: Text('${topupsAsync.error}'));
 
-    final funds = [
-      for (final f in fundsAsync.valueOrNull ?? const <PettyCashFund>[])
-        if (f.ownerType == 'department') f,
-    ]..sort((a, b) {
-        final ai = kAdminRegionOrder.indexOf((a.regionCode ?? '').toUpperCase());
-        final bi = kAdminRegionOrder.indexOf((b.regionCode ?? '').toUpperCase());
-        return (ai < 0 ? 99 : ai).compareTo(bi < 0 ? 99 : bi);
-      });
+    final funds =
+        [
+          for (final f in fundsAsync.valueOrNull ?? const <PettyCashFund>[])
+            if (f.ownerType == 'department') f,
+        ]..sort((a, b) {
+          final ai = kAdminRegionOrder.indexOf((a.regionCode ?? '').toUpperCase());
+          final bi = kAdminRegionOrder.indexOf((b.regionCode ?? '').toUpperCase());
+          return (ai < 0 ? 99 : ai).compareTo(bi < 0 ? 99 : bi);
+        });
     final topups = topupsAsync.valueOrNull ?? const <TopupRequest>[];
 
     return ListView(
@@ -115,7 +147,7 @@ class TopupsScreen extends ConsumerWidget {
               onRequestTopup: () async {
                 await Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => RaiseTopupScreen(fundId: fund.id, regionId: fund.regionId),
+                    builder: (_) => RaiseTopupScreen(fundId: fund.id, regionId: fund.regionId, fund: fund),
                   ),
                 );
                 invalidateFundProviders(ref);
@@ -126,26 +158,15 @@ class TopupsScreen extends ConsumerWidget {
         const SizedBox(height: 8),
         const Text(
           'Top-ups',
-          style: TextStyle(
-            color: AppColors.darkBlue,
-            fontWeight: FontWeight.w800,
-            fontSize: 13,
-            letterSpacing: 0.3,
-          ),
+          style: TextStyle(color: AppColors.darkBlue, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.3),
         ),
         const SizedBox(height: 8),
         if (topups.isEmpty)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Text(
-              'No top-up requests yet',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
+            decoration: BoxDecoration(color: AppColors.card, borderRadius: BorderRadius.circular(14)),
+            child: const Text('No top-up requests yet', style: TextStyle(color: AppColors.textSecondary)),
           )
         else
           for (var i = 0; i < topups.length; i++) ...[
@@ -178,55 +199,44 @@ class _HodFundCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-                Text(
-                  company,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    height: 1.2,
-                    color: AppColors.darkBlue,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (code.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.lightBlue,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          code,
-                          style: const TextStyle(
-                            color: AppColors.darkBlue,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 11,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
+            Text(
+              company,
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, height: 1.2, color: AppColors.darkBlue),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (code.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(color: AppColors.lightBlue, borderRadius: BorderRadius.circular(6)),
+                    child: Text(
+                      code,
+                      style: const TextStyle(
+                        color: AppColors.darkBlue,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        letterSpacing: 0.4,
                       ),
-                    Text(
-                      '$dept petty cash',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                PcaFundFigures(fund: fund),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: onRequestTopup,
-                    icon: Icon(PhosphorIcons.plus(), size: 16),
-                    label: const Text('Request top-up'),
                   ),
-                ),
+                Text('$dept petty cash', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            PcaFundFigures(fund: fund),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onRequestTopup,
+                icon: Icon(PhosphorIcons.plus(), size: 16),
+                label: const Text('Request top-up'),
+              ),
+            ),
           ],
         ),
       ),
@@ -260,17 +270,10 @@ class TopupRequestTile extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             if (t.fund != null)
-              Text(
-                fundCompanyName(t.fund!),
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              ),
+              Text(fundCompanyName(t.fund!), style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
             const SizedBox(height: 2),
             Text(
-              [
-                t.fund?.departmentName,
-                t.requesterName,
-                topupStatusLabel(t.status),
-              ].whereType<String>().join(' · '),
+              [t.fund?.departmentName, t.requesterName, topupStatusLabel(t.status)].whereType<String>().join(' · '),
               style: const TextStyle(color: AppColors.textSecondary),
             ),
             if (t.transactionIds.isNotEmpty) ...[
@@ -291,14 +294,38 @@ class TopupRequestTile extends ConsumerWidget {
               const SizedBox(height: 6),
               Text(t.remarks!, style: const TextStyle(fontSize: 13)),
             ],
+            if (t.status == 'returned' && (t.returnReason ?? '').trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AppColors.warningSoft, borderRadius: BorderRadius.circular(10)),
+                child: Text(
+                  'Returned: ${t.returnReason!.trim()}. Fix it and raise a new request.',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+            if (t.history.isNotEmpty) _TopupHistory(entries: t.history),
             if (canVerify && t.status == 'submitted') ...[
               const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => runTopupAction(context, ref, () => ref.read(apiClientProvider).verifyTopup(t.id)),
-                  child: const Text('Verify'),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () =>
+                          runTopupAction(context, ref, () => ref.read(apiClientProvider).verifyTopup(t.id)),
+                      child: const Text('Verify'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => returnTopup(context, ref, t.id),
+                      child: const Text('Return to HOD'),
+                    ),
+                  ),
+                ],
               ),
             ],
             if (canDecide && (t.status == 'verified' || (role == UserRole.admin && t.status == 'submitted'))) ...[
@@ -343,25 +370,123 @@ Future<void> runTopupAction(BuildContext context, WidgetRef ref, Future<void> Fu
   }
 }
 
+/// Accounts sends a top-up back to the HOD; the reason is required.
+Future<void> returnTopup(BuildContext context, WidgetRef ref, int id) async {
+  final reason = await showDialog<String>(context: context, builder: (_) => const _ReturnReasonDialog());
+  if (reason == null || reason.isEmpty || !context.mounted) return;
+  await runTopupAction(context, ref, () => ref.read(apiClientProvider).returnTopup(id, remarks: reason));
+}
+
+class _ReturnReasonDialog extends StatefulWidget {
+  const _ReturnReasonDialog();
+
+  @override
+  State<_ReturnReasonDialog> createState() => _ReturnReasonDialogState();
+}
+
+class _ReturnReasonDialogState extends State<_ReturnReasonDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = _controller.text.trim();
+    return AlertDialog(
+      title: const Text('Return to HOD'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLines: 3,
+        onChanged: (_) => setState(() {}),
+        decoration: const InputDecoration(labelText: 'Reason *', hintText: 'e.g. Receipt missing for one bill'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: text.isEmpty ? null : () => Navigator.of(context).pop(text),
+          child: const Text('Return'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Collapsible audit trail of a top-up: who did what, when, and why.
+class _TopupHistory extends StatelessWidget {
+  const _TopupHistory({required this.entries});
+
+  final List<TopupHistoryEntry> entries;
+
+  String _when(DateTime? at) {
+    if (at == null) return '';
+    final l = at.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(l.day)}/${two(l.month)}/${l.year} ${two(l.hour)}:${two(l.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 4),
+        title: Text(
+          'History (${entries.length})',
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.darkBlue),
+        ),
+        children: [
+          for (final h in entries.reversed)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          [topupActionLabel(h.action), if ((h.actorName ?? '').isNotEmpty) h.actorName!].join(' · '),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        if ((h.comment ?? '').trim().isNotEmpty)
+                          Text(
+                            h.comment!.trim(),
+                            style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Text(_when(h.at), style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 Future<void> approveTopup(BuildContext context, WidgetRef ref, int id) async {
   final refText = await showModalBottomSheet<String>(
     context: context,
     isScrollControlled: true,
     backgroundColor: AppColors.card,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (ctx) => const _PaymentRefSheet(),
   );
   if (refText == null || !context.mounted) return;
   await runTopupAction(
     context,
     ref,
-    () => ref.read(apiClientProvider).decideTopup(
-          id,
-          approve: true,
-          paymentReference: refText.isEmpty ? null : refText,
-        ),
+    () =>
+        ref.read(apiClientProvider).decideTopup(id, approve: true, paymentReference: refText.isEmpty ? null : refText),
   );
 }
 
@@ -412,10 +537,14 @@ class _PaymentRefSheetState extends State<_PaymentRefSheet> {
 }
 
 class RaiseTopupScreen extends ConsumerStatefulWidget {
-  const RaiseTopupScreen({super.key, this.fundId, this.regionId});
+  const RaiseTopupScreen({super.key, this.fundId, this.regionId, this.fund});
 
   final int? fundId;
   final int? regionId;
+
+  /// The fund the HOD tapped "Request top-up" on: the screen then skips loading funds and
+  /// goes straight to that fund's bills.
+  final PettyCashFund? fund;
 
   @override
   ConsumerState<RaiseTopupScreen> createState() => _RaiseTopupScreenState();
@@ -423,6 +552,10 @@ class RaiseTopupScreen extends ConsumerStatefulWidget {
 
 class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
   List<PettyCashFund> _funds = const [];
+  // Admin only: raises for any department, one company at a time (loading every fund in
+  // every company at once is slow).
+  List<RegionConfig> _regions = const [];
+  int? _adminRegionId;
   List<ReplenishableBill> _bills = const [];
   final Set<int> _selected = {};
   int? _fundId;
@@ -489,21 +622,51 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
     try {
       final role = UserRoleX.fromJson(ref.read(authControllerProvider).user?.role);
       final api = ref.read(apiClientProvider);
-      final funds = role == UserRole.admin ? await api.adminFunds() : await api.myFunds();
-      final depts = [for (final f in funds) if (f.ownerType == 'department') f]
-        ..sort((a, b) {
-          final ai = kAdminRegionOrder.indexOf((a.regionCode ?? '').toUpperCase());
-          final bi = kAdminRegionOrder.indexOf((b.regionCode ?? '').toUpperCase());
-          return (ai < 0 ? 99 : ai).compareTo(bi < 0 ? 99 : bi);
-        });
+      List<PettyCashFund> funds;
+      if (widget.fund != null && role != UserRole.admin) {
+        funds = [widget.fund!]; // came from the fund's card: nothing else to load
+      } else if (role == UserRole.admin) {
+        if (_regions.isEmpty) {
+          _regions = await api.listRegions();
+          final current = (ref.read(authControllerProvider).user?.regionCode ?? '').toUpperCase();
+          _adminRegionId ??=
+              widget.regionId ??
+              _regions
+                  .cast<RegionConfig?>()
+                  .firstWhere(
+                    (r) => r!.regionCode.toUpperCase() == current,
+                    orElse: () => _regions.isEmpty ? null : _regions.first,
+                  )
+                  ?.id;
+        }
+        funds = _adminRegionId == null
+            ? const []
+            : [
+                for (final d in await api.adminDepartmentFunds(_adminRegionId!))
+                  if (d.fund != null) d.fund!,
+              ];
+      } else {
+        funds = await api.myFunds();
+      }
+      final depts =
+          [
+            for (final f in funds)
+              if (f.ownerType == 'department') f,
+          ]..sort((a, b) {
+            final ai = kAdminRegionOrder.indexOf((a.regionCode ?? '').toUpperCase());
+            final bi = kAdminRegionOrder.indexOf((b.regionCode ?? '').toUpperCase());
+            return (ai < 0 ? 99 : ai).compareTo(bi < 0 ? 99 : bi);
+          });
       final picked = _defaultFund(depts);
       if (!mounted) return;
       setState(() {
         _funds = depts;
         _fundId = picked?.id;
-        _loading = false;
       });
+      // Keep the full-screen loader up until the bills are in too, so the form doesn't
+      // appear half-empty and then fill in.
       if (_fundId != null) await _loadBills(_fundId!);
+      if (mounted) setState(() => _loading = false);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -551,7 +714,9 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
       _error = null;
     });
     try {
-      await ref.read(apiClientProvider).createTopup(
+      await ref
+          .read(apiClientProvider)
+          .createTopup(
             _fundId!,
             remarks: _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
             transactionIds: _selected.toList(),
@@ -572,104 +737,183 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const BrandAppBar(title: 'Request top-up', automaticallyImplyLeading: true, showMenuAction: false),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          if (_funds.isEmpty && !_loading)
-            const Text(
-              'No department pot is set up for you yet. Ask Admin to set an approved limit.',
-              style: TextStyle(color: AppColors.textSecondary, height: 1.35),
-            )
-          else if (lockDepartment)
-            InputDecorator(
-              decoration: const InputDecoration(labelText: 'Department'),
-              child: Text(
-                fund != null ? _fundLabel(fund) : 'Your department',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-              ),
-            )
-          else
-            DropdownButtonFormField<int>(
-              key: ValueKey(_fundId),
-              isExpanded: true,
-              initialValue: _fundId,
-              decoration: const InputDecoration(labelText: 'Department'),
-              items: [
-                for (final f in _funds)
-                  DropdownMenuItem(
-                    value: f.id,
-                    child: Text(_fundLabel(f), overflow: TextOverflow.ellipsis),
-                  ),
-              ],
-              onChanged: (v) {
-                setState(() => _fundId = v);
-                if (v != null) _loadBills(v);
-              },
-            ),
-          const SizedBox(height: 16),
-          Text(
-            'Amount  ${formatMoney(currency, _amount)}',
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-          ),
-          const SizedBox(height: 12),
-          if (!_loading && !_loadingBills && _bills.isEmpty)
-            const Text(
-              'No unreplenished petty-cash bills for this department.',
-              style: TextStyle(color: AppColors.textSecondary),
-            )
-          else if (!_loadingBills)
-            ...[
-              for (final bill in _bills)
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _selected.contains(bill.id),
-                  onChanged: (on) {
-                    setState(() {
-                      if (on == true) {
-                        _selected.add(bill.id);
-                      } else {
-                        _selected.remove(bill.id);
-                      }
-                    });
-                  },
-                  title: Text(formatMoney(bill.currency ?? currency, bill.amount)),
-                  subtitle: Text(
-                    [
-                      if (bill.billDate != null && bill.billDate!.isNotEmpty) bill.billDate,
-                      '#${bill.id}',
-                      if (bill.isPartOfBill)
-                        'your department\'s part of ${formatMoney(bill.currency ?? currency, bill.billTotal!)}',
-                    ].whereType<String>().join(' · '),
-                  ),
-                ),
-            ],
-          const SizedBox(height: 12),
-          TextField(
-            controller: _remarks,
-            decoration: const InputDecoration(labelText: 'Reason (optional)'),
-          ),
-          const SizedBox(height: 16),
-          FilledButton(onPressed: _busy ? null : _save, child: Text(_busy ? 'Sending…' : 'Submit request')),
-          if (_loading || _loadingBills) ...[
-            const SizedBox(height: 16),
-            const Row(
+      // Nothing to fill in until the department and its bills are known: show a loader and
+      // shimmering bill rows instead of an empty form.
+      body: _loading
+          ? const _RaiseTopupLoading()
+          : ListView(
+              padding: const EdgeInsets.all(20),
               children: [
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                if (_regions.length > 1) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      for (final r in _regions)
+                        ChoiceChip(
+                          label: Text(companyLabel(r.regionCode)),
+                          selected: r.id == _adminRegionId,
+                          onSelected: _loading
+                              ? null
+                              : (_) {
+                                  if (r.id == _adminRegionId) return;
+                                  setState(() {
+                                    _adminRegionId = r.id;
+                                    _fundId = null;
+                                  });
+                                  _load();
+                                },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (_funds.isEmpty && !_loading)
+                  const Text(
+                    'No department pot is set up for you yet. Ask Admin to set an approved limit.',
+                    style: TextStyle(color: AppColors.textSecondary, height: 1.35),
+                  )
+                else if (lockDepartment)
+                  InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Department'),
+                    child: Text(
+                      fund != null ? _fundLabel(fund) : 'Your department',
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                    ),
+                  )
+                else
+                  DropdownButtonFormField<int>(
+                    key: ValueKey(_fundId),
+                    isExpanded: true,
+                    initialValue: _fundId,
+                    decoration: const InputDecoration(labelText: 'Department'),
+                    items: [
+                      for (final f in _funds)
+                        DropdownMenuItem(
+                          value: f.id,
+                          child: Text(_fundLabel(f), overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                    onChanged: (v) {
+                      setState(() => _fundId = v);
+                      if (v != null) _loadBills(v);
+                    },
+                  ),
+                const SizedBox(height: 16),
+                Text(
+                  'Amount  ${formatMoney(currency, _amount)}',
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                 ),
-                SizedBox(width: 10),
-                Text('Loading…', style: TextStyle(color: AppColors.textSecondary)),
+                const SizedBox(height: 12),
+                if (_loadingBills)
+                  // Switching department: shimmer just the bill list, keep the rest of the form.
+                  const _BillRowsShimmer()
+                else if (_bills.isEmpty)
+                  const Text(
+                    'No unreplenished petty-cash bills for this department.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  )
+                else ...[
+                  for (final bill in _bills)
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _selected.contains(bill.id),
+                      onChanged: (on) {
+                        setState(() {
+                          if (on == true) {
+                            _selected.add(bill.id);
+                          } else {
+                            _selected.remove(bill.id);
+                          }
+                        });
+                      },
+                      title: Text(formatMoney(bill.currency ?? currency, bill.amount)),
+                      subtitle: Text(
+                        [
+                          if (bill.billDate != null && bill.billDate!.isNotEmpty) bill.billDate,
+                          '#${bill.id}',
+                          if (bill.isPartOfBill)
+                            'your department\'s part of ${formatMoney(bill.currency ?? currency, bill.billTotal!)}',
+                        ].whereType<String>().join(' · '),
+                      ),
+                    ),
+                ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _remarks,
+                  decoration: const InputDecoration(labelText: 'Reason (optional)'),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: _busy || _loadingBills ? null : _save,
+                  child: Text(_busy ? 'Sending…' : 'Submit request'),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(_error!, style: const TextStyle(color: Colors.red)),
+                ],
               ],
             ),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 8),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
-        ],
-      ),
+    );
+  }
+}
+
+/// Full-screen loading state for Request top-up: a large spinner plus shimmering bill rows
+/// (no empty input fields while there's nothing to fill in yet).
+class _RaiseTopupLoading extends StatelessWidget {
+  const _RaiseTopupLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
+      children: const [
+        Center(child: SizedBox(width: 48, height: 48, child: CircularProgressIndicator(strokeWidth: 4))),
+        SizedBox(height: 16),
+        Center(
+          child: Text(
+            'Loading petty-cash bills…',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+        ),
+        SizedBox(height: 32),
+        ShimmerBox(height: 14, widthFraction: 0.45),
+        SizedBox(height: 20),
+        _BillRowsShimmer(),
+      ],
+    );
+  }
+}
+
+/// Placeholder for the bill list: a tick + amount + detail line per row.
+class _BillRowsShimmer extends StatelessWidget {
+  const _BillRowsShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < 4; i++)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              children: [
+                ShimmerBox(height: 20, width: 20, borderRadius: BorderRadius.all(Radius.circular(4))),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ShimmerBox(height: 14, widthFraction: 0.35),
+                      SizedBox(height: 8),
+                      ShimmerBox(height: 11, widthFraction: 0.6),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

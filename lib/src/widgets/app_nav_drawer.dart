@@ -80,6 +80,9 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/admin' || location.startsWith('/admin/companies'),
           onTap: () => go('/admin'),
         ),
+      // A collection `if` covers one element only -- People needs its own Admin check
+      // (it was showing for every role).
+      if (!kIsWeb && isAdmin)
         _DrawerItem(
           icon: PhosphorIcons.users(),
           selectedIcon: PhosphorIcons.users(PhosphorIconsStyle.fill),
@@ -97,7 +100,7 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/topups' || location == '/funds',
           onTap: () => go('/topups'),
         ),
-      if (!kIsWeb && (isAccountant || isFinanceManager))
+      if (!kIsWeb && (isAccountant || isFinanceManager || isAdmin))
         _DrawerItem(
           icon: PhosphorIcons.arrowClockwise(),
           selectedIcon: PhosphorIcons.arrowClockwise(PhosphorIconsStyle.fill),
@@ -164,20 +167,91 @@ class AppNavDrawer extends ConsumerWidget {
               decoration: const BoxDecoration(
                 border: Border(top: BorderSide(color: AppColors.divider)),
               ),
-              child: _DrawerItem(
-                icon: PhosphorIcons.signOut(),
-                selectedIcon: PhosphorIcons.signOut(PhosphorIconsStyle.fill),
-                accent: AppColors.danger,
-                label: 'Sign out',
-                selected: false,
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  await ref.read(authControllerProvider.notifier).logout();
-                  if (context.mounted) context.go('/login');
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (user != null) _WorkInfoCard(department: user.departmentName, regionCode: user.regionCode),
+                  _DrawerItem(
+                    icon: PhosphorIcons.signOut(),
+                    selectedIcon: PhosphorIcons.signOut(PhosphorIconsStyle.fill),
+                    accent: AppColors.danger,
+                    label: 'Sign out',
+                    selected: false,
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      await ref.read(authControllerProvider.notifier).logout();
+                      if (context.mounted) context.go('/login');
+                    },
+                  ),
+                ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Department and company (of the region the user is working in), side by side just
+/// above Sign out. The company name comes from the same branding lookup as the logo.
+class _WorkInfoCard extends ConsumerWidget {
+  const _WorkInfoCard({required this.department, required this.regionCode});
+
+  final String? department;
+  final String? regionCode;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final code = (regionCode ?? '').trim();
+    final branding = code.isEmpty ? null : ref.watch(regionBrandingProvider(code)).valueOrNull;
+    final company = (branding?.companyName ?? '').trim().isNotEmpty
+        ? branding!.companyName!.trim()
+        : (code.isEmpty ? '' : companyLabel(code));
+    final dept = (department ?? '').trim();
+    if (dept.isEmpty && company.isEmpty) return const SizedBox.shrink();
+
+    Widget column(IconData icon, String value) => Expanded(
+          child: Row(
+            children: [
+              PhosphorIcon(icon, size: 16, color: AppColors.darkBlue),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  value.isEmpty ? '—' : value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    height: 1.25,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              column(PhosphorIcons.usersThree(), dept),
+              const VerticalDivider(width: 20, thickness: 1, color: AppColors.divider),
+              column(PhosphorIcons.buildings(), company),
+            ],
+          ),
         ),
       ),
     );
@@ -215,45 +289,154 @@ class _CompanySwitcherState extends ConsumerState<_CompanySwitcher> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Couldn't switch company: $e")),
+        SnackBar(content: Text("Couldn't switch region: $e")),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
+  Future<void> _openPicker() async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: AppColors.card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Switch region',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Your claims, petty cash and approvals reload for the region you pick.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
+              for (final code in widget.options)
+                _RegionOption(
+                  code: code,
+                  selected: code == widget.current,
+                  onTap: () => Navigator.of(sheetContext).pop(code),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked != null && mounted) navigateGuarded(ref, () => _switch(picked));
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.divider)),
-      ),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: 'Company',
-          prefixIcon: PhosphorIcon(PhosphorIcons.buildings(), size: 20),
-          suffixIcon: _busy
-              ? const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                )
-              : null,
+    final current = widget.current;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Material(
+        color: AppColors.lightBlue,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: _busy ? null : _openPicker,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 10, 14, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppColors.card,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: PhosphorIcon(PhosphorIcons.globeHemisphereEast(), size: 22, color: AppColors.darkBlue),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'REGION',
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 0.8,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        current == null ? 'Select region' : companyLabel(current),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.darkBlue),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_busy)
+                  const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  PhosphorIcon(PhosphorIcons.caretUpDown(), size: 20, color: AppColors.darkBlue),
+              ],
+            ),
+          ),
         ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: widget.options.contains(widget.current) ? widget.current : null,
-            isExpanded: true,
-            isDense: true,
-            items: [
-              for (final code in widget.options)
-                DropdownMenuItem(value: code, child: Text(companyLabel(code))),
-            ],
-            onChanged: _busy
-                ? null
-                : (code) {
-                    if (code != null) navigateGuarded(ref, () => _switch(code));
-                  },
+      ),
+    );
+  }
+}
+
+class _RegionOption extends StatelessWidget {
+  const _RegionOption({required this.code, required this.selected, required this.onTap});
+
+  final String code;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: selected ? AppColors.lightBlue : AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: selected ? AppColors.brightBlue : AppColors.divider),
+            ),
+            child: Row(
+              children: [
+                PhosphorIcon(
+                  PhosphorIcons.mapPin(),
+                  size: 20,
+                  color: selected ? AppColors.brightBlue : AppColors.textSecondary,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    companyLabel(code),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected ? AppColors.darkBlue : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                if (selected) PhosphorIcon(PhosphorIcons.checkCircle(), size: 22, color: AppColors.brightBlue),
+              ],
+            ),
           ),
         ),
       ),
@@ -316,19 +499,6 @@ class _PettyCashLeft extends ConsumerWidget {
               '${formatMoney(fund.currency, fund.available)} left',
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.darkBlue),
             ),
-            const SizedBox(height: 2),
-            Text(
-              'of ${formatMoney(fund.currency, fund.approvedLimit)} limit',
-              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            ),
-            if (fund.pendingBills > 0) ...[
-              const SizedBox(height: 6),
-              Text(
-                '${formatMoney(fund.currency, fund.pendingBills)} awaiting approval\n'
-                '${formatMoney(fund.currency, fund.uncommitted)} free for new bills',
-                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-            ],
           ],
         ),
       ),

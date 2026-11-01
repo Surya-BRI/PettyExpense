@@ -11,6 +11,7 @@ import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency.dart';
 import '../../utils/money.dart';
+import '../../widgets/app_nav_drawer.dart' show companyLabel;
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/op_code_field.dart';
 import '../../widgets/receipt_pages_view.dart';
@@ -399,6 +400,21 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
 
   String get _baseCurrency => baseCurrencyForRegion(_billRegion ?? ref.read(authControllerProvider).user?.regionCode);
 
+  bool get _regionLocked => _regions.length <= 1 || _editingDisputed;
+
+  String get _regionHelperText {
+    // DropdownMenu shows the helper on one line -- keep these short.
+    if (_editingDisputed) return 'Locked once the bill is submitted';
+    if (_regions.length <= 1) return 'Your company';
+    final current = ref.read(authControllerProvider).user?.regionCode;
+    if (widget.existingClaimId == null && current != null && _billRegion == current) {
+      // Multi-company users: the default follows the company they're switched to, which
+      // may not be where this receipt is from.
+      return 'Your current company · change if needed';
+    }
+    return 'Company this bill is charged to';
+  }
+
   String? _normalizeCurrency(String? value) => normalizeBillCurrency(value);
 
   /// Prefills Region * from the employee's home company (or the only company
@@ -751,7 +767,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       } else {
         claim = await api.createClaim({
           ...body,
-          'region_code': _billRegion ?? ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
+          // Submit always has one (validated above). A draft without one is parked under the
+          // signed-in company by the server -- never a hard-coded company.
+          'region_code': ?_billRegion,
           'receipt_id': _ocr.receiptId,
           's3_key': _ocr.s3Key,
           'submit': !asDraft,
@@ -1119,23 +1137,30 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: _regions.any((r) => r.regionCode == _billRegion) ? _billRegion : null,
-                    decoration: InputDecoration(
-                      labelText: 'Region *',
-                      helperText: _regions.length <= 1 ? 'Your company' : 'Company this bill is charged to',
-                    ),
-                    items: [
+                  // DropdownMenu (not DropdownButtonFormField): its list always opens below the
+                  // field, instead of over it aligned to the selected item.
+                  DropdownMenu<String>(
+                    // Rebuilt when the selection or the company list changes, since
+                    // initialSelection is only read once.
+                    key: ValueKey('region-$_billRegion-${_regions.length}-$_regionLocked'),
+                    initialSelection: _regions.any((r) => r.regionCode == _billRegion) ? _billRegion : null,
+                    expandedInsets: EdgeInsets.zero,
+                    label: const Text('Region *'),
+                    helperText: _regionHelperText,
+                    requestFocusOnTap: false,
+                    // Locked when there's nothing to choose, and once the bill has been
+                    // submitted: approvals already given belong to that company's approvers.
+                    enabled: !_regionLocked,
+                    dropdownMenuEntries: [
                       for (final r in _regions)
-                        DropdownMenuItem(value: r.regionCode, child: Text(r.regionName)),
+                        // Short names (Dubai, UAE, KSA, Oman), same as the side-menu switcher.
+                        DropdownMenuEntry(value: r.regionCode, label: companyLabel(r.regionCode)),
                     ],
-                    // One company only: nothing to choose, so the field is shown locked.
-                    onChanged: _regions.length <= 1
-                        ? null
-                        : (v) {
-                            setState(() => _billRegion = v);
-                            _scheduleQuote();
-                          },
+                    onSelected: (v) {
+                      if (v == null || v == _billRegion) return;
+                      setState(() => _billRegion = v);
+                      _scheduleQuote();
+                    },
                   ),
                   _ConvertedAmountCard(
                     billCurrency: (_currency ?? '').toUpperCase(),
@@ -1215,6 +1240,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                       vat: _vatValue,
                       itemsTotal: _linesTotal,
                       billTotal: _ocrFailed ? null : _ocr.totalAmount,
+                      baseCurrency: _baseCurrency,
+                      rateToBase: _rateToBase,
                     ),
                   ],
                   if (!_multi) ...[
@@ -1753,6 +1780,8 @@ class _ItemsTotals extends StatelessWidget {
     required this.vat,
     required this.itemsTotal,
     this.billTotal,
+    this.baseCurrency,
+    this.rateToBase,
   });
 
   final String? currency;
@@ -1760,8 +1789,18 @@ class _ItemsTotals extends StatelessWidget {
   final double vat;
   final double itemsTotal; // line items sum — only used for the mismatch warning
   final double? billTotal;
+  // The bill's company currency and today's rate (1 bill unit = rateToBase base units);
+  // rateToBase is null while the rate is still loading or couldn't be fetched.
+  final String? baseCurrency;
+  final double? rateToBase;
 
   String _m(double v) => '${currency ?? ''} ${v.toStringAsFixed(2)}'.trim();
+
+  bool get _foreign {
+    final bill = (currency ?? '').toUpperCase();
+    final base = (baseCurrency ?? '').toUpperCase();
+    return bill.isNotEmpty && base.isNotEmpty && bill != base;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1803,6 +1842,16 @@ class _ItemsTotals extends StatelessWidget {
           row("VAT", _m(vat)),
           const Divider(height: 14),
           row("Total", _m(displayTotal), bold: true),
+          if (_foreign) ...[
+            const Divider(height: 14),
+            if (rateToBase != null) ...[
+              row("Total in $baseCurrency", formatMoney(baseCurrency!, displayTotal * rateToBase!), bold: true),
+            ] else
+              Text(
+                "Converted to $baseCurrency at submit",
+                style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+              ),
+          ],
           if (mismatch) ...[
             const SizedBox(height: 10),
             Container(

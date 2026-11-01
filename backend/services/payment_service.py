@@ -80,7 +80,8 @@ def _payable_amount(txn: ErpExpenseTransaction) -> tuple[float, str]:
 def _payable_sql():
     """(currency, amount) SQL expressions matching _payable_amount, so the page totals add
     up the same figures the rows show -- including bills with no stored base amount yet.
-    Needs ErpExpenseRegionConfig joined to the query."""
+    Needs ErpExpenseRegionConfig joined to the query. Don't GROUP BY the currency
+    expression on SQL Server (bound literal); see list_claims."""
     t, r = ErpExpenseTransaction, ErpExpenseRegionConfig
     currency = func.coalesce(t.base_currency, r.base_currency, "AED")
     bill_total = func.coalesce(t.total_amount, func.coalesce(t.amount, 0) + func.coalesce(t.vat_amount, 0))
@@ -231,14 +232,18 @@ class PaymentService:
                 q = q.filter(ErpExpenseTransaction.region_id.in_(region_ids or {-1}))
         if region_code and region_code.strip():
             q = q.filter(ErpExpenseRegionConfig.region_code == region_code.strip().upper())
-        pay_currency, pay_amount = _payable_sql()
-        totals = {
-            currency: round(float(amount or 0), 2)
-            for currency, amount in q.with_entities(pay_currency, func.sum(pay_amount))
-            .group_by(pay_currency)
+        # Grouped by the two plain currency columns, then combined here: SQL Server rejects a
+        # GROUP BY expression containing a bound literal (the 'AED' fallback), since the
+        # SELECT and GROUP BY copies are different parameters to it.
+        _, pay_amount = _payable_sql()
+        totals: dict[str, float] = {}
+        for txn_cur, region_cur, amount in (
+            q.with_entities(ErpExpenseTransaction.base_currency, ErpExpenseRegionConfig.base_currency, func.sum(pay_amount))
+            .group_by(ErpExpenseTransaction.base_currency, ErpExpenseRegionConfig.base_currency)
             .all()
-            if currency
-        }
+        ):
+            currency = (txn_cur or region_cur or "AED").strip().upper()
+            totals[currency] = round(totals.get(currency, 0.0) + float(amount or 0), 2)
         total = q.order_by(None).count()
         order = ErpExpenseTransaction.paid_on.desc() if wanted == "paid" else ErpExpenseTransaction.decided_on.desc()
         rows = (

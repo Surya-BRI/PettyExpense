@@ -506,6 +506,11 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
                 f"تمت الموافقة على مطالبتك رقم {txn.transaction_id} بمبلغ {bill_and_base_text(txn)}.",
                 html_body_en=content.html,
             )
+            if (txn.type or "").strip().lower() == "petty_cash":
+                # The bill just came off the fund(s): warn the HOD if one is now running low.
+                from services.fund_service import check_low_funds_for_bill
+
+                check_low_funds_for_bill(db, txn)
         else:
             next_approvers = resolve_stage_approvers(db, txn, txn.current_stage)
             content = email_templates.approval_pending_email(email_templates.build_context(txn))
@@ -650,30 +655,14 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
 
 
 def list_history(db: Session, user: CurrentUser, limit: int = 100) -> list[dict[str, Any]]:
-    """Claims this approver has personally actioned, newest first.
-    One row per unique transaction; the most recent action taken by this user is shown."""
+    """Every action this approver has taken, newest first -- one entry per action, not per
+    claim. A bill disputed and later approved by the same HOD shows both entries; history
+    is a log and an earlier action must never disappear behind a later one."""
     from database.models import ErpExpenseApprovalHistory
     from services.transaction_service import transaction_to_dict
 
-    # Subquery: most-recent actedOn per transaction for this actor.
-    from sqlalchemy import func
-
-    latest_per_txn = (
-        db.query(
-            ErpExpenseApprovalHistory.transaction_id,
-            func.max(ErpExpenseApprovalHistory.acted_on).label("latest"),
-        )
-        .filter(
-            ErpExpenseApprovalHistory.actor_id == user.id,
-            ~ErpExpenseApprovalHistory.action.in_(INTERNAL_HISTORY_ACTIONS),
-        )
-        .group_by(ErpExpenseApprovalHistory.transaction_id)
-        .subquery()
-    )
-
     rows = (
         db.query(ErpExpenseApprovalHistory, ErpExpenseTransaction)
-        .join(latest_per_txn, (ErpExpenseApprovalHistory.transaction_id == latest_per_txn.c.transaction_id) & (ErpExpenseApprovalHistory.acted_on == latest_per_txn.c.latest))
         .join(ErpExpenseTransaction, ErpExpenseTransaction.transaction_id == ErpExpenseApprovalHistory.transaction_id)
         .options(
             joinedload(ErpExpenseTransaction.documents),
@@ -683,15 +672,25 @@ def list_history(db: Session, user: CurrentUser, limit: int = 100) -> list[dict[
             joinedload(ErpExpenseTransaction.employee),
             selectinload(ErpExpenseTransaction.line_items).joinedload(ErpExpenseLineItem.category),
         )
-        .filter(ErpExpenseApprovalHistory.actor_id == user.id)
-        .order_by(ErpExpenseApprovalHistory.acted_on.desc())
+        .filter(
+            ErpExpenseApprovalHistory.actor_id == user.id,
+            ~ErpExpenseApprovalHistory.action.in_(INTERNAL_HISTORY_ACTIONS),
+        )
+        .order_by(
+            ErpExpenseApprovalHistory.acted_on.desc(),
+            ErpExpenseApprovalHistory.approval_history_id.desc(),
+        )
         .limit(limit)
         .all()
     )
 
     results = []
+    claim_dicts: dict[int, dict[str, Any]] = {}  # one claim can appear several times
     for hist, txn in rows:
-        d = transaction_to_dict(txn)
+        if txn.transaction_id not in claim_dicts:
+            claim_dicts[txn.transaction_id] = transaction_to_dict(txn)
+        d = dict(claim_dicts[txn.transaction_id])
+        d["history_id"] = hist.approval_history_id
         d["my_action"] = hist.action
         d["my_action_stage"] = stage_base(hist.stage)
         d["my_action_stage_key"] = hist.stage

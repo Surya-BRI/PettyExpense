@@ -571,7 +571,7 @@ class TransactionService:
         exchange_rate: float = 1.0,
         bill_date: Optional[str],
         category_id: int,
-        region_code: str,
+        region_code: Optional[str],
         type: str = "reimbursement",
         project_id: Optional[int],
         op_number: Optional[str],
@@ -582,7 +582,13 @@ class TransactionService:
         submit: bool = True,
         line_items: Optional[list[dict[str, Any]]] = None,
     ) -> dict[str, Any]:
-        region = _resolve_region(db, region_code)
+        code = (region_code or "").strip().upper()
+        if not code and not submit:
+            # A draft may leave the company for later; park it under the signed-in company.
+            code = (user.region_code or "").strip().upper()
+        if not code:
+            raise ValueError("Select the company (region) this bill is charged to")
+        region = _resolve_region(db, code)
         require_bill_region_allowed(db, user.id, user.region_code, region.region_code)
         category = db.query(ErpExpenseCategory).filter(ErpExpenseCategory.category_id == category_id).first()
         if not category:
@@ -689,6 +695,13 @@ class TransactionService:
         if updates.get("region_code"):
             region = _resolve_region(db, updates["region_code"])
             if region.region_id != txn.region_id:
+                if txn.status != "draft":
+                    # Approvals already given belong to the original company's approvers;
+                    # moving the bill would let it skip the new company's earlier stages.
+                    raise ValueError(
+                        "The company can't be changed after the bill was submitted. "
+                        "Ask for it to be rejected and file a new bill under the right company."
+                    )
                 require_bill_region_allowed(db, user.id, user.region_code, region.region_code)
             txn.region_id = region.region_id
             txn.region = region

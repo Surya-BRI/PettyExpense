@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 
 from auth.security import (
     CurrentUser,
-    allowed_regions_for,
+    FALLBACK_REGION_CODE,
+    selectable_regions_for,
     authenticate_user,
     create_access_token,
     create_refresh_token,
@@ -67,8 +68,8 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     # Nobody is prompted at sign-in: everyone starts in their ERP home company
     # (employee -> subsidiary). A multi-region user (ErpExpenseMultiRegionUserRegion)
     # switches afterwards via /switch-region from the side menu.
-    allowed = allowed_regions_for(db, user)
     home = resolve_default_region_code(db, user.user_id)
+    allowed = selectable_regions_for(db, user, home)
     # Approval routing reads the home company from the local row (no ERP query per claim).
     remember_home_region(db, user, home)
     if allowed:
@@ -79,7 +80,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         else:
             region_code = allowed[0]
     else:
-        region_code = home or body.region_code or "UAE"
+        region_code = home or body.region_code or FALLBACK_REGION_CODE
 
     return TokenResponse(
         access_token=create_access_token(user, region_code),
@@ -102,8 +103,8 @@ def switch_region(
     user = get_user_by_id(db, current.id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    allowed = allowed_regions_for(db, user)
     home = resolve_default_region_code(db, user.user_id)
+    allowed = selectable_regions_for(db, user, home)
     wanted = (body.region_code or "").strip().upper()
     if wanted not in allowed:
         raise HTTPException(status_code=403, detail="You are not assigned to that company")
@@ -129,7 +130,7 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     region_code = payload.get("region")
     home = resolve_default_region_code(db, user.user_id)
     remember_home_region(db, user, home)
-    allowed = _sorted_allowed(allowed_regions_for(db, user), home)
+    allowed = _sorted_allowed(selectable_regions_for(db, user, home), home)
     return TokenResponse(
         access_token=create_access_token(user, region_code),
         refresh_token=create_refresh_token(user, region_code),
@@ -146,7 +147,8 @@ def me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_
         else None
     )
     orm = get_user_by_id(db, user.id)
-    assigned = _sorted_allowed(allowed_regions_for(db, orm), resolve_default_region_code(db, orm.user_id)) if orm else []
+    home = resolve_default_region_code(db, orm.user_id) if orm else None
+    assigned = _sorted_allowed(selectable_regions_for(db, orm, home), home) if orm else []
     allowed = assigned or ([user.region_code] if user.region_code else [])
     return {
         "id": user.id,

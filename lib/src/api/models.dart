@@ -1012,6 +1012,8 @@ class TopupRequest {
     this.fund,
     this.paymentReference,
     this.transactionIds = const [],
+    this.departmentName,
+    this.history = const [],
   });
 
   final int id;
@@ -1022,6 +1024,17 @@ class TopupRequest {
   final PettyCashFund? fund;
   final String? paymentReference;
   final List<int> transactionIds;
+  final String? departmentName;
+  /// Audit trail, oldest first: requested, verified / returned, approved / rejected.
+  final List<TopupHistoryEntry> history;
+
+  /// Why Accounts sent it back (latest "returned" step), if it was.
+  String? get returnReason {
+    for (final h in history.reversed) {
+      if (h.action == 'returned') return h.comment;
+    }
+    return null;
+  }
 
   factory TopupRequest.fromJson(Map<String, dynamic> json) {
     return TopupRequest(
@@ -1038,6 +1051,30 @@ class TopupRequest {
         for (final id in (json['transaction_ids'] as List? ?? const []))
           if (id is num) id.toInt(),
       ],
+      departmentName: json['department_name'] as String?,
+      history: [
+        for (final row in (json['history'] as List? ?? const []))
+          if (row is Map) TopupHistoryEntry.fromJson(Map<String, dynamic>.from(row)),
+      ],
+    );
+  }
+}
+
+class TopupHistoryEntry {
+  const TopupHistoryEntry({required this.action, this.actorName, this.comment, this.at});
+
+  final String action; // requested | verified | returned | approved | rejected
+  final String? actorName;
+  final String? comment;
+  final DateTime? at;
+
+  factory TopupHistoryEntry.fromJson(Map<String, dynamic> json) {
+    final at = json['at'] as String?;
+    return TopupHistoryEntry(
+      action: json['action'] as String? ?? '',
+      actorName: json['actor_name'] as String?,
+      comment: json['comment'] as String?,
+      at: at == null ? null : DateTime.tryParse(at),
     );
   }
 }

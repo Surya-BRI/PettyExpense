@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -68,32 +67,43 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
     }
   }
 
-  /// Opens the phone's own document scanner (ML Kit on Android, VisionKit on iOS):
-  /// it finds the receipt, snaps it automatically and returns just the receipt,
-  /// cropped and flattened. Falls back to our doclens screen if it's unavailable.
-  Future<void> _scanReceipt() async {
-    final List<String>? paths;
-    try {
-      paths = await CunningDocumentScanner.getPictures(
-        noOfPages: _multiPage ? _maxPages : 1,
-        scannerSource: ScannerSource.camera,
+  /// Camera (Spec 5.1): our capture screen takes a photo only when the user presses the
+  /// shutter, then lets them check the crop. (The phone's built-in document scanner was
+  /// dropped here: it snaps by itself as soon as it thinks it sees a page, and that can't
+  /// be switched off from the app.) Multi-page bills: one shutter press per page, asking
+  /// after each whether to add another.
+  Future<void> _captureWithCamera() async {
+    final pages = <String>[];
+    final maxPages = _multiPage ? _maxPages : 1;
+    while (pages.length < maxPages) {
+      final result = await Navigator.of(context, rootNavigator: true).push<GuidedCaptureResult>(
+        MaterialPageRoute(
+          builder: (_) => GuidedCaptureScreen(
+            pageLabel: _multiPage ? 'Page ${pages.length + 1} of up to $maxPages' : null,
+          ),
+        ),
       );
-    } on CunningDocumentScannerException catch (e) {
       if (!mounted) return;
-      if (e.code == 'permission_denied') {
-        setState(() => _error = 'Camera permission is needed to scan receipts.');
-        return;
+      if (result == null) break; // closed the camera: keep the pages taken so far
+      if (result.useFallback) {
+        // Plain system camera -- also shutter-only -- for phones where ours can't run.
+        if (pages.isEmpty) await _pick(ImageSource.camera);
+        if (pages.isEmpty) return;
+        break;
       }
-      await _openGuidedCapture();
-      return;
+      final path = result.imagePath;
+      if (path == null) break;
+      pages.add(path);
+      if (pages.length >= maxPages || !await _askAddAnotherPage(pages.length)) break;
+      if (!mounted) return;
     }
-    if (!mounted || paths == null) return;
+    if (pages.isEmpty || !mounted) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await _uploadAndContinue(paths);
+      await _uploadAndContinue(pages);
     } catch (e) {
       setState(() {
         _busy = false;
@@ -102,30 +112,20 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
     }
   }
 
-  Future<void> _openGuidedCapture() async {
-    final result = await Navigator.of(context, rootNavigator: true)
-        .push<GuidedCaptureResult>(
-          MaterialPageRoute(builder: (_) => const GuidedCaptureScreen()),
-        );
-    if (!mounted || result == null) return;
-    if (result.useFallback) {
-      await _pick(ImageSource.camera);
-      return;
-    }
-    final path = result.imagePath;
-    if (path == null) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await _uploadAndContinue([path]);
-    } catch (e) {
-      setState(() {
-        _busy = false;
-        _error = 'Could not upload receipt. Check connection and try again.';
-      });
-    }
+  Future<bool> _askAddAnotherPage(int taken) async {
+    final more = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Text('Page $taken added'),
+        content: const Text('Does this bill have another page?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Done')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Add page')),
+        ],
+      ),
+    );
+    return more ?? false;
   }
 
   /// Uploads every page of the bill in one request, then opens the confirm screen.
@@ -160,7 +160,10 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
         20,
         32 + MediaQuery.paddingOf(context).bottom,
       ),
-      child: Column(
+      // Scrolls instead of overflowing on short screens (the toggles + cards + buttons are
+      // taller than a small phone's available sheet height).
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -250,7 +253,7 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
                 ),
               ),
             FilledButton.icon(
-              onPressed: _mode == null ? null : _scanReceipt,
+              onPressed: _mode == null ? null : _captureWithCamera,
               icon: Icon(PhosphorIcons.camera()),
               label: const Text('Open camera'),
             ),
@@ -269,6 +272,7 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
             ),
           ],
         ],
+        ),
       ),
     );
   }

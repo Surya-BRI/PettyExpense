@@ -30,19 +30,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _busy = false;
   bool _obscurePassword = true;
 
+  // One approver team per company plus an employee to file bills. Other dev logins
+  // (anjana_it_emp, deepa_accounts_emp, dev_uae, dev_oman, ksa_it_hod) still work when typed.
   static const _demoAccounts = [
-    ('surya_sales_emp',    'Test@1234', 'Employee · Sales · Dubai'),
+    ('surya_sales_emp',    'Test@1234', 'Employee · Sales · Dubai + KSA + UAE'),
     ('priya_sales_hod',    'Test@1234', 'HOD · Sales · Dubai'),
-    ('anjana_it_emp',      'Test@1234', 'Employee · IT · Dubai'),
     ('vikram_it_hod',      'Test@1234', 'HOD · IT · Dubai'),
-    ('deepa_accounts_emp', 'Test@1234', 'Employee · Accounts · Dubai'),
     ('ravi_accountant',    'Test@1234', 'Accountant · Dubai'),
     ('meera_finance_mgr',  'Test@1234', 'Finance Manager · Dubai'),
-    ('arjun_admin',        'Test@1234', 'Admin · Dubai'),
-    ('dev_dubai',          'Test@1234', 'Employee · Dubai region'),
-    ('dev_uae',            'Test@1234', 'Employee · UAE region'),
-    ('dev_ksa',            'Test@1234', 'Employee · KSA region'),
-    ('dev_oman',           'Test@1234', 'Employee · OMAN region'),
+    ('arjun_admin',        'Test@1234', 'Admin'),
+    ('dev_ksa',            'Test@1234', 'Employee · Sales · KSA'),
+    ('ksa_sales_hod',      'Test@1234', 'HOD · Sales · KSA'),
+    ('ksa_accountant',     'Test@1234', 'Accountant · KSA'),
+    ('ksa_finance_mgr',    'Test@1234', 'Finance Manager · KSA'),
   ];
 
   @override

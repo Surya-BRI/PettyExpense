@@ -99,6 +99,17 @@ def allowed_regions_for(db: Session, user: ErpAuthExpenseUsers) -> list[str]:
     return [r[0] for r in rows]
 
 
+def selectable_regions_for(db: Session, user: ErpAuthExpenseUsers, home: Optional[str]) -> list[str]:
+    """Companies a multi-company user can switch to and file bills under: Admin's ticks plus
+    their ERP home company, even when it isn't ticked (ticks saved before an ERP transfer, or
+    written outside Admin -> People). Only ever adds. Empty = single-company user."""
+    ticked = allowed_regions_for(db, user)
+    home_code = (home or "").strip().upper()
+    if ticked and home_code and home_code not in {c.upper() for c in ticked}:
+        return [*ticked, home_code]
+    return ticked
+
+
 # ERP is the directory (login, department, subsidiary). Petty-cash limits, bills, and
 # top-ups live only in ErpExpense* tables — never written back to ERP master data.
 # ErpMasterSubsidiary.subsidiaryCode (the ERP entity an employee's ErpMasterRegion belongs
@@ -111,6 +122,12 @@ ERP_SUBSIDIARY_TO_REGION_CODE = {
     "Prosigns Oman": "OMAN",
     "ELJO India": "IN",
 }
+
+
+# Company for someone ERP gives no company at all (no region on their employee record, or an
+# unmapped subsidiary). Dubai = Blue Rhine Industries, where most staff are -- not UAE, which
+# is Blue Rhine Contracting and has no ERP subsidiary of its own.
+FALLBACK_REGION_CODE = "DUBAI"
 
 
 def resolve_default_region_code(db: Session, erp_user_id: int) -> Optional[str]:

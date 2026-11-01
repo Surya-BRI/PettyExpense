@@ -128,3 +128,30 @@ def test_dispute_leaves_hod_queue_and_blocks_approve_until_resubmit(db, world):
     assert txn.current_stage == "accountant"
     assert tid not in _ids(approval_service.list_queue(db, hod, "hod"))
     assert tid in _ids(approval_service.list_queue(db, accountant, "accountant"))
+
+
+def test_hod_history_keeps_the_dispute_after_a_later_approve(db, world):
+    """History is a log: dispute -> resubmit -> approve shows BOTH of the HOD's actions,
+    newest first, each with its own comment -- the approve must not replace the dispute."""
+    hod = _cu(world["hod"], "hod")
+    employee = _cu(world["employee"], "employee")
+    tid = world["txn"].transaction_id
+
+    approval_service.advance(db, hod, tid, "dispute", "Wrong amount — please correct")
+    transaction_service.update_draft(db, employee, tid, {"amount": 35.0, "total_amount": 37.0})
+    approval_service.resubmit_after_dispute(db, employee, tid)
+    approval_service.advance(db, hod, tid, "approve", "Looks right now")
+
+    mine = [h for h in approval_service.list_history(db, hod) if h["id"] == tid]
+    assert [(h["my_action"], h["my_comment"]) for h in mine] == [
+        ("approve", "Looks right now"),
+        ("dispute", "Wrong amount — please correct"),
+    ]
+    assert len({h["history_id"] for h in mine}) == 2
+    # Both entries describe the same claim's current state.
+    assert {h["status"] for h in mine} == {"submitted"}
+
+    # The claim's own history (employee + approver view) has every step too.
+    claim = transaction_service.get_claim(db, employee, tid)
+    actions = [h["action"] for h in claim["history"] if h["action"] not in ("created", "edited")]
+    assert actions == ["submitted", "dispute", "approve"]

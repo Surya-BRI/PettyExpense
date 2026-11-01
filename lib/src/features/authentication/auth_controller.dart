@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -39,6 +40,10 @@ class AuthController extends StateNotifier<AuthState> {
   AuthController() : super(const AuthState(isLoading: true)) {
     _bootstrap();
   }
+
+  /// Starts from [initial] without reading stored tokens -- for widget tests.
+  @visibleForTesting
+  AuthController.withState(super.initial);
 
   final _storage = const FlutterSecureStorage();
 

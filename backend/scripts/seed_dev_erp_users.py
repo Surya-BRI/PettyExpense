@@ -9,7 +9,9 @@ Script is fully idempotent: re-running it is safe.
 
 Usage:
     cd backend
-    python -m scripts.seed_dev_erp_users
+    python -m scripts.seed_dev_erp_users          # Dubai dev users
+    python -m scripts.seed_dev_erp_users --ksa    # KSA approver team
+    python -m scripts.seed_dev_erp_users --uae    # UAE (Contracting) team + employee
 """
 
 from sqlalchemy import text
@@ -81,6 +83,40 @@ DEV_HOD_ASSIGNMENTS = [
     (9002, "Sales"),
     (9006, "IT"),
 ]
+DEV_FINANCE_MANAGER_IDS = {9004}
+
+# KSA approver team: home company KSA, so KSA bills route to them and not to the Dubai
+# team. HOD of the same departments as the Dubai HODs (HOD is per department across
+# companies; each handles only the companies they cover -- see services/region_scope.py).
+KSA_HOME_REGION = "KSA"
+KSA_USERS = [
+    (9021, "ksa_sales_hod",    "Khalid", "Sales HOD KSA",  "ksa_sales_hod@expense.local",    "Department HOD", "Sales"),
+    (9022, "ksa_it_hod",       "Omar",   "IT HOD KSA",     "ksa_it_hod@expense.local",       "Department HOD", "IT"),
+    (9023, "ksa_accountant",   "Noura",  "Accountant KSA", "ksa_accountant@expense.local",   "Accountant",      None),
+    (9024, "ksa_finance_mgr",  "Faisal", "Finance KSA",    "ksa_finance_mgr@expense.local",  None,              None),
+]
+KSA_HOD_ASSIGNMENTS = [
+    (9021, "Sales"),
+    (9022, "IT"),
+]
+KSA_FINANCE_MANAGER_IDS = {9024}
+
+# UAE = Blue Rhine Contracting. No ERP subsidiary maps to it, so ERP can't give these users a
+# UAE home company -- they get UAE as an Admin-style assigned company instead
+# (ErpExpenseMultiRegionUserRegion), and sign in straight into UAE.
+UAE_REGION = "UAE"
+UAE_USERS = [
+    (9031, "uae_sales_hod",    "Hamdan", "Sales HOD UAE",  "uae_sales_hod@expense.local",    "Department HOD", "Sales"),
+    (9032, "uae_it_hod",       "Rashid", "IT HOD UAE",     "uae_it_hod@expense.local",       "Department HOD", "IT"),
+    (9033, "uae_accountant",   "Mariam", "Accountant UAE", "uae_accountant@expense.local",   "Accountant",      None),
+    (9034, "uae_finance_mgr",  "Sultan", "Finance UAE",    "uae_finance_mgr@expense.local",  None,              None),
+    (9035, "uae_sales_emp",    "Aisha",  "Sales UAE",      "uae_sales_emp@expense.local",    None,              "Sales"),
+]
+UAE_HOD_ASSIGNMENTS = [
+    (9031, "Sales"),
+    (9032, "IT"),
+]
+UAE_FINANCE_MANAGER_IDS = {9034}
 
 # erp_role_name -> local ErpAuthExpenseUsers.role_code. Used when THIS script has to
 # pre-create a user's local row (see section 3) -- a first login would resolve the same
@@ -104,6 +140,29 @@ DEV_ERP_ROLES = [
 
 
 def seed_dev_erp_users() -> None:
+    _seed_users(DEV_USERS, DEV_HOD_ASSIGNMENTS, DEV_HOME_REGION, DEV_FINANCE_MANAGER_IDS)
+
+
+def seed_dev_ksa_team() -> None:
+    _seed_users(KSA_USERS, KSA_HOD_ASSIGNMENTS, KSA_HOME_REGION, KSA_FINANCE_MANAGER_IDS)
+
+
+def seed_dev_uae_team() -> None:
+    _seed_users(
+        UAE_USERS, UAE_HOD_ASSIGNMENTS, UAE_REGION, UAE_FINANCE_MANAGER_IDS,
+        assigned_region_codes=[UAE_REGION],
+    )
+
+
+def _seed_users(
+    users,
+    hod_assignments,
+    home_region_code: str,
+    finance_manager_ids: set[int],
+    assigned_region_codes: tuple[str, ...] | list[str] = (),
+) -> None:
+    """assigned_region_codes: companies ticked for every user (as Admin -> People does), for a
+    company ERP can't give as a home company (UAE / Contracting)."""
     db = SessionLocal()
     pw_hash = hash_password(DEV_PASSWORD)
     try:
@@ -127,12 +186,12 @@ def seed_dev_erp_users() -> None:
         # erp_role_name in DEV_USERS refers to these roleIds by name, so just use the
         # fixed mapping directly -- no need to look anything up by name.
         erp_role_id: dict[str, int] = {name: rid for rid, name in DEV_ERP_ROLES}
-        home_region_id = _find_region_id(db, DEV_HOME_REGION)
-        if home_region_id is None:
-            print(f"  WARNING: no ERP subsidiary/region for {DEV_HOME_REGION} -- People/home company left unset")
+        home_region_id = _find_region_id(db, home_region_code)
+        if home_region_id is None and not assigned_region_codes:
+            print(f"  WARNING: no ERP subsidiary/region for {home_region_code} -- People/home company left unset")
 
         # ── 2. Insert / update ERP auth + employee rows ────────────────────
-        for user_id, user_name, first, last, email, erp_role_name, _dept in DEV_USERS:
+        for user_id, user_name, first, last, email, erp_role_name, _dept in users:
             # ErpAuthUsers
             existing_auth = db.execute(
                 text("SELECT userId FROM ErpAuthUsers WHERE userId = :id"), {"id": user_id}
@@ -201,16 +260,34 @@ def seed_dev_erp_users() -> None:
         # department_id assignment has to happen here, not on the ERP-side tables above.
         # dev_finance additionally needs its role pre-set (finance_manager has no ERP role
         # mapping at all), which is why it's always force-created even with no department.
-        from database.models import ErpAuthExpenseUsers, ErpExpenseDepartment, ErpMasterExpenseRole
+        from database.models import (
+            ErpAuthExpenseUsers,
+            ErpExpenseDepartment,
+            ErpExpenseRegionConfig,
+            ErpMasterExpenseRole,
+        )
 
         dept_id_by_name = {d.department_name: d.department_id for d in db.query(ErpExpenseDepartment).all()}
+        # App company id, saved as the local home company so approval routing knows it
+        # before the user's first sign-in (login would save the same value).
+        app_home_region_id = (
+            db.query(ErpExpenseRegionConfig.region_id)
+            .filter(ErpExpenseRegionConfig.region_code == home_region_code)
+            .scalar()
+            if home_region_id is not None
+            else None
+        )
 
-        for user_id, user_name, first, last, email, erp_role_name, dept_name in DEV_USERS:
+        for user_id, user_name, first, last, email, erp_role_name, dept_name in users:
             dept_id = dept_id_by_name.get(dept_name) if dept_name else None
             if dept_name and dept_id is None:
                 print(f"  WARNING: department {dept_name!r} not found -- {user_name} left without one")
 
-            role_code = "finance_manager" if user_id == 9004 else ROLE_CODE_BY_ERP_ROLE_NAME.get(erp_role_name, "employee")
+            role_code = (
+                "finance_manager"
+                if user_id in finance_manager_ids
+                else ROLE_CODE_BY_ERP_ROLE_NAME.get(erp_role_name, "employee")
+            )
             role = db.query(ErpMasterExpenseRole).filter(ErpMasterExpenseRole.role_code == role_code).first()
 
             local = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == user_id).first()
@@ -223,11 +300,12 @@ def seed_dev_erp_users() -> None:
                 # this is what caught/fixes the IT HOD row that got pre-created as "employee".
                 if role:
                     local.role_id = role.role_id
+                if app_home_region_id is not None:
+                    local.home_region_id = app_home_region_id
                 db.commit()
-            elif user_id == 9004 or dept_id is not None:
-                # Only pre-create the local row when there's something it needs to carry that
-                # a first login wouldn't set on its own (finance_manager's role, or a
-                # department) -- every other dev user gets its local row lazily on first login.
+            else:
+                # Pre-created (not left to first login) so role, department and home company
+                # are in place for approval routing straight away.
                 if role:
                     db.execute(text("SET IDENTITY_INSERT ErpAuthExpenseUsers ON"))
                     db.add(
@@ -239,6 +317,7 @@ def seed_dev_erp_users() -> None:
                             role_id=role.role_id,
                             department_id=dept_id,
                             email=email,
+                            home_region_id=app_home_region_id,
                             is_active=1,
                             is_deleted=0,
                         )
@@ -247,10 +326,36 @@ def seed_dev_erp_users() -> None:
                     db.execute(text("SET IDENTITY_INSERT ErpAuthExpenseUsers OFF"))
                     db.commit()
 
+        # ── 3b. Assigned companies (Admin -> People ticks) ─────────────────
+        if assigned_region_codes:
+            from database.models import ErpExpenseMultiRegionUserRegion
+
+            assigned_ids = [
+                rid
+                for (rid,) in db.query(ErpExpenseRegionConfig.region_id).filter(
+                    ErpExpenseRegionConfig.region_code.in_(list(assigned_region_codes))
+                )
+            ]
+            for user_id, *_ in users:
+                for rid in assigned_ids:
+                    row = (
+                        db.query(ErpExpenseMultiRegionUserRegion)
+                        .filter(
+                            ErpExpenseMultiRegionUserRegion.user_id == user_id,
+                            ErpExpenseMultiRegionUserRegion.region_id == rid,
+                        )
+                        .first()
+                    )
+                    if row:
+                        row.is_active = 1
+                    else:
+                        db.add(ErpExpenseMultiRegionUserRegion(user_id=user_id, region_id=rid, is_active=1))
+            db.commit()
+
         # ── 4. HOD assignments -- who approves the "hod" stage per department ──
         from database.models import ErpExpenseHodAssignment
 
-        for user_id, dept_name in DEV_HOD_ASSIGNMENTS:
+        for user_id, dept_name in hod_assignments:
             dept_id = dept_id_by_name.get(dept_name)
             if dept_id is None:
                 print(f"  WARNING: department {dept_name!r} not found -- HOD assignment for user {user_id} skipped")
@@ -264,11 +369,14 @@ def seed_dev_erp_users() -> None:
         db.commit()
 
         print("Dev ERP users seeded:")
-        for uid, uname, *_, erp_role, dept_name in DEV_USERS:
-            app_role = "finance_manager" if uid == 9004 else ROLE_CODE_BY_ERP_ROLE_NAME.get(erp_role, "employee")
+        for uid, uname, *_, erp_role, dept_name in users:
+            app_role = (
+                "finance_manager" if uid in finance_manager_ids else ROLE_CODE_BY_ERP_ROLE_NAME.get(erp_role, "employee")
+            )
             dept_suffix = f"  dept={dept_name}" if dept_name else ""
-            home = f"  home={DEV_HOME_REGION}" if home_region_id else ""
-            print(f"  {uname:<22} password={DEV_PASSWORD!r}  role={app_role}{dept_suffix}{home}")
+            home = f"  home={home_region_code}" if home_region_id else ""
+            assigned = f"  assigned={','.join(assigned_region_codes)}" if assigned_region_codes else ""
+            print(f"  {uname:<22} password={DEV_PASSWORD!r}  role={app_role}{dept_suffix}{home}{assigned}")
 
     finally:
         db.close()
@@ -281,4 +389,9 @@ if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-    seed_dev_erp_users()
+    if "--ksa" in sys.argv:
+        seed_dev_ksa_team()
+    elif "--uae" in sys.argv:
+        seed_dev_uae_team()
+    else:
+        seed_dev_erp_users()
