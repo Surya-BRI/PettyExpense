@@ -84,12 +84,30 @@ export interface Claim {
   bill_date: string | null;
   currency: string;
   exchange_rate: number;
+  /** Company base currency the bill was converted into (rate locked at first submit). */
+  base_currency?: string | null;
+  exchange_rate_date?: string | null;
+  total_amount_base?: number | null;
   amount: number;
   vat_amount: number;
   total_amount: number;
   op_number: string | null;
   status: ClaimStatus;
+  /** 'unpaid' = approved reimbursement waiting for payment; petty cash is 'not_applicable'. */
+  payment_status?: 'not_applicable' | 'unpaid' | 'paid';
+  payment?: {
+    amount: number;
+    currency: string;
+    payment_method: string;
+    payment_method_label: string;
+    payment_reference: string;
+    payment_date: string | null;
+    paid_by_name: string | null;
+    remarks: string | null;
+  } | null;
   current_stage: Stage | null;
+  /** Exact step: 'department_hod:<id>' names the department. Matches stage_sequence / stage_labels. */
+  current_stage_key?: string | null;
   dispute_returned: boolean;
   remarks: string | null;
   duplicate_flag: boolean;
@@ -102,6 +120,8 @@ export interface Claim {
   receipt: Receipt | null;
   duplicate_warning: DuplicateWarning | null;
   stage_sequence: string[];
+  /** Per-claim stage names, e.g. 'department_hod:7' → 'IT HOD'. */
+  stage_labels?: Record<string, string>;
   history?: HistoryEntry[];
   /** "multiple" for itemised bills (total = sum of line_items). Older backends omit both. */
   line_mode?: 'single' | 'multiple';

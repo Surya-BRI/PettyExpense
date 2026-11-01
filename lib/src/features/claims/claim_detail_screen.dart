@@ -9,11 +9,12 @@ import '../../theme/app_theme.dart';
 import '../../utils/dubai_time.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/authenticated_image.dart';
+import '../../widgets/receipt_pages_view.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/claim_stage_tracker.dart';
 import '../../widgets/claim_ui_helpers.dart';
 import '../../widgets/shimmer_box.dart';
+import '../payments/payment_sheet.dart' show PaymentDetailsCard;
 import '../shared/status_chip.dart';
 
 String _fmtDate(String? raw) {
@@ -64,7 +65,7 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
         loading: () => const _ClaimDetailSkeleton(),
         error: (e, _) => Center(child: Text('$e')),
         data: (claim) {
-          final imagePath = claim.receipt?.imageUrl;
+          final pages = claim.receipt?.pageImageUrls ?? const <String>[];
           final total = claim.totalAmount ?? (claim.amount + claim.vatAmount);
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 110),
@@ -82,7 +83,7 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
-                        StatusChip(status: claim.status),
+                        StatusChip.forClaim(claim),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -103,6 +104,7 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                       formatMoney(claim.currency, total),
                       emphasize: true,
                     ),
+                    RegionTotalBreakdownRow(claim: claim, billTotal: total),
                   ],
                 ),
               ),
@@ -114,7 +116,7 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                 const SizedBox(height: 16),
                 ClaimLineItemsList(claim: claim),
               ],
-              if (imagePath != null && imagePath.isNotEmpty) ...[
+              if (pages.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 AppCard(
                   padding: const EdgeInsets.all(12),
@@ -122,15 +124,11 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Receipt',
+                        pages.length > 1 ? 'Receipt (${pages.length} pages)' : 'Receipt',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                       const SizedBox(height: 10),
-                      AuthenticatedImage(
-                        path: imagePath,
-                        height: 220,
-                        width: double.infinity,
-                      ),
+                      ReceiptPagesView.network(pages, height: 220),
                     ],
                   ),
                 ),
@@ -150,7 +148,13 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
               ClaimDetailsCard(
                 title: 'Details',
                 rows: [
+                  ClaimDetailRow(
+                    label: 'Invoice no.',
+                    value: (claim.billNumber ?? '').trim().isEmpty ? '—' : claim.billNumber!.trim(),
+                  ),
                   ClaimDetailRow(label: 'Type', value: claim.type == 'petty_cash' ? 'Petty cash' : 'Reimbursement'),
+                  ClaimDetailRow(label: 'Bill currency', value: claim.currency),
+                  ...claimConversionDetailRows(claim, total),
                   ClaimDetailRow(label: 'Category', value: claim.category),
                   if (claim.regionCode != null) ClaimDetailRow(label: 'Region', value: claim.regionCode!),
                   ClaimDetailRow(label: 'Bill date', value: _fmtDate(claim.billDate)),
@@ -159,6 +163,20 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
                   if (claim.remarks != null) ClaimDetailRow(label: 'Remarks', value: claim.remarks!),
                 ],
               ),
+              if (claim.payment != null) ...[
+                const SizedBox(height: 16),
+                PaymentDetailsCard(payment: claim.payment!),
+              ] else if (claim.paymentStatus == 'unpaid') ...[
+                const SizedBox(height: 16),
+                Material(
+                  color: AppColors.warningSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text('Approved. Finance will pay this claim and you will be notified with the payment reference.'),
+                  ),
+                ),
+              ],
               if (claim.status == 'draft') ...[
                 const SizedBox(height: 16),
                 OutlinedButton(
@@ -194,6 +212,11 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
               ],
               if (claim.status == 'disputed') ...[
                 const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: () => context.push('/claim/${claim.id}/edit'),
+                  child: const Text('Correct claim'),
+                ),
+                const SizedBox(height: 10),
                 FilledButton(
                   onPressed: _busy
                       ? null
@@ -212,7 +235,7 @@ class _ClaimDetailScreenState extends ConsumerState<ClaimDetailScreen> {
               const SizedBox(height: 20),
               Text('History', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              ClaimHistoryList(history: claim.history ?? []),
+              ClaimHistoryList(history: claim.history ?? [], stageLabels: claim.stageLabels),
             ],
           );
         },
@@ -317,16 +340,22 @@ class _ClaimDetailSkeleton extends StatelessWidget {
 
 /// The item lines of a "Multiple items" claim, with their categories and the total.
 class ClaimLineItemsList extends StatelessWidget {
-  const ClaimLineItemsList({super.key, required this.claim});
+  const ClaimLineItemsList({super.key, required this.claim, this.onlyDepartmentId});
 
   final ExpenseClaim claim;
+
+  /// Department HOD review: only the lines this department owns (their part of the bill).
+  final int? onlyDepartmentId;
 
   String _qty(double q) =>
       q == q.roundToDouble() ? q.toStringAsFixed(0) : q.toString();
 
   @override
   Widget build(BuildContext context) {
-    final lines = claim.lineItems;
+    final dept = onlyDepartmentId;
+    final lines = dept == null
+        ? claim.lineItems
+        : claim.lineItems.where((l) => l.owningDepartmentId == dept).toList();
     final total = lines.fold(0.0, (sum, l) => sum + l.amount);
     return Container(
       decoration: BoxDecoration(
@@ -346,10 +375,15 @@ class ClaimLineItemsList extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Text('Items', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppColors.textSecondary)),
+                Text(
+                  dept == null ? 'Items' : 'Your department\'s items',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(color: AppColors.textSecondary),
+                ),
                 const Spacer(),
                 Text(
-                  '${lines.length} item${lines.length == 1 ? '' : 's'}',
+                  dept == null
+                      ? '${lines.length} item${lines.length == 1 ? '' : 's'}'
+                      : '${lines.length} of ${claim.lineItems.length} items',
                   style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                 ),
               ],
@@ -404,6 +438,16 @@ class ClaimLineItemsList extends StatelessWidget {
                                   style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                 ),
                               ),
+                            if (l.owningDepartmentName != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 3),
+                                child: Text(
+                                  claim.type == 'petty_cash'
+                                      ? '${l.owningDepartmentName} HOD approval · ${l.owningDepartmentName} petty cash'
+                                      : '${l.owningDepartmentName} HOD approval',
+                                  style: const TextStyle(color: AppColors.darkBlue, fontSize: 12, fontWeight: FontWeight.w600),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -414,9 +458,20 @@ class ClaimLineItemsList extends StatelessWidget {
                       decoration: const BoxDecoration(
                         border: Border(left: BorderSide(color: AppColors.divider)),
                       ),
-                      child: Text(
-                        formatMoney(claim.currency, l.amount),
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            formatMoney(claim.currency, l.amount),
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                          ),
+                          if (claim.isConverted && l.amountBase != null)
+                            Text(
+                              '≈ ${formatMoney(claim.baseCurrency!, l.amountBase!)}',
+                              style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5),
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -428,8 +483,11 @@ class ClaimLineItemsList extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
-                const Expanded(
-                  child: Text('Total', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                Expanded(
+                  child: Text(
+                    dept == null ? 'Total' : 'Your part',
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                  ),
                 ),
                 Text(
                   formatMoney(claim.currency, total),

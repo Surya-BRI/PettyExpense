@@ -26,7 +26,8 @@ DEV_PASSWORD = "Test@1234"
 # One subsidiary code to try per region we want a dev login for (first match wins when a
 # region has more than one subsidiary, e.g. KSA).
 REGION_DEV_USERS = [
-    ("UAE", 9010, "dev_uae", "Dev", "UAE", "dev_uae@expense.local"),
+    ("DUBAI", 9010, "dev_dubai", "Dev", "Dubai", "dev_dubai@expense.local"),
+    ("UAE", 9013, "dev_uae", "Dev", "UAE", "dev_uae@expense.local"),
     ("KSA", 9011, "dev_ksa", "Dev", "KSA", "dev_ksa@expense.local"),
     ("OMAN", 9012, "dev_oman", "Dev", "OMAN", "dev_oman@expense.local"),
 ]

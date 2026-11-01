@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../api/models.dart';
 import '../theme/app_theme.dart';
+import '../utils/currency.dart';
 import '../utils/dubai_time.dart';
+import '../utils/money.dart';
 import 'app_card.dart';
 
 /// A bordered table card for claim details — shared between employee and
@@ -156,12 +158,17 @@ class KeyValueRow extends StatelessWidget {
 /// review screens. Shows newest entry first with avatar, name, action chip and
 /// timestamp.
 class ClaimHistoryList extends StatelessWidget {
-  const ClaimHistoryList({super.key, required this.history, this.hideInternal = false});
+  const ClaimHistoryList({
+    super.key,
+    required this.history,
+    this.stageLabels = const {},
+  });
 
   final List<ClaimHistoryItem> history;
-  // When true, filters out employee-internal actions (edited/created) that are
-  // noise for approvers who only care about submission and approval steps.
-  final bool hideInternal;
+  final Map<String, String> stageLabels;
+
+  /// Draft/internal bookkeeping is stored but never shown on the timeline.
+  static const _internalActions = {'created', 'edited', 'vendor_resolved'};
 
   static const _stageLabels = {
     'hod': 'HOD',
@@ -206,9 +213,7 @@ class ClaimHistoryList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visible = hideInternal
-        ? history.where((h) => h.action != 'edited' && h.action != 'created').toList()
-        : history;
+    final visible = history.where((h) => !_internalActions.contains(h.action)).toList();
 
     if (visible.isEmpty) {
       return AppCard(
@@ -252,7 +257,7 @@ class ClaimHistoryList extends StatelessWidget {
                           children: [
                             Expanded(
                               child: Text(
-                                h.actorName ?? _stageLabels[h.stage] ?? h.stage ?? '—',
+                                h.actorName ?? stageLabels[h.stage] ?? _stageLabels[h.stage] ?? h.stage ?? '—',
                                 style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
                               ),
                             ),
@@ -270,7 +275,7 @@ class ClaimHistoryList extends StatelessWidget {
                             if (h.stage != null) ...[
                               const SizedBox(width: 6),
                               Text(
-                                _stageLabels[h.stage] ?? h.stage!,
+                                stageLabels[h.stage] ?? _stageLabels[h.stage] ?? h.stage!,
                                 style: const TextStyle(color: AppColors.textSecondary, fontSize: 11.5),
                               ),
                             ],
@@ -319,6 +324,59 @@ class _ActionChip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 11),
+      ),
+    );
+  }
+}
+
+/// Bill + region totals. The rate line is for approvers only (`showRate: true`).
+List<ClaimDetailRow> claimConversionDetailRows(
+  ExpenseClaim claim,
+  double billTotal, {
+  bool showRate = false,
+}) {
+  if (!showsRegionConversion(claim.currency, claim.regionCode, claim.exchangeRate)) {
+    return const [];
+  }
+  final base = baseCurrencyForRegion(claim.regionCode);
+  final regionTotal = toRegionAmount(billTotal, claim.exchangeRate);
+  final caption = showRate
+      ? exchangeRateCaption(
+          billCurrency: claim.currency,
+          regionCode: claim.regionCode,
+          rate: claim.exchangeRate,
+        )
+      : null;
+  return [
+    ClaimDetailRow(label: 'Bill total', value: formatMoney(claim.currency, billTotal)),
+    ClaimDetailRow(label: 'Region total ($base)', value: formatMoney(base, regionTotal)),
+    if (caption != null) ClaimDetailRow(label: 'Exchange rate', value: caption),
+  ];
+}
+
+/// Extra header row: region total under the bill total, when the bill is foreign.
+class RegionTotalBreakdownRow extends StatelessWidget {
+  const RegionTotalBreakdownRow({
+    super.key,
+    required this.claim,
+    required this.billTotal,
+  });
+
+  final ExpenseClaim claim;
+  final double billTotal;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showsRegionConversion(claim.currency, claim.regionCode, claim.exchangeRate)) {
+      return const SizedBox.shrink();
+    }
+    final base = baseCurrencyForRegion(claim.regionCode);
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: MoneyBreakdownRow(
+        'Total ($base)',
+        formatMoney(base, toRegionAmount(billTotal, claim.exchangeRate)),
+        emphasize: true,
       ),
     );
   }

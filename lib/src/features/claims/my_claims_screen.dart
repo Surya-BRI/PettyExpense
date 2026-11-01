@@ -11,6 +11,7 @@ import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/claim_stage_tracker.dart';
 import '../../widgets/shimmer_box.dart';
+import '../authentication/auth_controller.dart';
 import '../shared/status_chip.dart';
 
 const _pageSize = 6;
@@ -19,6 +20,7 @@ class MyClaimsState {
   const MyClaimsState({
     this.items = const [],
     this.status = 'all',
+    this.regionCode,
     this.page = 0,
     this.total = 0,
     this.isLoading = true,
@@ -27,6 +29,8 @@ class MyClaimsState {
 
   final List<ExpenseClaim> items;
   final String status;
+  /// Company filter; null shows claims from every company.
+  final String? regionCode;
   final int page;
   final int total;
   final bool isLoading;
@@ -47,6 +51,7 @@ class MyClaimsState {
     return MyClaimsState(
       items: items ?? this.items,
       status: status ?? this.status,
+      regionCode: regionCode,
       page: page ?? this.page,
       total: total ?? this.total,
       isLoading: isLoading ?? this.isLoading,
@@ -69,6 +74,7 @@ class MyClaimsController extends StateNotifier<MyClaimsState> {
             limit: _pageSize,
             offset: state.page * _pageSize,
             status: state.status,
+            regionCode: state.regionCode,
           );
       if (!mounted) return;
       state = state.copyWith(items: page.items, total: page.total, isLoading: false, clearError: true);
@@ -97,7 +103,13 @@ class MyClaimsController extends StateNotifier<MyClaimsState> {
 
   void setStatus(String status) {
     if (status == state.status) return;
-    state = MyClaimsState(status: status, isLoading: true);
+    state = MyClaimsState(status: status, regionCode: state.regionCode, isLoading: true);
+    _fetch();
+  }
+
+  void setRegion(String? regionCode) {
+    if (regionCode == state.regionCode) return;
+    state = MyClaimsState(status: state.status, regionCode: regionCode, isLoading: true);
     _fetch();
   }
 }
@@ -143,6 +155,7 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(myClaimsControllerProvider);
+    final allowedRegions = ref.watch(authControllerProvider).user?.allowedRegions ?? const <String>[];
 
     return Scaffold(
       drawer: const AppNavDrawer(),
@@ -152,6 +165,12 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
       ),
       body: Column(
         children: [
+          if (allowedRegions.length > 1)
+            _RegionFilter(
+              options: allowedRegions,
+              selected: state.regionCode,
+              onSelected: ref.read(myClaimsControllerProvider.notifier).setRegion,
+            ),
           Expanded(
             child: state.isLoading
                 ? const _MyClaimsSkeleton()
@@ -160,9 +179,11 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                     : state.items.isEmpty
                         ? Center(
                             child: Text(
-                              state.status == 'all'
-                                  ? 'No claims yet. Capture a receipt to start.'
-                                  : 'No ${_statusFilterLabels[state.status]!.toLowerCase()} claims.',
+                              state.regionCode != null
+                                  ? 'No claims for ${companyLabel(state.regionCode!)}.'
+                                  : state.status == 'all'
+                                      ? 'No claims yet. Capture a receipt to start.'
+                                      : 'No ${_statusFilterLabels[state.status]!.toLowerCase()} claims.',
                             ),
                           )
                         : RefreshIndicator(
@@ -227,9 +248,20 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                                               ),
                                             ),
                                             const SizedBox(width: 8),
-                                            StatusChip(status: c.status),
+                                            StatusChip.forClaim(c),
                                           ],
                                         ),
+                                        if ((c.billNumber ?? '').trim().isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Invoice ${c.billNumber!.trim()}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.darkBlue,
+                                            ),
+                                          ),
+                                        ],
                                         const SizedBox(height: 8),
                                         Row(
                                           children: [
@@ -342,6 +374,51 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
           ),
           if (!state.isLoading && state.error == null && state.items.isNotEmpty)
             _ClaimsPager(state: state),
+        ],
+      ),
+    );
+  }
+}
+
+/// "All" plus one chip per company the employee is assigned to.
+class _RegionFilter extends StatelessWidget {
+  const _RegionFilter({required this.options, required this.selected, required this.onSelected});
+
+  final List<String> options;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget chip(String label, String? code) {
+      final isSelected = selected == code;
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(
+          label: Text(label),
+          selected: isSelected,
+          showCheckmark: false,
+          onSelected: (_) => onSelected(code),
+          selectedColor: AppColors.darkBlue,
+          backgroundColor: AppColors.card,
+          side: BorderSide(color: isSelected ? AppColors.darkBlue : AppColors.divider),
+          labelStyle: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? Colors.white : AppColors.textPrimary,
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 52,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 10, 8, 2),
+        children: [
+          chip('All', null),
+          for (final code in options) chip(companyLabel(code), code),
         ],
       ),
     );

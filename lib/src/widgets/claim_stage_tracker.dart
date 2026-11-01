@@ -8,13 +8,6 @@ import '../theme/app_theme.dart';
 // `_stageLabels` (which is approver/queue-phrased, e.g. "HOD queue"). The two
 // label sets are independently editable; coupling them would risk one screen's
 // copy change silently affecting the other.
-const _employeeStageLabels = {
-  'hod': 'HOD Review',
-  'department_hod': 'Department HOD Review',
-  'accountant': 'Accountant Review',
-  'finance_manager': 'Finance Manager Review',
-};
-
 enum _StepState { done, current, rejected, upcoming }
 
 class _Step {
@@ -40,11 +33,10 @@ class ClaimStageTracker extends StatelessWidget {
   /// `stageSequence` + `currentStage` — no history lookup required.
   static String? compactLabel(ExpenseClaim claim) {
     final seq = claim.stageSequence;
-    final current = claim.currentStage;
+    final current = claim.currentStageKey;
     if (seq.isEmpty || current == null) return null;
     if (!seq.contains(current)) return null;
-    final label = _employeeStageLabels[current] ?? current;
-    return 'At $label';
+    return 'At ${claim.currentStageLabel}';
   }
 
   List<_Step> _buildSteps() {
@@ -66,7 +58,7 @@ class ClaimStageTracker extends StatelessWidget {
 
     final steps = <_Step>[];
     for (final stage in seq) {
-      final label = _employeeStageLabels[stage] ?? stage;
+      final label = claim.stageLabel(stage);
 
       if (rejectedEntry != null && rejectedEntry.stage == stage && rejectedEntry.action == 'reject') {
         steps.add(_Step(
@@ -84,7 +76,7 @@ class ClaimStageTracker extends StatelessWidget {
         continue;
       }
 
-      if (claim.currentStage == stage) {
+      if (claim.currentStageKey == stage) {
         if (disputedEntry != null) {
           steps.add(_Step(
             label: label,
@@ -108,7 +100,9 @@ class ClaimStageTracker extends StatelessWidget {
           steps[i] = _Step(label: steps[i].label, state: _StepState.done, caption: 'Approved');
         }
       }
-      if (claim.status == 'paid') {
+      if (claim.type == 'petty_cash') {
+        steps.add(const _Step(label: 'Petty cash', state: _StepState.done, caption: 'Deducted from petty cash'));
+      } else if (claim.status == 'paid') {
         final paidEntry = claim.history
             ?.lastWhere((e) => e.action == 'paid', orElse: () => const ClaimHistoryItem(id: -1, actorId: -1, action: ''));
         final caption = (paidEntry != null && paidEntry.id != -1)

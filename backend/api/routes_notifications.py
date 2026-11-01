@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from auth.security import CurrentUser, get_current_user
 from database.models import ErpExpenseTransaction, get_db
 from services import approval_service, notification_service
+from services.department_split import stage_base
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 
@@ -22,7 +23,7 @@ def _to_dict(row, txn: Optional[ErpExpenseTransaction], actionable: bool) -> dic
         "status": row.status,
         "message": row.message,
         "sent_at": row.sent_at.isoformat() if row.sent_at else None,
-        "current_stage": txn.current_stage if txn else None,
+        "current_stage": stage_base(txn.current_stage) if txn else None,
         "claim_status": txn.status if txn else None,
         # Whether the recipient is STILL a genuine current approver for this claim right now --
         # current_stage/claim_status above reflect the transaction's live state, not the state at

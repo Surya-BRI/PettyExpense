@@ -6,6 +6,7 @@ import 'package:phosphor_icons/phosphor_icons.dart';
 import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/region_branding.dart';
 import '../authentication/auth_controller.dart';
 import '../claims/confirm_claim_screen.dart' show navigateGuarded;
 import '../notifications/notifications_screen.dart';
@@ -69,6 +70,16 @@ class _Sidebar extends ConsumerWidget {
       if (role.isApprover)
         _NavEntry(PhosphorIcons.clipboardText(), PhosphorIcons.clipboardText(PhosphorIconsStyle.fill), 'My approval queue',
             '/approvals/${defaultStageFor(role)}', matchPrefix: '/approvals'),
+      if (role == UserRole.hod)
+        _NavEntry(PhosphorIcons.money(), PhosphorIcons.money(PhosphorIconsStyle.fill), 'Funds', '/topups', matchPrefix: '/funds'),
+      if (role == UserRole.accountant || role == UserRole.financeManager)
+        _NavEntry(PhosphorIcons.arrowClockwise(), PhosphorIcons.arrowClockwise(PhosphorIconsStyle.fill), 'Top-ups', '/topups'),
+      if (role == UserRole.financeManager || role == UserRole.admin)
+        _NavEntry(PhosphorIcons.wallet(), PhosphorIcons.wallet(PhosphorIconsStyle.fill), 'Payments', '/payments'),
+      if (role == UserRole.admin) ...[
+        _NavEntry(PhosphorIcons.buildings(), PhosphorIcons.buildings(PhosphorIconsStyle.fill), 'Companies', '/admin', matchPrefix: '/admin/companies'),
+        _NavEntry(PhosphorIcons.users(), PhosphorIcons.users(PhosphorIconsStyle.fill), 'People', '/admin/people', matchPrefix: '/admin/people'),
+      ],
       _NavEntry(PhosphorIcons.bell(), PhosphorIcons.bell(PhosphorIconsStyle.fill), 'Alerts', '/notifications', badge: unread),
       _NavEntry(PhosphorIcons.userCircle(), PhosphorIcons.userCircle(PhosphorIconsStyle.fill), 'Profile', '/profile'),
     ];
@@ -119,7 +130,7 @@ class _Sidebar extends ConsumerWidget {
             _UserFooter(
               name: user?.displayName ?? '',
               detail: [_roleLabel(role), if (user?.regionCode != null) user!.regionCode!].join(' · '),
-              logoAsset: _regionLogoAsset(user?.regionCode),
+              regionCode: user?.regionCode,
               onSignOut: () => ref.read(authControllerProvider.notifier).logout(),
             ),
           ],
@@ -137,17 +148,6 @@ class _Sidebar extends ConsumerWidget {
       };
 }
 
-// Per-legal-entity branding (see ERP_SUBSIDIARY_TO_REGION_CODE in backend/auth/security.py
-// for how a user's region_code is derived). OMAN/IN have no dedicated logo yet, so they
-// fall back to the generic Blue Rhine Industries mark.
-const _defaultRegionLogoAsset = 'assets/logos/Dubai_LOGO.png';
-const _regionLogoAssets = {
-  'UAE': 'assets/logos/UAE_LOGO.png',
-  'KSA': 'assets/logos/KSA_LOGO.png',
-};
-
-String _regionLogoAsset(String? regionCode) => _regionLogoAssets[regionCode] ?? _defaultRegionLogoAsset;
-
 class _NavEntry {
   const _NavEntry(this.icon, this.selectedIcon, this.label, this.path, {this.badge = 0, this.matchPrefix});
 
@@ -159,9 +159,10 @@ class _NavEntry {
   final String? matchPrefix;
 
   bool matches(String location) {
+    if (location == path) return true;
     if (matchPrefix != null) return location.startsWith(matchPrefix!);
-    if (path == '/all-claims') return location == path || location.startsWith('/claim/');
-    return location == path;
+    if (path == '/all-claims') return location.startsWith('/claim/');
+    return false;
   }
 }
 
@@ -216,11 +217,11 @@ class _SidebarTile extends StatelessWidget {
 }
 
 class _UserFooter extends StatelessWidget {
-  const _UserFooter({required this.name, required this.detail, required this.logoAsset, required this.onSignOut});
+  const _UserFooter({required this.name, required this.detail, required this.regionCode, required this.onSignOut});
 
   final String name;
   final String detail;
-  final String logoAsset;
+  final String? regionCode;
   final VoidCallback onSignOut;
 
   @override
@@ -258,7 +259,7 @@ class _UserFooter extends StatelessWidget {
           const SizedBox(height: 10),
           Padding(
             padding: const EdgeInsets.only(left: 2),
-            child: Image.asset(logoAsset, height: 36, fit: BoxFit.contain, alignment: Alignment.centerLeft),
+            child: RegionLogo(regionCode: regionCode, height: 36, alignment: Alignment.centerLeft),
           ),
         ],
       ),

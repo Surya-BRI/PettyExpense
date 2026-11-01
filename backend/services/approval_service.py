@@ -1,6 +1,8 @@
 import json
+import logging
+from contextlib import contextmanager
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any, Callable, Iterator, Optional, TypeVar
 
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -14,9 +16,56 @@ from database.models import (
     ErpExpenseRegionConfig,
     ErpExpenseTransaction,
 )
+from services.currency import bill_and_base_text
+from services.department_split import (
+    DEPARTMENT_HOD,
+    cross_department_ids,
+    stage_base,
+    stage_department_id,
+    stage_key,
+)
+from services.region_scope import covers_region
+
+logger = logging.getLogger(__name__)
 
 TERMINAL_STATUSES = ("approved", "rejected", "paid")
-ACTIONABLE_STATUSES = ("submitted", "disputed")
+# Only `submitted` is in an approver's hands. After a dispute the claim sits with
+# the employee (`disputed`) until they correct and resubmit — it must not stay
+# in the approver queue or accept Approve/Reject, or HOD can "approve" a bill
+# that never cleanly reaches Accountant.
+ACTIONABLE_STATUSES = ("submitted",)
+# Draft/internal bookkeeping stays in the table but is not shown as workflow history.
+INTERNAL_HISTORY_ACTIONS = frozenset({"created", "edited", "vendor_resolved"})
+
+_CACHE_KEY = "approver_lookup_cache"
+_T = TypeVar("_T")
+
+
+@contextmanager
+def approver_lookup_cache(db: Session) -> Iterator[None]:
+    """Remembers approver lookups (HODs per department+company, role holders per company,
+    today's delegations) for the length of a list request. A queue or claims list asks the
+    same few questions for every row -- once in resolve_stage_approvers and again in
+    transaction_to_dict's stage sequence -- and each answer is a round trip to a slow remote
+    DB. Inside this block each distinct question hits the DB once. Only wrap read-only
+    loops: the cached answers don't see writes made inside the block. Nested use is a no-op."""
+    owner = _CACHE_KEY not in db.info
+    if owner:
+        db.info[_CACHE_KEY] = {}
+    try:
+        yield
+    finally:
+        if owner:
+            db.info.pop(_CACHE_KEY, None)
+
+
+def _cached(db: Session, key: tuple, load: Callable[[], _T]) -> _T:
+    cache = db.info.get(_CACHE_KEY)
+    if cache is None:
+        return load()
+    if key not in cache:
+        cache[key] = load()
+    return cache[key]
 
 
 def _matrix(region: ErpExpenseRegionConfig) -> dict[str, Any]:
@@ -24,51 +73,186 @@ def _matrix(region: ErpExpenseRegionConfig) -> dict[str, Any]:
 
 
 def resolve_stage_sequence(db: Session, txn: ErpExpenseTransaction) -> list[str]:
-    """Base stages come from the region's approval matrix. 'department_hod' is spliced in
-    right after 'hod' when the category's owning department differs from the employee's own
-    department — unless that department's HOD group is identical to the employee's own HOD
-    group (auto-skip, no duplicate approval by the same people). A department can have more
-    than one active HOD (see _hods_for_department); the skip only fires when the two groups
-    match exactly, since any genuinely different reviewer in the set is still a real approval
-    step worth keeping."""
+    """Base stages come from the region's approval matrix. One 'department_hod:<id>' stage is
+    spliced in right after 'hod' for every other department that owns part of the bill — the
+    claim category on a single-item bill, or any line's category on a multi-item bill (a Sales
+    bill with one IT line goes to the IT HOD too). A department is skipped when its HOD group
+    is identical to the employee's own HOD group (no duplicate approval by the same people).
+    A department can have more than one active HOD (see _hods_for_department); the skip only
+    fires when the two groups match exactly."""
     # Relationship access, not a fresh db.query() -- region/category/employee are already
     # eager-loaded onto `txn` by every caller that matters (list_queue, transaction_to_dict),
     # so re-querying them here was a redundant round-trip per call, on every transaction, to a
     # remote high-latency DB -- the dominant cost behind a queue load that should be instant.
     region = txn.region
-    category = txn.category
     employee = txn.employee
 
     base: list[str] = list(_matrix(region)["stages"])
 
-    if category and category.owning_department_id and employee and category.owning_department_id != employee.department_id:
+    other_departments = cross_department_ids(txn) if employee else []
+    if other_departments:
         own_hod_ids = (
-            {u.user_id for u in _hods_for_department(db, employee.department_id)} if employee.department_id else set()
+            {u.user_id for u in _hods_for_department(db, employee.department_id, txn.region_id)}
+            if employee.department_id
+            else set()
         )
-        dept_hod_ids = {u.user_id for u in _hods_for_department(db, category.owning_department_id)}
-        if dept_hod_ids and dept_hod_ids != own_hod_ids:
-            idx = base.index("hod") + 1 if "hod" in base else 0
-            base = base[:idx] + ["department_hod"] + base[idx:]
+        extra = []
+        for dept_id in other_departments:
+            dept_hod_ids = {u.user_id for u in _hods_for_department(db, dept_id, txn.region_id)}
+            if dept_hod_ids:
+                if dept_hod_ids != own_hod_ids:
+                    extra.append(stage_key(dept_id))
+            elif _hods_for_department(db, dept_id):
+                # The department has HODs, just none covering this company: keep the step
+                # (it goes to Admin) rather than letting the bill skip that department's approval.
+                extra.append(stage_key(dept_id))
+        idx = base.index("hod") + 1 if "hod" in base else 0
+        base = base[:idx] + extra + base[idx:]
 
     return base
 
 
-def _hods_for_department(db: Session, department_id: int) -> list[ErpAuthExpenseUsers]:
+def _department_names(txn: ErpExpenseTransaction) -> dict[int, str]:
+    categories = [li.category for li in txn.line_items if li.category] + ([txn.category] if txn.category else [])
+    return {
+        c.owning_department_id: c.owning_department.department_name
+        for c in categories
+        if c.owning_department_id and c.owning_department is not None
+    }
+
+
+def resolve_stage_labels(txn: ErpExpenseTransaction) -> dict[str, str]:
+    """Human names for the tracker: 'hod' is the employee's department HOD, each
+    'department_hod:<id>' is that owning department's HOD (e.g. Sales HOD → IT HOD).
+    Plain 'department_hod' (claims staged before per-department keys) uses the claim category."""
+    emp_dept = (
+        txn.employee.department.department_name
+        if txn.employee is not None and txn.employee.department is not None
+        else None
+    )
+    cat_dept = (
+        txn.category.owning_department.department_name
+        if txn.category is not None and txn.category.owning_department is not None
+        else None
+    )
+    labels = {
+        "hod": f"{emp_dept} HOD" if emp_dept else "HOD",
+        DEPARTMENT_HOD: f"{cat_dept} HOD" if cat_dept else "Department HOD",
+        "accountant": "Accountant",
+        "finance_manager": "Finance Manager",
+        "employee": "Employee",
+    }
+    for dept_id, name in _department_names(txn).items():
+        labels[stage_key(dept_id)] = f"{name} HOD"
+    return labels
+
+
+def _legacy_department_stage(txn: ErpExpenseTransaction, seq: list[str]) -> Optional[str]:
+    """Maps a plain 'department_hod' (staged before per-department keys) onto this sequence."""
+    dept_id = txn.category.owning_department_id if txn.category else None
+    if dept_id and stage_key(dept_id) in seq:
+        return stage_key(dept_id)
+    return next((s for s in seq if stage_base(s) == DEPARTMENT_HOD), None)
+
+
+def _approved_stages(txn: ErpExpenseTransaction, seq: list[str]) -> set[str]:
+    approved = set()
+    for h in txn.approval_history:
+        if h.action != "approve":
+            continue
+        stage = _legacy_department_stage(txn, seq) if h.stage == DEPARTMENT_HOD else h.stage
+        if stage:
+            approved.add(stage)
+    return approved
+
+
+def _realign_stage(db: Session, txn: ErpExpenseTransaction) -> list[str]:
+    """Keeps current_stage inside the (possibly changed) sequence. A dispute-edit can add or
+    drop a cross-department line, so after resubmit the claim goes to the first stage that
+    hasn't approved yet — normally the same stage that disputed it."""
+    seq = resolve_stage_sequence(db, txn)
+    if txn.current_stage in seq:
+        return seq
+    if txn.current_stage == DEPARTMENT_HOD:
+        mapped = _legacy_department_stage(txn, seq)
+        if mapped:
+            txn.current_stage = mapped
+            return seq
+    approved = _approved_stages(txn, seq)
+    txn.current_stage = next((s for s in seq if s not in approved), seq[-1] if seq else None)
+    return seq
+
+
+def _hods_for_department(
+    db: Session, department_id: int, region_id: Optional[int] = None
+) -> list[ErpAuthExpenseUsers]:
     # A department can genuinely have more than one active HOD (co-HODs, a handover overlap,
     # etc.) -- every one of them is a valid approver for that stage, not just whichever row
     # a plain .first() happened to return. One joined query, not an assignment lookup followed
     # by a separate user lookup -- each round trip to this DB is expensive.
-    return (
-        db.query(ErpAuthExpenseUsers)
+    # The same HOD heads the department in every company, but handles a company's bills only
+    # if it's their home company or Admin assigned it to them (region_scope.covers_region).
+    return _cached(
+        db,
+        ("hods", department_id, region_id),
+        lambda: db.query(ErpAuthExpenseUsers)
         .join(ErpExpenseHodAssignment, ErpExpenseHodAssignment.user_id == ErpAuthExpenseUsers.user_id)
-        .filter(ErpExpenseHodAssignment.department_id == department_id, ErpExpenseHodAssignment.is_active == 1)
+        .filter(
+            ErpExpenseHodAssignment.department_id == department_id,
+            ErpExpenseHodAssignment.is_active == 1,
+            covers_region(region_id),
+        )
+        .all(),
+    )
+
+
+def _active_with_role(db: Session, role_code: str, region_id: Optional[int] = None) -> list[ErpAuthExpenseUsers]:
+    return _cached(
+        db,
+        ("role", role_code, region_id),
+        lambda: db.query(ErpAuthExpenseUsers)
+        .join(ErpAuthExpenseUsers.role)
+        .filter(
+            ErpAuthExpenseUsers.role.has(role_code=role_code),
+            ErpAuthExpenseUsers.is_active == 1,
+            ErpAuthExpenseUsers.is_deleted == 0,
+            covers_region(region_id),
+        )
+        .all(),
+    )
+
+
+def _todays_backups(db: Session) -> dict[int, ErpAuthExpenseUsers]:
+    """approver_id -> backup user for every delegation active today, in two queries total.
+    Earliest delegation wins when one approver has overlapping ones."""
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    delegations = (
+        db.query(ErpExpenseApproverDelegation)
+        .filter(
+            ErpExpenseApproverDelegation.start_date <= today,
+            ErpExpenseApproverDelegation.end_date >= today,
+        )
+        .order_by(ErpExpenseApproverDelegation.delegation_id)
         .all()
     )
+    backup_ids = {d.backup_id for d in delegations}
+    backups = (
+        {u.user_id: u for u in db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id.in_(backup_ids))}
+        if backup_ids
+        else {}
+    )
+    out: dict[int, ErpAuthExpenseUsers] = {}
+    for d in delegations:
+        if d.approver_id not in out and d.backup_id in backups:
+            out[d.approver_id] = backups[d.backup_id]
+    return out
 
 
 def _apply_delegation(db: Session, approver: Optional[ErpAuthExpenseUsers]) -> Optional[ErpAuthExpenseUsers]:
     if not approver:
         return None
+    if _CACHE_KEY in db.info:
+        return _cached(db, ("backups",), lambda: _todays_backups(db)).get(approver.user_id, approver)
     today = datetime.utcnow().strftime("%Y-%m-%d")
     delegation = (
         db.query(ErpExpenseApproverDelegation)
@@ -102,29 +286,35 @@ def resolve_stage_approvers(db: Session, txn: ErpExpenseTransaction, stage: str)
     employee = txn.employee
     category = txn.category
 
+    region_id = txn.region_id
     approvers: list[ErpAuthExpenseUsers] = []
     if stage == "hod":
         if employee and employee.department_id:
-            approvers = _hods_for_department(db, employee.department_id)
+            approvers = _hods_for_department(db, employee.department_id, region_id)
         else:
-            # Employee has no department assigned — broadcast to all active HODs so the
-            # claim is visible and actionable rather than stuck in limbo forever.
-            approvers = (
-                db.query(ErpAuthExpenseUsers)
-                .join(ErpAuthExpenseUsers.role)
-                .filter(ErpAuthExpenseUsers.role.has(role_code="hod"), ErpAuthExpenseUsers.is_active == 1)
-                .all()
-            )
-    elif stage == "department_hod":
-        if category and category.owning_department_id:
-            approvers = _hods_for_department(db, category.owning_department_id)
+            # Employee has no department assigned — broadcast to all active HODs of this
+            # company so the claim is visible and actionable rather than stuck in limbo forever.
+            approvers = _active_with_role(db, "hod", region_id)
+    elif stage_base(stage) == DEPARTMENT_HOD:
+        dept_id = stage_department_id(stage) or (category.owning_department_id if category else None)
+        if dept_id:
+            approvers = _hods_for_department(db, dept_id, region_id)
     else:
-        approvers = (
-            db.query(ErpAuthExpenseUsers)
-            .join(ErpAuthExpenseUsers.role)
-            .filter(ErpAuthExpenseUsers.role.has(role_code=stage), ErpAuthExpenseUsers.is_active == 1)
-            .all()
-        )
+        # Accountant and Finance Manager are per company: only those covering the bill's company.
+        approvers = _active_with_role(db, stage, region_id)
+    if not approvers:
+        # Nobody configured for this step in this company — Admin gets it instead of the claim
+        # sitting unseen (and is notified through the normal submission/stage emails).
+        # Inside a list request, warn once per missing (stage, company), not once per claim.
+        cache = db.info.get(_CACHE_KEY)
+        warn_key = ("warned", stage, region_id)
+        if cache is None or warn_key not in cache:
+            logger.warning(
+                "No %s approver for claim %s (region %s); routing to Admin", stage, txn.transaction_id, region_id
+            )
+            if cache is not None:
+                cache[warn_key] = True
+        approvers = _active_with_role(db, "admin")
     # Delegation is per-person -- each active approver might have their own backup covering
     # them for a date range, independent of who else is also active on this stage. Dedup by
     # user_id afterward: two different approvers could delegate to the same backup, or a
@@ -156,7 +346,7 @@ def _update_stage_due(db: Session, txn: ErpExpenseTransaction) -> None:
         txn.stage_due_at = None
         return
     region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == txn.region_id).first()
-    sla_hours = _matrix(region).get("sla_hours", {}).get(txn.current_stage, 48)
+    sla_hours = _matrix(region).get("sla_hours", {}).get(stage_base(txn.current_stage), 48)
     txn.stage_due_at = datetime.utcnow() + timedelta(hours=sla_hours)
 
 
@@ -204,54 +394,44 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
     _eager_opts = [
         joinedload(ErpExpenseTransaction.documents),
         joinedload(ErpExpenseTransaction.region),
-        joinedload(ErpExpenseTransaction.category),
+        joinedload(ErpExpenseTransaction.category).joinedload(ErpExpenseCategory.owning_department),
         joinedload(ErpExpenseTransaction.vendor),
-        joinedload(ErpExpenseTransaction.employee),
+        joinedload(ErpExpenseTransaction.employee).joinedload(ErpAuthExpenseUsers.department),
         # selectinload, not joinedload -- one-to-many would multiply rows per line item.
-        selectinload(ErpExpenseTransaction.line_items).joinedload(ErpExpenseLineItem.category),
+        selectinload(ErpExpenseTransaction.line_items)
+        .joinedload(ErpExpenseLineItem.category)
+        .joinedload(ErpExpenseCategory.owning_department),
     ]
 
+    # The department_hod queue covers every 'department_hod:<id>' stage; approver
+    # membership below narrows it to the departments this user is HOD of.
+    stage_filter = (
+        ErpExpenseTransaction.current_stage.like(f"{DEPARTMENT_HOD}%")
+        if stage == DEPARTMENT_HOD
+        else ErpExpenseTransaction.current_stage == stage
+    )
     candidates = (
         db.query(ErpExpenseTransaction)
         .options(*_eager_opts)
         .filter(
             ErpExpenseTransaction.status.in_(ACTIONABLE_STATUSES),
-            ErpExpenseTransaction.current_stage == stage,
+            stage_filter,
         )
         .order_by(ErpExpenseTransaction.created_on.desc())
         .all()
     )
     results = []
-    for txn in candidates:
-        approvers = resolve_stage_approvers(db, txn, stage)
-        if not user.is_admin and user.id not in {a.user_id for a in approvers}:
-            continue
-        results.append(transaction_to_dict(txn, db=db))
-
-    # Finance Manager also sees approved-but-unpaid claims so they can mark them paid.
-    # These have status='approved' and current_stage=None (cleared after FM approval).
-    # Permission check: user must be an active finance_manager (same role query used for stage approvers).
-    if stage == "finance_manager":
-        is_fm = user.is_admin or any(
-            u.user_id == user.id
-            for u in db.query(ErpAuthExpenseUsers)
-            .join(ErpAuthExpenseUsers.role)
-            .filter(ErpAuthExpenseUsers.role.has(role_code="finance_manager"), ErpAuthExpenseUsers.is_active == 1)
-            .all()
-        )
-        if is_fm:
-            approved_txns = (
-                db.query(ErpExpenseTransaction)
-                .options(*_eager_opts)
-                .filter(ErpExpenseTransaction.status == "approved")
-                .order_by(ErpExpenseTransaction.created_on.desc())
-                .all()
-            )
-            existing_ids = {r["id"] for r in results}
-            for txn in approved_txns:
-                if txn.transaction_id not in existing_ids:
-                    results.append(transaction_to_dict(txn, db=db))
-
+    # One DB lookup per distinct (department, company) / (role, company) for the whole list,
+    # shared by the membership check here and the stage sequence in transaction_to_dict.
+    with approver_lookup_cache(db):
+        for txn in candidates:
+            if not user.is_admin:
+                approvers = resolve_stage_approvers(db, txn, txn.current_stage)
+                if user.id not in {a.user_id for a in approvers}:
+                    continue
+            results.append(transaction_to_dict(txn, db=db))
+    # Approved-but-unpaid reimbursements are no longer mixed in here: they're listed (paged,
+    # per company) by GET /api/payments — see payment_service.
     return results
 
 
@@ -267,6 +447,7 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
         raise ValueError("Transaction is not awaiting approval")
 
     _ensure_stage(db, txn)
+    seq = _realign_stage(db, txn)
     stage = txn.current_stage
     if not stage:
         raise ValueError("No approval stage resolved for this transaction")
@@ -285,11 +466,11 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
         raise ValueError("A comment is required to approve a duplicate-flagged claim")
 
     if action == "approve":
-        seq = resolve_stage_sequence(db, txn)
         idx = seq.index(stage)
         _history(db, txn.transaction_id, user.id, stage, "approve", comment)
         if idx == len(seq) - 1:
-            # TODO(Phase 3): petty-cash hard/soft balance check before finalizing approval.
+            # Final approval is the point a petty-cash bill comes off the fund (fund_service
+            # _SPEND_STATUSES); it was already reserved against the fund at submit.
             txn.status = "approved"
             txn.current_stage = None
             txn.stage_due_at = None
@@ -301,12 +482,10 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
     elif action == "reject":
         txn.status = "rejected"
         txn.decided_on = datetime.utcnow()
-        txn.remarks = comment
         _history(db, txn.transaction_id, user.id, stage, "reject", comment)
     else:  # dispute
         txn.status = "disputed"
         txn.dispute_returned = 1
-        txn.remarks = comment
         _history(db, txn.transaction_id, user.id, stage, "dispute", comment)
 
     db.commit()
@@ -322,19 +501,21 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
             notification_service.send(
                 db, employee, "approval", txn.transaction_id,
                 f"Expense claim approved ({vendor_name})", f"تمت الموافقة على مطالبة النفقات ({vendor_name})",
-                f"Your claim {txn.transaction_id} for {txn.currency} {txn.amount} was approved.",
-                f"تمت الموافقة على مطالبتك رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount}.",
+                f"Your claim {txn.transaction_id} for {bill_and_base_text(txn)} was approved."
+                + (" It is now waiting for payment." if (txn.type or "") != "petty_cash" else ""),
+                f"تمت الموافقة على مطالبتك رقم {txn.transaction_id} بمبلغ {bill_and_base_text(txn)}.",
                 html_body_en=content.html,
             )
         else:
             next_approvers = resolve_stage_approvers(db, txn, txn.current_stage)
             content = email_templates.approval_pending_email(email_templates.build_context(txn))
+            stage_label = resolve_stage_labels(txn).get(txn.current_stage, txn.current_stage)
             for next_approver in next_approvers:
                 notification_service.send(
                     db, next_approver, "approval_pending", txn.transaction_id,
                     f"Claim awaiting your approval ({vendor_name})", f"مطالبة نفقات في انتظار موافقتك ({vendor_name})",
-                    f"Claim {txn.transaction_id} for {txn.currency} {txn.amount} is now at your stage ({txn.current_stage}).",
-                    f"المطالبة رقم {txn.transaction_id} بمبلغ {txn.currency} {txn.amount} وصلت إلى مرحلتك ({txn.current_stage}).",
+                    f"Claim {txn.transaction_id} for {bill_and_base_text(txn)} is now at your stage ({stage_label}).",
+                    f"المطالبة رقم {txn.transaction_id} بمبلغ {bill_and_base_text(txn)} وصلت إلى مرحلتك ({stage_label}).",
                     html_body_en=content.html,
                 )
     else:
@@ -429,10 +610,21 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
         raise PermissionError("Only the submitter can resubmit")
     if txn.status != "disputed":
         raise ValueError("Only disputed claims can be resubmitted")
-    # current_stage is deliberately left untouched — resubmitting returns the claim to the
-    # exact stage that disputed it, not to the start of the chain.
+    from services.transaction_service import transaction_service
+    transaction_service._require_unique_submitted_bill_number(
+        db, txn.bill_number, txn.transaction_id,
+    )
+    from services.transaction_service import _stamp_exchange_rate
+    # Keeps the rate locked at first submit, so the converted figure (and the petty-cash
+    # reservation) doesn't drift while the bill goes back and forth.
+    _stamp_exchange_rate(txn, required=True, keep_locked=True)
+    if (txn.type or "").strip().lower() == "petty_cash":
+        transaction_service._require_petty_cash_limit(db, user, txn)
+    # Resubmitting returns the claim to the exact stage that disputed it, not to the start of
+    # the chain — unless the edit added a cross-department line whose HOD hasn't approved yet.
     txn.status = "submitted"
     txn.dispute_returned = 0
+    _realign_stage(db, txn)
     db.commit()
     txn = _load_txn(db, transaction_id)
 
@@ -471,7 +663,10 @@ def list_history(db: Session, user: CurrentUser, limit: int = 100) -> list[dict[
             ErpExpenseApprovalHistory.transaction_id,
             func.max(ErpExpenseApprovalHistory.acted_on).label("latest"),
         )
-        .filter(ErpExpenseApprovalHistory.actor_id == user.id)
+        .filter(
+            ErpExpenseApprovalHistory.actor_id == user.id,
+            ~ErpExpenseApprovalHistory.action.in_(INTERNAL_HISTORY_ACTIONS),
+        )
         .group_by(ErpExpenseApprovalHistory.transaction_id)
         .subquery()
     )
@@ -498,7 +693,8 @@ def list_history(db: Session, user: CurrentUser, limit: int = 100) -> list[dict[
     for hist, txn in rows:
         d = transaction_to_dict(txn)
         d["my_action"] = hist.action
-        d["my_action_stage"] = hist.stage
+        d["my_action_stage"] = stage_base(hist.stage)
+        d["my_action_stage_key"] = hist.stage
         d["my_actioned_at"] = hist.acted_on.isoformat() if hist.acted_on else None
         d["my_comment"] = hist.comment
         results.append(d)

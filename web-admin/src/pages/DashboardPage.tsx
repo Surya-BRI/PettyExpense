@@ -253,7 +253,7 @@ function Kpis({ claims, currency }: { claims: Claim[]; currency: string }) {
   const spend = claims.filter(isSpend);
   const pending = claims.filter((c) => PENDING.includes(c.status));
   const disputed = pending.filter((c) => c.status === 'disputed').length;
-  const approved = claims.filter((c) => c.status === 'approved');
+  const approved = claims.filter((c) => c.status === 'approved' && c.type !== 'petty_cash');
   const paid = claims.filter((c) => c.status === 'paid');
   const rejected = claims.filter((c) => c.status === 'rejected');
   const drafts = claims.filter((c) => c.status === 'draft').length;

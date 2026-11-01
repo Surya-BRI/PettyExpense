@@ -115,6 +115,8 @@ class LineItemsEditor extends StatefulWidget {
     required this.onAdd,
     required this.onRemove,
     this.showProblems = false,
+    this.ownDepartmentId,
+    this.pettyCash = false,
   });
 
   final List<LineItemDraft> lines;
@@ -123,6 +125,11 @@ class LineItemsEditor extends StatefulWidget {
   final VoidCallback onChanged;
   final VoidCallback onAdd;
   final ValueChanged<int> onRemove;
+
+  /// The employee's department — a line in a category owned by another department
+  /// is flagged as going to that department's HOD (and fund, for [pettyCash]).
+  final int? ownDepartmentId;
+  final bool pettyCash;
 
   /// After a failed submit, highlight what each incomplete line is missing.
   final bool showProblems;
@@ -179,6 +186,8 @@ class _LineItemsEditorState extends State<LineItemsEditor> {
           line: lines[index],
           categories: widget.categories,
           currency: widget.currency,
+          ownDepartmentId: widget.ownDepartmentId,
+          pettyCash: widget.pettyCash,
           canRemove: lines.length > 1,
           showProblem: widget.showProblems,
           onChanged: widget.onChanged,
@@ -217,16 +226,27 @@ class _LineCard extends StatelessWidget {
     required this.showProblem,
     required this.onChanged,
     required this.onRemove,
+    this.ownDepartmentId,
+    this.pettyCash = false,
   });
 
   final int index;
   final LineItemDraft line;
   final List<CategoryRef> categories;
   final String? currency;
+  final int? ownDepartmentId;
+  final bool pettyCash;
   final bool canRemove;
   final bool showProblem;
   final VoidCallback onChanged;
   final VoidCallback onRemove;
+
+  String? get _otherDepartment {
+    for (final c in categories) {
+      if (c.id == line.categoryId) return c.otherDepartmentFor(ownDepartmentId);
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -384,6 +404,15 @@ class _LineCard extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (_otherDepartment != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    pettyCash
+                        ? 'Goes to $_otherDepartment HOD · paid from $_otherDepartment petty cash'
+                        : 'Goes to $_otherDepartment HOD for approval',
+                    style: const TextStyle(color: AppColors.darkBlue, fontSize: 11.5, fontWeight: FontWeight.w600),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 OpCodeField(
                   key: ValueKey(line),

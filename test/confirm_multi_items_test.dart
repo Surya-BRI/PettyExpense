@@ -17,7 +17,7 @@ class _FakeApi extends ApiClient {
   Map<String, dynamic>? createdBody;
 
   @override
-  Future<OcrResult> analyzeReceipt(int receiptId) async => const OcrResult(
+  Future<OcrResult> analyzeReceipt(int receiptId, {String mode = 'auto'}) async => const OcrResult(
         receiptId: 7,
         s3Key: 'k',
         vendor: 'Bab Al Hayat Pharmacy',
@@ -34,8 +34,33 @@ class _FakeApi extends ApiClient {
       );
 
   @override
+  Future<ExchangeRateQuote> lookupExchangeRate({
+    required String from,
+    String? to,
+    String? regionCode,
+    String? date,
+  }) async {
+    final base = to ?? 'AED';
+    return ExchangeRateQuote(
+      rate: from == base ? 1 : 9.54,
+      asOf: '2026-07-06',
+      billCurrency: from,
+      baseCurrency: base,
+      source: 'test',
+    );
+  }
+
+  @override
   Future<List<CategoryRef>> categories() async =>
       const [CategoryRef(id: 1, name: 'First aid'), CategoryRef(id: 2, name: 'Stationery')];
+
+  @override
+  Future<List<RegionConfig>> listRegions() async => const [
+        RegionConfig(id: 1, regionCode: 'DUBAI', regionName: 'Dubai'),
+      ];
+
+  @override
+  Future<List<PettyCashFund>> myFunds() async => const [];
 
   @override
   Future<List<ProjectRef>> projects() async => const [];
@@ -139,13 +164,14 @@ void main() {
 
     final body = api.createdBody!;
     expect(body['line_items'], [
-      {'description': 'Gauze swab', 'quantity': 5.0, 'amount': 23.94, 'category_id': 1, 'op_number': null},
-      {'description': 'Cotton wool', 'quantity': 5.0, 'amount': 23.94, 'category_id': 1, 'op_number': null},
-      {'description': 'Scissor', 'quantity': 1.0, 'amount': 10.0, 'category_id': 1, 'op_number': null},
+      {'description': 'Gauze swab', 'quantity': 5.0, 'amount': 23.94, 'vat_percent': null, 'category_id': 1, 'op_number': null},
+      {'description': 'Cotton wool', 'quantity': 5.0, 'amount': 23.94, 'vat_percent': null, 'category_id': 1, 'op_number': null},
+      {'description': 'Scissor', 'quantity': 1.0, 'amount': 10.0, 'vat_percent': null, 'category_id': 1, 'op_number': null},
     ]);
     expect(body['total_amount'], 57.88);
     expect(body['amount'], 57.88);
     expect(body['category_id'], 1);
+    expect(body['region_code'], 'DUBAI');
     expect(find.text('claim 99'), findsOneWidget);
   });
 

@@ -1,13 +1,15 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from auth.security import CurrentUser, get_current_user
-from database.models import ErpExpenseCategory, ErpExpenseVendor, get_db
+from database.models import ErpExpenseCategory, ErpExpenseRegionConfig, ErpExpenseVendor, get_db
 from services import approval_service
+from services.currency import region_base_currency
+from services.exchange_rate_service import ExchangeRateError, lookup_rate
 from services.llm_vision_service import LlmVisionError
 from services.storage import storage_service
 from services.transaction_service import transaction_service
@@ -20,8 +22,24 @@ categories_router = APIRouter(prefix="/api", tags=["reference"])
 @categories_router.get("/categories")
 def list_active_categories(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     """Read-only category picker for the bill-capture form (any authenticated user)."""
-    categories = db.query(ErpExpenseCategory).filter(ErpExpenseCategory.is_active == 1).all()
-    return [{"id": c.category_id, "name": c.category_name, "name_ar": c.category_name_ar} for c in categories]
+    categories = (
+        db.query(ErpExpenseCategory)
+        .options(joinedload(ErpExpenseCategory.owning_department))
+        .filter(ErpExpenseCategory.is_active == 1)
+        .all()
+    )
+    return [
+        {
+            "id": c.category_id,
+            "name": c.category_name,
+            "name_ar": c.category_name_ar,
+            # Lines in a category owned by another department go to that department's HOD
+            # and, for petty cash, come out of that department's fund.
+            "owning_department_id": c.owning_department_id,
+            "owning_department_name": c.owning_department.department_name if c.owning_department else None,
+        }
+        for c in categories
+    ]
 
 
 @categories_router.get("/vendors")
@@ -51,7 +69,7 @@ class CreateClaimRequest(BaseModel):
     exchange_rate: float = 1.0
     bill_date: Optional[str] = None
     category_id: int
-    region_code: str = "IN"
+    region_code: str = "UAE"
     type: str = "reimbursement"  # petty_cash | reimbursement
     project_id: Optional[int] = None
     op_number: Optional[str] = None
@@ -73,6 +91,7 @@ class UpdateClaimRequest(BaseModel):
     exchange_rate: Optional[float] = None
     bill_date: Optional[str] = None
     category_id: Optional[int] = None
+    region_code: Optional[str] = None  # billed company; omitted here used to make PATCH drop it
     project_id: Optional[int] = None
     type: Optional[str] = None
     op_number: Optional[str] = None
@@ -100,24 +119,39 @@ async def ocr_receipt(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+MAX_RECEIPT_PAGES = 5
+
+
 @router.post("/ocr/upload")
 async def upload_receipt(
     file: UploadFile = File(...),
+    pages: list[UploadFile] = File(default=[]),
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Save the photo to S3 only — returns immediately so the UI can leave Add receipt."""
+    """Save the photo to S3 only — returns immediately so the UI can leave Add receipt.
+    `file` is page 1; `pages` are pages 2..N of the same bill (multi-page bills)."""
+    if 1 + len(pages) > MAX_RECEIPT_PAGES:
+        raise HTTPException(status_code=400, detail=f"A bill can have at most {MAX_RECEIPT_PAGES} pages")
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
+    extra_pages = []
+    for page in pages:
+        page_data = await page.read()
+        if not page_data:
+            raise HTTPException(status_code=400, detail="Empty page")
+        extra_pages.append((page_data, page.content_type or "image/jpeg", page.filename or "receipt.jpg"))
     content_type = file.content_type or "image/jpeg"
-    return transaction_service.store_receipt(db, data, content_type, file.filename or "receipt.jpg")
+    return transaction_service.store_receipt(
+        db, data, content_type, file.filename or "receipt.jpg", extra_pages=extra_pages,
+    )
 
 
 @router.post("/receipts/{receipt_id}/ocr")
 def analyze_receipt(
     receipt_id: int,
-    mode: str = "auto",  # ignored; kept so older app builds still work
+    mode: str = "auto",  # auto | en | ar — language hint for the scan
     engine: str = "ai",  # ignored; every scan uses GPT
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -166,15 +200,47 @@ def create_claim(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/exchange-rate")
+def get_exchange_rate(
+    from_currency: str = Query(..., alias="from"),
+    to_currency: Optional[str] = Query(None, alias="to"),
+    region_code: Optional[str] = None,
+    date: Optional[str] = None,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Published rate for 1 `from` in `to` (or in `region_code`'s base currency) on the scan
+    date (today). Preview only — the rate is stamped on the claim at submit."""
+    target = to_currency
+    if not target and region_code:
+        region = (
+            db.query(ErpExpenseRegionConfig)
+            .filter(ErpExpenseRegionConfig.region_code == region_code.strip().upper())
+            .first()
+        )
+        if not region:
+            raise HTTPException(status_code=404, detail="Unknown region_code")
+        target = region_base_currency(region)
+    if not target:
+        raise HTTPException(status_code=400, detail="Pass `to` or `region_code`")
+    try:
+        return lookup_rate(from_currency, target, date)
+    except ExchangeRateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/mine")
 def my_claims(
     limit: int = 6,
     offset: int = 0,
     status: str | None = None,
+    region_code: str | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return transaction_service.list_mine(db, user, limit=limit, offset=offset, status=status)
+    return transaction_service.list_mine(
+        db, user, limit=limit, offset=offset, status=status, region_code=region_code,
+    )
 
 
 @router.get("/receipts/{receipt_id}/image")
@@ -191,6 +257,23 @@ def receipt_image(
     if data is None:
         raise HTTPException(status_code=404, detail="Image not found")
     return Response(content=data, media_type=receipt.content_type or "image/jpeg")
+
+
+@router.get("/receipts/{receipt_id}/pages/{page_no}/image")
+def receipt_page_image(
+    receipt_id: int,
+    page_no: int,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        page = transaction_service.get_receipt_page(db, receipt_id, page_no)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    data = storage_service.read_bytes(page.s3_key)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return Response(content=data, media_type=page.content_type or "image/jpeg")
 
 
 @router.get("/{claim_id}")

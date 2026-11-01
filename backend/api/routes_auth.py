@@ -17,6 +17,7 @@ from auth.security import (
 )
 from config import get_settings
 from database.models import ErpExpenseDepartment, get_db
+from services.region_scope import remember_home_region
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
@@ -32,6 +33,10 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class SwitchRegionRequest(BaseModel):
+    region_code: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -39,7 +44,7 @@ class TokenResponse(BaseModel):
     user: dict
 
 
-def _user_dict(user, region_code: Optional[str] = None) -> dict:
+def _user_dict(user, region_code: Optional[str] = None, allowed_regions: Optional[list] = None) -> dict:
     return {
         "id": user.user_id,
         "username": user.user_name,
@@ -49,6 +54,7 @@ def _user_dict(user, region_code: Optional[str] = None) -> dict:
         "department_name": user.department.department_name if user.department else None,
         "email": user.email,
         "region_code": region_code,
+        "allowed_regions": allowed_regions or ([region_code] if region_code else []),
     }
 
 
@@ -58,25 +64,53 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    # A multi-region user (in ErpExpenseMultiRegionUserRegion) must pick one of their
-    # assigned regions -- the client is expected to retry with region_code once it sees
-    # region_required in the error detail. Everyone else gets their region derived from
-    # ERP (employee -> subsidiary), no prompt needed.
+    # Nobody is prompted at sign-in: everyone starts in their ERP home company
+    # (employee -> subsidiary). A multi-region user (ErpExpenseMultiRegionUserRegion)
+    # switches afterwards via /switch-region from the side menu.
     allowed = allowed_regions_for(db, user)
+    home = resolve_default_region_code(db, user.user_id)
+    # Approval routing reads the home company from the local row (no ERP query per claim).
+    remember_home_region(db, user, home)
     if allowed:
-        if body.region_code not in allowed:
-            raise HTTPException(
-                status_code=400,
-                detail={"region_required": True, "allowed_regions": allowed},
-            )
-        region_code = body.region_code
+        if body.region_code in allowed:
+            region_code = body.region_code
+        elif home in allowed:
+            region_code = home
+        else:
+            region_code = allowed[0]
     else:
-        region_code = resolve_default_region_code(db, user.user_id) or body.region_code or "UAE"
+        region_code = home or body.region_code or "UAE"
 
     return TokenResponse(
         access_token=create_access_token(user, region_code),
         refresh_token=create_refresh_token(user, region_code),
-        user=_user_dict(user, region_code),
+        user=_user_dict(user, region_code, _sorted_allowed(allowed, home) or [region_code]),
+    )
+
+
+def _sorted_allowed(allowed: list[str], home: Optional[str]) -> list[str]:
+    """Home company first so the side-menu switcher lists it at the top."""
+    return sorted(allowed, key=lambda c: (c != home, c))
+
+
+@router.post("/switch-region", response_model=TokenResponse)
+def switch_region(
+    body: SwitchRegionRequest,
+    current: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = get_user_by_id(db, current.id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    allowed = allowed_regions_for(db, user)
+    home = resolve_default_region_code(db, user.user_id)
+    wanted = (body.region_code or "").strip().upper()
+    if wanted not in allowed:
+        raise HTTPException(status_code=403, detail="You are not assigned to that company")
+    return TokenResponse(
+        access_token=create_access_token(user, wanted),
+        refresh_token=create_refresh_token(user, wanted),
+        user=_user_dict(user, wanted, _sorted_allowed(allowed, home)),
     )
 
 
@@ -93,10 +127,13 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid refresh token") from exc
 
     region_code = payload.get("region")
+    home = resolve_default_region_code(db, user.user_id)
+    remember_home_region(db, user, home)
+    allowed = _sorted_allowed(allowed_regions_for(db, user), home)
     return TokenResponse(
         access_token=create_access_token(user, region_code),
         refresh_token=create_refresh_token(user, region_code),
-        user=_user_dict(user, region_code),
+        user=_user_dict(user, region_code, allowed),
     )
 
 
@@ -108,6 +145,9 @@ def me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_
         if user.department_id
         else None
     )
+    orm = get_user_by_id(db, user.id)
+    assigned = _sorted_allowed(allowed_regions_for(db, orm), resolve_default_region_code(db, orm.user_id)) if orm else []
+    allowed = assigned or ([user.region_code] if user.region_code else [])
     return {
         "id": user.id,
         "display_name": user.display_name,
@@ -116,6 +156,7 @@ def me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_
         "department_name": department.department_name if department else None,
         "email": user.email,
         "region_code": user.region_code,
+        "allowed_regions": allowed,
     }
 
 

@@ -56,6 +56,14 @@ class ClaimEmailContext:
     expense_type: Optional[str] = None
     project_name: Optional[str] = None
     op_number: Optional[str] = None
+    # Same bill in the company's base currency (only shown when it differs from the bill's).
+    base_currency: Optional[str] = None
+    total_amount_base: Optional[float] = None
+    exchange_rate: Optional[float] = None
+    payment_method: Optional[str] = None
+    payment_reference: Optional[str] = None
+    payment_date: Optional[str] = None
+    payment_amount: Optional[str] = None
 
 
 @dataclass
@@ -65,11 +73,36 @@ class EmailContent:
     text: str
 
 
+def _department_stage_label(txn) -> Optional[str]:
+    """'department_hod:<id>' -> that department's name, e.g. 'IT HOD'."""
+    from services.approval_service import resolve_stage_labels
+    from services.department_split import stage_department_id
+
+    if not stage_department_id(txn.current_stage):
+        return None
+    return resolve_stage_labels(txn).get(txn.current_stage)
+
+
 def build_context(txn, comment: Optional[str] = None, approver=None) -> ClaimEmailContext:
     region = txn.region
     employee = txn.employee
     project = getattr(txn, "project", None)
+    payment = getattr(txn, "payment", None)
+    payment_fields = {}
+    if payment is not None:
+        from services.payment_service import PAYMENT_METHOD_LABELS
+
+        payment_fields = {
+            "payment_method": PAYMENT_METHOD_LABELS.get(payment.payment_method, payment.payment_method),
+            "payment_reference": payment.payment_reference,
+            "payment_date": payment.payment_date.strftime("%d %b %Y") if payment.payment_date else None,
+            "payment_amount": _money(payment.amount, payment.currency),
+        }
     return ClaimEmailContext(
+        base_currency=getattr(txn, "base_currency", None),
+        total_amount_base=getattr(txn, "total_amount_base", None),
+        exchange_rate=txn.exchange_rate,
+        **payment_fields,
         transaction_id=txn.transaction_id,
         employee_name=employee.display_name if employee else "-",
         employee_department=employee.department.department_name if employee and employee.department else None,
@@ -80,7 +113,7 @@ def build_context(txn, comment: Optional[str] = None, approver=None) -> ClaimEma
         currency=txn.currency,
         bill_date=txn.bill_date,
         category_name=txn.category.category_name if txn.category else None,
-        stage=txn.current_stage,
+        stage=_department_stage_label(txn) or txn.current_stage,
         submitted_on=txn.submitted_on.strftime("%d %b %Y, %H:%M") if txn.submitted_on else None,
         approver_name=approver.display_name if approver else None,
         logo_url=region.logo_url if region else None,
@@ -94,6 +127,15 @@ def build_context(txn, comment: Optional[str] = None, approver=None) -> ClaimEma
 
 def _money(amount: float, currency: str) -> str:
     return f"{currency} {amount:,.2f}"
+
+
+def _converted(ctx: "ClaimEmailContext") -> bool:
+    return bool(
+        ctx.base_currency
+        and ctx.total_amount_base is not None
+        and ctx.exchange_rate
+        and ctx.base_currency.upper() != (ctx.currency or "").upper()
+    )
 
 
 def _truncate(value: str, limit: int = 70) -> str:
@@ -151,6 +193,11 @@ def _common_rows(ctx: ClaimEmailContext) -> list[tuple[str, Optional[str], str]]
     rows.append(("Amount (excl. VAT)", _money(ctx.amount, ctx.currency), "money"))
     rows.append(("VAT amount", _money(ctx.vat_amount, ctx.currency), "money"))
     rows.append(("Total amount", _money(ctx.total_amount, ctx.currency), "total"))
+    if _converted(ctx):
+        rows.append((f"Total in {ctx.base_currency}", _money(ctx.total_amount_base, ctx.base_currency), "total"))
+        rows.append(
+            ("Exchange rate", f"1 {ctx.currency} = {ctx.exchange_rate:g} {ctx.base_currency}", "default")
+        )
     holder_row = _current_holder_row(ctx)
     if holder_row:
         rows.append((holder_row[0], holder_row[1], "default"))
@@ -365,9 +412,20 @@ def resubmit_email(ctx: ClaimEmailContext, _force_dark_preview: bool = False) ->
 def paid_email(ctx: ClaimEmailContext, _force_dark_preview: bool = False) -> EmailContent:
     subject = f"Your expense claim was paid - {_money(ctx.total_amount, ctx.currency)}"
     heading = "Expense claim paid"
-    intro = "Your expense claim has been marked as paid."
+    intro = "Your expense claim has been paid."
+    rows = _common_rows(ctx) + [
+        ("Amount paid", ctx.payment_amount, "total"),
+        ("Payment method", ctx.payment_method, "default"),
+        ("Payment reference", ctx.payment_reference, "default"),
+        ("Payment date", ctx.payment_date, "default"),
+    ]
     html_body = _shell(
-        heading, intro, _common_rows(ctx), ctx, tone="positive", comment_label="Remarks", _force_dark_preview=_force_dark_preview
+        heading, intro, rows, ctx, tone="positive", comment_label="Remarks", _force_dark_preview=_force_dark_preview
     )
-    text_body = _text(heading, ctx, f"Remarks: {ctx.comment or '-'}")
+    paid_line = (
+        f"Paid {ctx.payment_amount} by {ctx.payment_method} on {ctx.payment_date}, reference {ctx.payment_reference}."
+        if ctx.payment_reference
+        else ""
+    )
+    text_body = _text(heading, ctx, "\n".join(x for x in (paid_line, f"Remarks: {ctx.comment or '-'}") if x))
     return EmailContent(subject, html_body, text_body)

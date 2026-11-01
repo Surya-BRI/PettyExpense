@@ -60,6 +60,7 @@ def _create(db, **overrides):
         region_code="UAE",
         project_id=None,
         op_number=None,
+        bill_number=None,
         remarks=None,
         receipt_id=None,
         s3_key=None,

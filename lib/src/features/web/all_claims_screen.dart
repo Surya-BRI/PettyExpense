@@ -58,7 +58,8 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
           c.vendor.toLowerCase().contains(q) ||
           c.employeeDisplay.toLowerCase().contains(q) ||
           c.category.toLowerCase().contains(q) ||
-          (c.opNumber ?? '').toLowerCase().contains(q);
+          (c.opNumber ?? '').toLowerCase().contains(q) ||
+          (c.billNumber ?? '').toLowerCase().contains(q);
     }).toList();
 
     int compare(ExpenseClaim a, ExpenseClaim b) => switch (_sort) {
@@ -255,6 +256,7 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
         _SortColumn.date,
         if (role.isApprover) _SortColumn.employee,
         _SortColumn.vendor,
+        null, // invoice
         null, // category
         null, // region
         _SortColumn.total,
@@ -277,7 +279,7 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
       _SortColumn.total: 'Total',
       _SortColumn.status: 'Status',
     };
-    final unsortable = ['Category', 'Region', 'Stage', 'Flags'];
+    final unsortable = ['Invoice no.', 'Category', 'Region', 'Stage', 'Flags'];
     var u = 0;
     return [
       for (final key in _columnKeys(role))
@@ -294,7 +296,7 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
 
   DataRow _row(BuildContext context, ExpenseClaim c, UserRole role) {
     final date = claimDate(c);
-    final stage = kPendingStatuses.contains(c.status) ? (kStageLabels[c.currentStage] ?? '-') : '-';
+    final stage = kPendingStatuses.contains(c.status) ? c.currentStageLabel : '-';
     return DataRow(
       onSelectChanged: (_) => openClaim(context, c, role),
       cells: [
@@ -305,10 +307,11 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
           constraints: const BoxConstraints(maxWidth: 220),
           child: Text(c.vendor.isEmpty ? '-' : c.vendor, overflow: TextOverflow.ellipsis),
         )),
+        DataCell(Text((c.billNumber ?? '').trim().isEmpty ? '-' : c.billNumber!.trim())),
         DataCell(Text(c.category.isEmpty ? '-' : c.category)),
         DataCell(Text(c.regionCode ?? '-')),
         DataCell(Text(formatMoney(c.currency, claimTotal(c)), style: const TextStyle(fontWeight: FontWeight.w600))),
-        DataCell(StatusChip(status: c.status)),
+        DataCell(StatusChip.forClaim(c)),
         DataCell(Text(stage)),
         DataCell(Row(
           mainAxisSize: MainAxisSize.min,

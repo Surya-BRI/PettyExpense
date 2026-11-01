@@ -26,6 +26,9 @@ default:
   plausible_vat_rates: [0, 5, 15]
 
 regions:
+  DUBAI:
+    plausible_vat_rates: [0, 5]
+    default_currency: AED
   UAE:
     plausible_vat_rates: [0, 5]
     default_currency: AED

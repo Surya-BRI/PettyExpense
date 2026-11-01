@@ -96,10 +96,25 @@ function Detail({ claim, user, onChanged }: { claim: Claim; user: AuthUser; onCh
       label: 'Currency',
       value: `${claim.currency}${claim.exchange_rate && claim.exchange_rate !== 1 ? ` (rate ${claim.exchange_rate})` : ''}`,
     },
+    {
+      label: `Total in ${claim.base_currency ?? ''}`,
+      value:
+        claim.base_currency && claim.base_currency !== claim.currency && claim.total_amount_base != null
+          ? `${claim.base_currency} ${claim.total_amount_base.toFixed(2)}${claim.exchange_rate_date ? ` (rate of ${claim.exchange_rate_date})` : ''}`
+          : null,
+    },
     { label: 'OP number', value: claim.op_number },
     { label: 'Submitted', value: claim.submitted_at ? formatDateTime(claim.submitted_at) : null },
     { label: 'Decided', value: claim.decided_at ? formatDateTime(claim.decided_at) : null },
     { label: 'Paid', value: claim.paid_at ? formatDateTime(claim.paid_at) : null },
+    {
+      label: 'Payment',
+      value: claim.payment
+        ? `${claim.payment.payment_method_label} · ref ${claim.payment.payment_reference} · ${claim.payment.currency} ${claim.payment.amount.toFixed(2)}`
+        : claim.payment_status === 'unpaid'
+          ? 'Approved – waiting for payment'
+          : null,
+    },
     { label: 'Remarks', value: claim.remarks, wide: true },
   ].filter((f) => f.value !== null && f.value !== undefined && f.value !== '');
 
@@ -243,7 +258,8 @@ function LineItems({ claim }: { claim: Claim }) {
 function Stepper({ claim }: { claim: Claim }) {
   const seq = claim.stage_sequence;
   const finished = claim.status === 'approved' || claim.status === 'paid';
-  const currentIdx = claim.current_stage ? seq.indexOf(claim.current_stage) : -1;
+  const currentKey = claim.current_stage_key ?? claim.current_stage;
+  const currentIdx = currentKey ? seq.indexOf(currentKey) : -1;
   return (
     <div className="stepper">
       {seq.map((s, i) => {
@@ -252,7 +268,7 @@ function Stepper({ claim }: { claim: Claim }) {
         return (
           <div key={s} className={`step${done ? ' done' : ''}${current ? ' current' : ''}`} aria-current={current ? 'step' : undefined}>
             <div className="dot">{done ? '✓' : i + 1}</div>
-            {STAGE_LABELS[s] ?? s}
+            {claim.stage_labels?.[s] ?? STAGE_LABELS[s.split(':')[0]] ?? s}
             {current && claim.status === 'disputed' && (
               <div className="small" style={{ color: 'var(--warning-ink)', fontWeight: 500 }}>
                 With employee
@@ -261,10 +277,17 @@ function Stepper({ claim }: { claim: Claim }) {
           </div>
         );
       })}
-      <div className={`step${claim.status === 'paid' ? ' done' : ''}${claim.status === 'approved' ? ' current' : ''}`}>
-        <div className="dot">{claim.status === 'paid' ? '✓' : seq.length + 1}</div>
-        Paid
-      </div>
+      {claim.type === 'petty_cash' ? (
+        <div className={`step${finished ? ' done' : ''}`}>
+          <div className="dot">{finished ? '✓' : seq.length + 1}</div>
+          Deducted from petty cash
+        </div>
+      ) : (
+        <div className={`step${claim.status === 'paid' ? ' done' : ''}${claim.status === 'approved' ? ' current' : ''}`}>
+          <div className="dot">{claim.status === 'paid' ? '✓' : seq.length + 1}</div>
+          Paid
+        </div>
+      )}
     </div>
   );
 }
@@ -320,7 +343,11 @@ function Actions({ claim, user, onChanged }: { claim: Claim; user: AuthUser; onC
 
   const pending = PENDING.includes(claim.status);
   const myStage = pending && claim.current_stage != null && stagesFor(user.role).includes(claim.current_stage);
-  const canPay = claim.status === 'approved' && (user.role === 'finance_manager' || user.role === 'admin');
+  // Petty cash is settled from the fund at final approval -- only reimbursements get paid.
+  const canPay =
+    claim.status === 'approved' &&
+    claim.type !== 'petty_cash' &&
+    (user.role === 'finance_manager' || user.role === 'admin');
   const canResolveVendor =
     pending && claim.vendor_unmatched && claim.current_stage === 'accountant' && (user.role === 'accountant' || user.role === 'admin');
   const isOwner = user.id === claim.employee_id;

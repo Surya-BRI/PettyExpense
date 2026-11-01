@@ -16,6 +16,12 @@ import '../features/claims/confirm_claim_screen.dart';
 import '../features/claims/my_claims_screen.dart';
 import '../features/home/main_shell.dart';
 import '../features/notifications/notifications_screen.dart';
+import '../features/admin/admin_company_screen.dart';
+import '../features/admin/admin_hub_screen.dart';
+import '../features/admin/admin_people_screen.dart';
+import '../features/admin/my_funds_screen.dart';
+import '../features/admin/topups_screen.dart';
+import '../features/payments/payments_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/web/all_claims_screen.dart';
 import '../features/web/dashboard_screen.dart';
@@ -39,19 +45,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     refreshListenable: refresh,
     redirect: (context, state) {
       final auth = ref.read(authControllerProvider);
-      final loc = state.matchedLocation;
+      final loc = state.uri.path;
       final role = UserRoleX.fromJson(auth.user?.role);
       final approver = role.isApprover;
-      final loggedOut = auth.user == null && !auth.isLoading;
-
-      if (loc == '/login') {
-        if (auth.user != null) {
-          return homeRouteFor(role);
-        }
-        return null;
+      // No session → login. Do not keep the main shell with a fake Guest user
+      // while tokens are restoring after restart / hot reload / logout.
+      if (auth.user == null) {
+        return loc == '/login' ? null : '/login';
       }
 
-      if (loggedOut) return '/login';
+      if (loc == '/login') {
+        return homeRouteFor(role);
+      }
 
       if (loc == '/') {
         return homeRouteFor(role);
@@ -62,9 +67,37 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return homeRouteFor(role);
       }
 
+      // Admin screens are Admin-only.
+      if (loc.startsWith('/admin') && role != UserRole.admin) {
+        return homeRouteFor(role);
+      }
+
+      // Admin is organisation setup, not an approver queue (a single claim opened from
+      // Payments is fine).
+      if (!kIsWeb &&
+          role == UserRole.admin &&
+          loc.startsWith('/approvals') &&
+          !RegExp(r'^/approvals/[a-z_]+/\d+$').hasMatch(loc)) {
+        return '/admin';
+      }
+
+      // Recording reimbursement payments is the Finance Manager's (and Admin's) job.
+      if (loc == '/payments' && role != UserRole.financeManager && role != UserRole.admin) {
+        return homeRouteFor(role);
+      }
+
       // Dashboard and all-claims are web-only screens; redirect mobile employees away.
       if (!kIsWeb && !approver && (loc == '/dashboard' || loc == '/all-claims')) {
         return '/claims';
+      }
+
+      // Employees do not manage pots — leftover cash is shown on the bill, not a Funds tab.
+      if (role == UserRole.employee && loc == '/funds') {
+        return '/claims';
+      }
+      // HOD remaining + top-ups live on one screen.
+      if (role == UserRole.hod && loc == '/funds') {
+        return '/topups';
       }
 
       return null;
@@ -99,6 +132,68 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
+            path: '/admin',
+            builder: (context, state) => const AdminHubScreen(),
+          ),
+          GoRoute(
+            path: '/admin/companies/:id',
+            builder: (context, state) {
+              final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+              return AdminCompanyScreen(regionId: id);
+            },
+          ),
+          GoRoute(
+            path: '/admin/regions',
+            redirect: (context, state) => '/admin',
+            builder: (context, state) => const AdminHubScreen(),
+          ),
+          GoRoute(
+            path: '/admin/people',
+            builder: (context, state) => const AdminPeopleScreen(),
+            routes: [
+              GoRoute(
+                path: ':regionCode',
+                builder: (context, state) {
+                  final extra = state.extra;
+                  return AdminCompanyPeopleScreen(
+                    regionCode: state.pathParameters['regionCode'] ?? '',
+                    region: extra is RegionConfig ? extra : null,
+                  );
+                },
+                routes: [
+                  GoRoute(
+                    path: ':userId',
+                    builder: (context, state) {
+                      final extra = state.extra;
+                      return AdminPersonScreen(
+                        userId: int.tryParse(state.pathParameters['userId'] ?? '') ?? 0,
+                        regionCode: state.pathParameters['regionCode'] ?? '',
+                        user: extra is OrgUser ? extra : null,
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          GoRoute(
+            path: '/admin/funds',
+            redirect: (context, state) => '/admin',
+            builder: (context, state) => const AdminHubScreen(),
+          ),
+          GoRoute(
+            path: '/funds',
+            builder: (context, state) => const MyFundsScreen(),
+          ),
+          GoRoute(
+            path: '/topups',
+            builder: (context, state) => const TopupsScreen(),
+          ),
+          GoRoute(
+            path: '/payments',
+            builder: (context, state) => const PaymentsScreen(),
+          ),
+          GoRoute(
             path: '/notifications',
             builder: (context, state) => const NotificationsScreen(),
           ),
@@ -109,9 +204,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               if (extra is Map) {
                 return ConfirmClaimScreen(
                   ocr: extra['ocr'] as OcrResult,
-                  localPath: extra['localPath'] as String?,
+                  localPaths: (extra['localPaths'] as List?)?.cast<String>() ?? const [],
                   runOcr: extra['runOcr'] == true,
                   lineMode: extra['lineMode'] as BillLineMode? ?? BillLineMode.single,
+                  ocrMode: extra['ocrMode'] as String? ?? 'auto',
                 );
               }
               return const Scaffold(

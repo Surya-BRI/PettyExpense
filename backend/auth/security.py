@@ -39,6 +39,17 @@ ERP_ROLE_ID_TO_APP_ROLE = {
 ERP_HOD_ROLE_NAME_SUFFIX = "HOD"
 
 
+def mapped_app_role(role_id: Optional[int], role_name: Optional[str]) -> Optional[str]:
+    """ERP roleId / roleName → this app's role. Same rules as first-login mirroring."""
+    if role_id in ERP_ROLE_ID_TO_APP_ROLE:
+        return ERP_ROLE_ID_TO_APP_ROLE[role_id]
+    if (role_name or "").strip().upper().endswith(ERP_HOD_ROLE_NAME_SUFFIX):
+        return "hod"
+    if role_name:
+        return "employee"
+    return None
+
+
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
@@ -88,10 +99,13 @@ def allowed_regions_for(db: Session, user: ErpAuthExpenseUsers) -> list[str]:
     return [r[0] for r in rows]
 
 
+# ERP is the directory (login, department, subsidiary). Petty-cash limits, bills, and
+# top-ups live only in ErpExpense* tables — never written back to ERP master data.
 # ErpMasterSubsidiary.subsidiaryCode (the ERP entity an employee's ErpMasterRegion belongs
 # to, via subsidiaryId) -> this app's region_code. Two KSA legal entities both map to KSA.
 ERP_SUBSIDIARY_TO_REGION_CODE = {
-    "BRI UAE": "UAE",
+    # BRI UAE = Blue Rhine Industries (Dubai). Contracting (UAE) is an app region for bills.
+    "BRI UAE": "DUBAI",
     "Prosigns KSA": "KSA",
     "BRI PS Saudi": "KSA",
     "Prosigns Oman": "OMAN",
@@ -124,7 +138,7 @@ def resolve_default_region_code(db: Session, erp_user_id: int) -> Optional[str]:
 def get_user_by_id(db: Session, user_id: int) -> Optional[ErpAuthExpenseUsers]:
     return (
         db.query(ErpAuthExpenseUsers)
-        .options(joinedload(ErpAuthExpenseUsers.role))
+        .options(joinedload(ErpAuthExpenseUsers.role), joinedload(ErpAuthExpenseUsers.department))
         .filter(
             ErpAuthExpenseUsers.user_id == user_id,
             ErpAuthExpenseUsers.is_active == 1,
@@ -137,15 +151,18 @@ def get_user_by_id(db: Session, user_id: int) -> Optional[ErpAuthExpenseUsers]:
 def authenticate_user(db: Session, username: str, password: str) -> Optional[ErpAuthExpenseUsers]:
     """Validate credentials against the shared ERP tables (ErpAuthUsers /
     ErpAuthUserRoleMap / ErpMasterRole / ErpMasterEmployee) and mirror the result into the
-    app's local ErpAuthExpenseUsers row, keyed by the real ERP userId. Role/department on
-    an existing local row are never overwritten here, so manual admin elevation sticks."""
+    app's local ErpAuthExpenseUsers row, keyed by the real ERP userId. Role on an existing
+    local row is never overwritten here, so manual admin elevation sticks. Department is
+    copied from ERP only while the local department_id is still empty."""
     erp_user = db.execute(
         text(
             "SELECT TOP 1 u.userId, u.userName, u.password, "
             "me.firstName, me.lastName, me.emailId AS email, "
+            "d.departmentName AS departmentName, "
             "r.roleId AS roleId, r.roleName AS roleName "
             "FROM ErpAuthUsers u "
             "LEFT JOIN ErpMasterEmployee me ON me.userId = u.userId "
+            "LEFT JOIN ErpMasterDepartment d ON d.departmentId = me.departmentId "
             "LEFT JOIN ErpAuthUserRoleMap m ON m.userId = u.userId AND m.isActive = 1 "
             "LEFT JOIN ErpMasterRole r ON r.roleId = m.roleId AND r.isActive = 1 AND r.isDeleted = 0 "
             "WHERE u.userName = :username AND u.isActive = 1 AND u.isDeleted = 0 "
@@ -157,21 +174,21 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Erp
     if not erp_user or not verify_password(password, erp_user.password):
         return None
 
-    if erp_user.roleId in ERP_ROLE_ID_TO_APP_ROLE:
-        app_role_code = ERP_ROLE_ID_TO_APP_ROLE[erp_user.roleId]
-    elif (erp_user.roleName or "").strip().upper().endswith(ERP_HOD_ROLE_NAME_SUFFIX):
-        app_role_code = "hod"
-    else:
-        app_role_code = "employee"
+    app_role_code = mapped_app_role(erp_user.roleId, erp_user.roleName) or "employee"
 
     from database.models import ErpMasterExpenseRole
+
+    dept_id = resolve_local_department_id(db, getattr(erp_user, "departmentName", None))
 
     local_user = get_user_by_id(db, erp_user.userId)
     if local_user:
         local_user.display_name = _erp_display_name(erp_user)
         local_user.email = erp_user.email
+        # Fill department only when still empty so a later admin change is not overwritten.
+        if local_user.department_id is None and dept_id is not None:
+            local_user.department_id = dept_id
         db.commit()
-        return local_user
+        return get_user_by_id(db, local_user.user_id)
 
     role = db.query(ErpMasterExpenseRole).filter(ErpMasterExpenseRole.role_code == app_role_code).first()
     local_user = ErpAuthExpenseUsers(
@@ -180,7 +197,7 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Erp
         display_name=_erp_display_name(erp_user),
         password_hash=hash_password(secrets.token_hex(32)),  # unused — real auth is against ERP
         role_id=role.role_id,
-        department_id=None,  # department stays admin-managed locally; see auth doc
+        department_id=dept_id,
         email=erp_user.email,
         is_active=1,
         is_deleted=0,
@@ -194,6 +211,23 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Erp
     db.execute(text("SET IDENTITY_INSERT ErpAuthExpenseUsers OFF"))
     db.commit()
     return get_user_by_id(db, local_user.user_id)
+
+
+def resolve_local_department_id(db: Session, department_name: Optional[str]) -> Optional[int]:
+    """Match or create an ErpExpenseDepartment row for an ERP department name."""
+    from database.models import ErpExpenseDepartment
+
+    name = (department_name or "").strip()
+    if not name:
+        return None
+    wanted = name.lower()
+    for row in db.query(ErpExpenseDepartment).all():
+        if (row.department_name or "").strip().lower() == wanted:
+            return row.department_id
+    row = ErpExpenseDepartment(department_name=name, is_active=1)
+    db.add(row)
+    db.flush()
+    return row.department_id
 
 
 def _erp_display_name(erp_user) -> str:

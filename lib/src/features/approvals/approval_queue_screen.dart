@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency.dart';
+import '../../utils/money.dart';
 import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/shimmer_box.dart';
@@ -35,13 +37,20 @@ String _formatDate(String? raw) {
   return DateFormat('MMM d, yyyy').format(date.toLocal());
 }
 
-String _formatAmount(double amount) =>
-    NumberFormat('#,##0.00').format(amount);
-
 final approvalsQueueProvider =
-    FutureProvider.autoDispose.family<List<ExpenseClaim>, String>((ref, stage) {
-  return ref.watch(apiClientProvider).approvalsQueue(stage);
+    FutureProvider.autoDispose.family<List<ExpenseClaim>, String>((ref, stage) async {
+  final api = ref.watch(apiClientProvider);
+  if (stage != 'hod') return api.approvalsQueue(stage);
+  // An HOD approves their own department's bills ('hod') and other departments' lines they
+  // own, e.g. IT items on a Sales bill ('department_hod') — one queue for both.
+  final results = await Future.wait([api.approvalsQueue('hod'), api.approvalsQueue('department_hod')]);
+  final seen = <int>{};
+  return [for (final c in [...results[0], ...results[1]]) if (seen.add(c.id)) c];
 });
+
+/// Detail route for a queued claim: cross-department steps open in the department_hod view.
+String _detailStageFor(String queueStage, ExpenseClaim c) =>
+    queueStage == 'hod' && c.currentStage == 'department_hod' ? 'department_hod' : queueStage;
 
 const _stageLabels = {
   'hod': 'HOD queue',
@@ -50,13 +59,12 @@ const _stageLabels = {
   'finance_manager': 'Finance Manager queue',
 };
 
-// Status filters for the queue. Finance Manager also sees 'approved' (pending payment).
-const _statusFilters = ['all', 'submitted', 'disputed', 'approved'];
+// Approved reimbursements waiting for payment live on the Payments screen (/payments).
+const _statusFilters = ['all', 'submitted', 'disputed'];
 const _statusFilterLabels = {
   'all': 'All',
   'submitted': 'New',
   'disputed': 'Disputed',
-  'approved': 'Pending payment',
 };
 
 /// One screen, parameterized by stage — an HOD and an Accountant see the same
@@ -77,7 +85,8 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
   @override
   void initState() {
     super.initState();
-    _statusFilter = widget.initialFilter ?? 'all';
+    final initial = widget.initialFilter;
+    _statusFilter = _statusFilters.contains(initial) ? initial! : 'all';
   }
 
   @override
@@ -95,7 +104,6 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: _statusFilters
-                    .where((s) => s != 'approved' || widget.stage == 'finance_manager')
                     .map(
                       (s) => Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -143,7 +151,7 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                   separatorBuilder: (context, index) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
                     final c = filtered[i];
-                    final isPendingPayment = c.status == 'approved';
+                    final isPendingPayment = c.status == 'approved' && c.type != 'petty_cash';
                     final accentColor = isPendingPayment ? AppColors.success : AppColors.darkBlue;
                     final buttonLabel = isPendingPayment ? 'Mark paid' : 'View claim';
                     return Material(
@@ -151,7 +159,7 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                       borderRadius: BorderRadius.zero,
                       child: InkWell(
                         borderRadius: BorderRadius.zero,
-                        onTap: () => context.push('/approvals/${widget.stage}/${c.id}'),
+                        onTap: () => context.push('/approvals/${_detailStageFor(widget.stage, c)}/${c.id}'),
                         child: Container(
                           decoration: BoxDecoration(
                             border: Border.all(color: AppColors.divider),
@@ -182,6 +190,17 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                                             ),
                                           ),
                                           const SizedBox(height: 5),
+                                          if ((c.billNumber ?? '').trim().isNotEmpty) ...[
+                                            Text(
+                                              'Invoice ${c.billNumber!.trim()}',
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.darkBlue,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                          ],
                                           // Employee · category
                                           Text(
                                             '${c.employeeDisplay} · ${c.category}',
@@ -191,15 +210,30 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                                             ),
                                           ),
                                           const SizedBox(height: 10),
-                                          // Amount
+                                          // Bill amount, plus region amount when the bill is foreign.
                                           Text(
-                                            '${_formatAmount(c.amount)} ${c.currency}',
+                                            formatMoney(c.currency, c.amount),
                                             style: const TextStyle(
                                               fontWeight: FontWeight.w700,
                                               fontSize: 15,
                                               color: AppColors.textPrimary,
                                             ),
                                           ),
+                                          if (needsRegionConversion(c.currency, c.regionCode) &&
+                                              c.exchangeRate > 0) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              formatMoney(
+                                                baseCurrencyForRegion(c.regionCode),
+                                                toRegionAmount(c.amount, c.exchangeRate),
+                                              ),
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 13,
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
                                           const SizedBox(height: 8),
                                           // Region tag + date + View claim button
                                           Row(
@@ -231,7 +265,7 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                                               ),
                                               const Spacer(),
                                               FilledButton(
-                                                onPressed: () => context.push('/approvals/${widget.stage}/${c.id}'),
+                                                onPressed: () => context.push('/approvals/${_detailStageFor(widget.stage, c)}/${c.id}'),
                                                 style: FilledButton.styleFrom(
                                                   backgroundColor: isPendingPayment ? AppColors.success : AppColors.orange,
                                                   shape: const RoundedRectangleBorder(),

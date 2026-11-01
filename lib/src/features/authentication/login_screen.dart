@@ -16,7 +16,7 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-const _regionLabels = {'UAE': 'UAE', 'KSA': 'KSA', 'OMAN': 'Oman'};
+const _regionLabels = {'DUBAI': 'Dubai', 'UAE': 'UAE', 'KSA': 'KSA', 'OMAN': 'Oman'};
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _userCtrl = TextEditingController();
@@ -31,14 +31,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
 
   static const _demoAccounts = [
-    ('surya_sales_emp',    'Test@1234', 'Employee · Sales'),
-    ('priya_sales_hod',    'Test@1234', 'HOD · Sales'),
-    ('anjana_it_emp',      'Test@1234', 'Employee · IT'),
-    ('vikram_it_hod',      'Test@1234', 'HOD · IT'),
-    ('deepa_accounts_emp', 'Test@1234', 'Employee · Accounts'),
-    ('ravi_accountant',    'Test@1234', 'Accountant'),
-    ('meera_finance_mgr',  'Test@1234', 'Finance Manager'),
-    ('arjun_admin',        'Test@1234', 'Admin'),
+    ('surya_sales_emp',    'Test@1234', 'Employee · Sales · Dubai'),
+    ('priya_sales_hod',    'Test@1234', 'HOD · Sales · Dubai'),
+    ('anjana_it_emp',      'Test@1234', 'Employee · IT · Dubai'),
+    ('vikram_it_hod',      'Test@1234', 'HOD · IT · Dubai'),
+    ('deepa_accounts_emp', 'Test@1234', 'Employee · Accounts · Dubai'),
+    ('ravi_accountant',    'Test@1234', 'Accountant · Dubai'),
+    ('meera_finance_mgr',  'Test@1234', 'Finance Manager · Dubai'),
+    ('arjun_admin',        'Test@1234', 'Admin · Dubai'),
+    ('dev_dubai',          'Test@1234', 'Employee · Dubai region'),
     ('dev_uae',            'Test@1234', 'Employee · UAE region'),
     ('dev_ksa',            'Test@1234', 'Employee · KSA region'),
     ('dev_oman',           'Test@1234', 'Employee · OMAN region'),
@@ -79,6 +80,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = ref.watch(authControllerProvider);
+    if (auth.isLoading && auth.user == null) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: Image.asset(
+            'assets/brand/Br_fulllogo.png',
+            width: 220,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -164,11 +179,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       // while the app is still internal-testing only.
                       const SizedBox(height: 20),
                       DropdownButtonFormField<int>(
+                        isExpanded: true,
                         decoration: InputDecoration(
                           labelText: 'Dev account',
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        hint: const Text('Select a dev account'),
+                        hint: const Text('Select a dev account', overflow: TextOverflow.ellipsis),
                         value: null,
                         items: [
                           for (var i = 0; i < _demoAccounts.length; i++)
@@ -176,6 +192,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               value: i,
                               child: Text(
                                 '${_demoAccounts[i].$1} — ${_demoAccounts[i].$3}',
+                                overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 13),
                               ),
                             ),

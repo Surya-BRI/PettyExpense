@@ -6,6 +6,7 @@ import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
+import '../admin/admin_hub_screen.dart';
 import '../authentication/auth_controller.dart';
 import '../claims/capture_receipt_sheet.dart';
 import '../claims/confirm_claim_screen.dart' show navigateGuarded;
@@ -39,7 +40,13 @@ class MainShell extends ConsumerWidget {
     final user = ref.watch(authControllerProvider).user;
     final role = UserRoleX.fromJson(user?.role);
     final isApprover = role.isApprover;
+    final isAdmin = role == UserRole.admin;
     final homeSelected = location == '/dashboard';
+    final adminSelected = location == '/admin' || location.startsWith('/admin/companies');
+    final peopleSelected = location == '/admin/people' || location.startsWith('/admin/people/');
+    final showApproverTopups =
+        role == UserRole.hod || role == UserRole.financeManager || role == UserRole.accountant;
+    final topupsSelected = location == '/topups' || location == '/funds';
     final claimsSelected =
         location == '/claims' ||
         location == '/all-claims' ||
@@ -52,15 +59,66 @@ class MainShell extends ConsumerWidget {
     final unreadCount = ref
         .watch(unreadNotificationCountProvider)
         .maybeWhen(data: (n) => n, orElse: () => 0);
+    final strayAdminQueue = isAdmin && location.startsWith('/approvals');
+    if (strayAdminQueue) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted &&
+            GoRouterState.of(context).uri.path.startsWith('/approvals')) {
+          context.go('/admin');
+        }
+      });
+    }
 
     return Scaffold(
-      body: child,
+      body: strayAdminQueue ? const AdminHubScreen() : child,
       bottomNavigationBar: BottomAppBar(
         color: AppColors.card,
         elevation: 8,
         height: 64,
         padding: EdgeInsets.zero,
-        child: isApprover
+        child: isAdmin
+            ? Row(
+                children: [
+                  Expanded(
+                    child: _NavItem(
+                      icon: PhosphorIcons.buildings(),
+                      selectedIcon: PhosphorIcons.buildings(PhosphorIconsStyle.fill),
+                      label: 'Companies',
+                      selected: adminSelected,
+                      onTap: () => context.go('/admin'),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavItem(
+                      icon: PhosphorIcons.users(),
+                      selectedIcon: PhosphorIcons.users(PhosphorIconsStyle.fill),
+                      label: 'People',
+                      selected: peopleSelected,
+                      onTap: () => context.go('/admin/people'),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavItem(
+                      icon: PhosphorIcons.bell(),
+                      selectedIcon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
+                      label: 'Alerts',
+                      selected: alertsSelected,
+                      badgeCount: unreadCount,
+                      onTap: () => context.push('/notifications'),
+                    ),
+                  ),
+                  Expanded(
+                    child: _NavItem(
+                      icon: PhosphorIcons.userCircle(),
+                      selectedIcon: PhosphorIcons.userCircle(PhosphorIconsStyle.fill),
+                      label: 'Profile',
+                      selected: profileSelected,
+                      onTap: () => context.go('/profile'),
+                    ),
+                  ),
+                ],
+              )
+            : isApprover
             ? Row(
                 children: [
                   if (kIsWeb)
@@ -92,6 +150,18 @@ class MainShell extends ConsumerWidget {
                       onTap: () => context.go('/approvals/history'),
                     ),
                   ),
+                  if (showApproverTopups)
+                    Expanded(
+                      child: _NavItem(
+                        icon: role == UserRole.hod ? PhosphorIcons.money() : PhosphorIcons.arrowClockwise(),
+                        selectedIcon: role == UserRole.hod
+                            ? PhosphorIcons.money(PhosphorIconsStyle.fill)
+                            : PhosphorIcons.arrowClockwise(PhosphorIconsStyle.fill),
+                        label: role == UserRole.hod ? 'Funds' : 'Top-ups',
+                        selected: topupsSelected,
+                        onTap: () => context.go('/topups'),
+                      ),
+                    ),
                   Expanded(
                     child: _NavItem(
                       icon: PhosphorIcons.bell(),

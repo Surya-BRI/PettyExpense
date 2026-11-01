@@ -49,6 +49,44 @@ void main() {
     expect(_button(tester, 'Upload from gallery').onPressed, isNotNull);
   });
 
+  testWidgets('page toggle defaults to one page and switches to multiple', (tester) async {
+    await _openSheet(tester);
+
+    // The selected segment is the orange one with white text.
+    bool selected(String label) =>
+        tester.widget<Text>(find.text(label)).style?.color == Colors.white;
+
+    expect(selected('One page'), isTrue);
+    expect(selected('Multiple pages'), isFalse);
+
+    await tester.tap(find.text('Multiple pages'));
+    await tester.pumpAndSettle();
+
+    expect(selected('One page'), isFalse);
+    expect(selected('Multiple pages'), isTrue);
+  });
+
+  testWidgets('bill language defaults to Mixed and can switch to English or Arabic', (tester) async {
+    await _openSheet(tester);
+
+    bool selected(String label) =>
+        tester.widget<Text>(find.text(label)).style?.color == Colors.white;
+
+    expect(find.text('Bill language'), findsOneWidget);
+    expect(find.text('Mixed'), findsOneWidget);
+    expect(find.text('English'), findsOneWidget);
+    expect(find.text('Arabic'), findsOneWidget);
+    expect(selected('Mixed'), isTrue);
+    expect(selected('English'), isFalse);
+    expect(selected('Arabic'), isFalse);
+
+    await tester.tap(find.text('Arabic'));
+    await tester.pumpAndSettle();
+
+    expect(selected('Mixed'), isFalse);
+    expect(selected('Arabic'), isTrue);
+  });
+
   testWidgets('only one bill type can be selected at a time', (tester) async {
     await _openSheet(tester);
 

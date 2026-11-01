@@ -11,7 +11,7 @@ import json
 import logging
 import time
 from datetime import date
-from typing import Any, Optional
+from typing import Any, Optional, Sequence
 
 import httpx
 from PIL import Image
@@ -24,8 +24,14 @@ logger = logging.getLogger(__name__)
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 RUNPOD_BASE_URL = "https://api.runpod.ai/v2/{endpoint_id}/openai/v1"  # official vLLM worker
 
-PROMPT = """You read one photo of a receipt / bill / tax invoice from the UAE or Saudi Arabia.
-Text may be English, Arabic or both; some fields may be handwritten. Read the IMAGE carefully.
+_LANGUAGE_HINT = {
+    "en": "This bill is primarily English. Prefer English printed names and Latin numbers.",
+    "ar": "This bill is primarily Arabic. Read Arabic text carefully and prefer the Arabic vendor name if printed.",
+}
+
+PROMPT = """You read a photo of a receipt / bill / tax invoice from the UAE or Saudi Arabia -- or
+several photos that are the pages of ONE bill, in page order.
+Text may be English, Arabic or both; some fields may be handwritten. Read the IMAGES carefully.
 
 Return JSON only, following the schema. Rules:
 - vendor: the business that issued the bill (the company name printed in the header or logo),
@@ -47,6 +53,10 @@ Return JSON only, following the schema. Rules:
 - line_items_include_vat: true if the row totals already include VAT (sum of rows = total_amount),
   false if VAT is added only at the bottom (sum of rows = amount).
 - If the image holds more than one receipt, read the first / top one only.
+- Multi-page bills: treat all pages as one bill. Take vendor / date / bill_number from whichever
+  page shows them. line_items = every item row across all pages, in order; skip "carried forward" /
+  "brought forward" / page subtotal rows so nothing is counted twice. amount / vat_amount /
+  total_amount = the bill's final grand totals (usually on the last page), not a page subtotal.
 - For each field give confidence 0..1 for how sure you are of what you read. Use null for a field
   you cannot read rather than guessing; use a low confidence for a guess.
 """
@@ -110,27 +120,45 @@ def _image_mime(image_bytes: bytes) -> str:
     return {"png": "image/png", "webp": "image/webp", "gif": "image/gif"}.get(fmt, "image/jpeg")
 
 
+def _system_prompt(mode: str = "auto") -> str:
+    hint = _LANGUAGE_HINT.get((mode or "auto").strip().lower())
+    return f"{hint}\n\n{PROMPT}" if hint else PROMPT
+
+
 def call_openai(
-    image_bytes: bytes, model: str, api_key: str, reasoning: Optional[str], timeout: float = 60,
+    images: bytes | Sequence[bytes], model: str, api_key: str, reasoning: Optional[str], timeout: float = 60,
     base_url: str = OPENAI_BASE_URL, service: str = "OpenAI", max_tokens: int = 4000,
+    mode: str = "auto",
 ) -> dict[str, Any]:
     """One chat-completions call with a strict JSON schema against any OpenAI-compatible server
-    (OpenAI itself, or the RunPod vLLM worker). Raises LlmVisionError on any failure."""
+    (OpenAI itself, or the RunPod vLLM worker). `images` is one bill: a single photo, or its pages
+    in order -- all sent in the same request. Raises LlmVisionError on any failure."""
     if not api_key:
         raise LlmVisionError("Scan is not set up on the server.")
-    data_url = f"data:{_image_mime(image_bytes)};base64,{base64.b64encode(image_bytes).decode()}"
+    pages = [images] if isinstance(images, bytes) else list(images)
+    instruction = "Extract this bill."
+    if len(pages) > 1:
+        instruction = f"These {len(pages)} images are pages 1 to {len(pages)} of the same bill, in order. {instruction}"
+    image_parts = [
+        {"type": "image_url", "image_url": {
+            "url": f"data:{_image_mime(page)};base64,{base64.b64encode(page).decode()}", "detail": "high",
+        }}
+        for page in pages
+    ]
+    extra = len(pages) - 1  # each extra page costs read time and output tokens (more line items)
     body: dict[str, Any] = {
         "model": model,
         "messages": [
-            {"role": "system", "content": PROMPT},
+            {"role": "system", "content": _system_prompt(mode)},
             {"role": "user", "content": [
-                {"type": "text", "text": f"Today is {date.today().isoformat()}. Extract this bill."},
-                {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
+                {"type": "text", "text": f"Today is {date.today().isoformat()}. {instruction}"},
+                *image_parts,
             ]},
         ],
         "response_format": {"type": "json_schema", "json_schema": {"name": "bill", "strict": True, "schema": SCHEMA}},
-        "max_completion_tokens": max_tokens,
+        "max_completion_tokens": max_tokens + 1000 * extra,
     }
+    timeout = timeout + 20 * extra
     if reasoning:  # gpt-5* / o-series only
         body["reasoning_effort"] = reasoning
     started = time.monotonic()
@@ -280,12 +308,15 @@ def provider_config(provider: str, settings: Any = None) -> dict[str, Any]:
     }
 
 
-def run_llm_vision(image_bytes: bytes, region_code: Optional[str] = None) -> dict[str, Any]:
+def run_llm_vision(
+    images: bytes | Sequence[bytes], region_code: Optional[str] = None, mode: str = "auto",
+) -> dict[str, Any]:
     settings = get_settings()
     cfg = provider_config(settings.ai_vision_provider, settings)
     raw = call_openai(
-        image_bytes, cfg["model"], cfg["api_key"], cfg["reasoning"],
+        images, cfg["model"], cfg["api_key"], cfg["reasoning"],
         timeout=cfg["timeout"], base_url=cfg["base_url"], service=cfg["service"], max_tokens=cfg["max_tokens"],
+        mode=mode,
     )
     result = to_ocr_service_shape(raw["parsed"], region_code)
     result["raw_json"].update(

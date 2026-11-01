@@ -6,6 +6,7 @@ import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
 import '../../theme/app_theme.dart';
+import '../../utils/currency.dart';
 import '../../utils/money.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/shimmer_box.dart';
@@ -39,7 +40,12 @@ class ApproverHistoryScreen extends ConsumerWidget {
             child: Text('$e', textAlign: TextAlign.center),
           ),
         ),
-        data: (items) {
+        data: (allItems) {
+          final items = allItems
+              .where((item) =>
+                  !const {'created', 'edited', 'vendor_resolved'}
+                      .contains(item['my_action'] as String? ?? ''))
+              .toList();
           if (items.isEmpty) {
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(approverHistoryProvider),
@@ -98,8 +104,10 @@ class ApproverHistoryScreen extends ConsumerWidget {
                 final action = item['my_action'] as String? ?? '';
                 final actionedAt = item['my_actioned_at'] as String?;
                 final vendor = item['vendor_name'] as String? ?? '—';
+                final invoice = (item['bill_number'] as String?)?.trim() ?? '';
                 final currency = item['currency'] as String? ?? '';
                 final amount = (item['amount'] as num?)?.toDouble() ?? 0;
+                final rate = (item['exchange_rate'] as num?)?.toDouble() ?? 1.0;
                 final employee = item['employee_name'] as String? ?? '';
                 final category = item['category_name'] as String? ?? '';
                 final status = item['status'] as String? ?? '';
@@ -158,7 +166,18 @@ class ApproverHistoryScreen extends ConsumerWidget {
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${formatMoney(currency, amount)} · $category · $employee${regionCode != null ? ' · $regionCode' : ''}',
+                                      [
+                                        if (invoice.isNotEmpty) invoice,
+                                        formatMoney(currency, amount),
+                                        if (needsRegionConversion(currency, regionCode) && rate > 0)
+                                          formatMoney(
+                                            baseCurrencyForRegion(regionCode),
+                                            toRegionAmount(amount, rate),
+                                          ),
+                                        category,
+                                        employee,
+                                        if (regionCode != null) regionCode,
+                                      ].where((s) => s.isNotEmpty).join(' · '),
                                       style: const TextStyle(
                                         color: AppColors.textSecondary,
                                         fontSize: 13,

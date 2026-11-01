@@ -329,7 +329,7 @@ class _KpiRow extends StatelessWidget {
     final claimed = claims.where((c) => c.status != 'draft' && c.status != 'rejected').toList();
     final pending = claims.where((c) => kPendingStatuses.contains(c.status)).toList();
     final disputed = pending.where((c) => c.status == 'disputed').length;
-    final approved = claims.where((c) => c.status == 'approved').toList();
+    final approved = claims.where((c) => c.status == 'approved' && c.type != 'petty_cash').toList();
     final paid = claims.where((c) => c.status == 'paid').toList();
     final rejected = claims.where((c) => c.status == 'rejected').toList();
     final drafts = claims.where((c) => c.status == 'draft').length;
@@ -875,10 +875,13 @@ class _ActivityCard extends ConsumerWidget {
           if (items == null) {
             return const _Empty('Activity feed is not available on this server yet.');
           }
-          if (items.isEmpty) return const _Empty('No activity yet.');
+          final visible = items
+              .where((a) => !const {'created', 'edited', 'vendor_resolved'}.contains(a.action))
+              .toList();
+          if (visible.isEmpty) return const _Empty('No activity yet.');
           return Column(
             children: [
-              for (final a in items.take(12))
+              for (final a in visible.take(12))
                 InkWell(
                   borderRadius: BorderRadius.circular(10),
                   onTap: byId[a.transactionId] == null ? null : () => openClaim(context, byId[a.transactionId]!, role),
@@ -984,6 +987,7 @@ class _ClaimRow extends StatelessWidget {
                   Text(
                     [
                       '#${claim.id}',
+                      if ((claim.billNumber ?? '').trim().isNotEmpty) claim.billNumber!.trim(),
                       if (role.isApprover) claim.employeeDisplay,
                       if (claim.category.isNotEmpty) claim.category,
                       if (date != null) DateFormat('d MMM yyyy').format(date.toLocal()),
@@ -997,7 +1001,7 @@ class _ClaimRow extends StatelessWidget {
             const SizedBox(width: 10),
             Text(formatMoney(claim.currency, claimTotal(claim)), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
             const SizedBox(width: 10),
-            StatusChip(status: claim.status),
+            StatusChip.forClaim(claim),
           ],
         ),
       ),

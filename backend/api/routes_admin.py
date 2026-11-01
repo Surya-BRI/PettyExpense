@@ -11,9 +11,8 @@ from services.transaction_service import transaction_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-# mark-paid is the final post-approval step (only reachable once status == 'approved',
-# i.e. finance_manager has already approved via /api/approvals). Phase 3 formalizes this
-# into payment_records; for now it stays a single finance_manager/admin action here.
+# mark-paid is the old one-click payment step, kept for web-admin. It records a payment
+# (bank transfer, dated today, remarks as the reference) through /api/payments' service.
 require_finance_manager = require_role("finance_manager")
 
 
@@ -76,6 +75,8 @@ def mark_paid(
         return transaction_service.mark_paid(db, user, claim_id, body.remarks)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

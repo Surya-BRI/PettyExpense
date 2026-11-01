@@ -6,6 +6,7 @@ import '../api/enums.dart';
 String homeRouteFor(UserRole role) {
   // The web build opens on the dashboard for every role.
   if (kIsWeb) return '/dashboard';
+  if (role == UserRole.admin) return '/admin';
   if (role == UserRole.employee) return '/claims';
   return '/approvals/${defaultStageFor(role)}';
 }

@@ -91,6 +91,30 @@ def test_maps_answer_to_ocr_service_shape(fake_openai):
     assert sent["response_format"]["json_schema"]["strict"] is True
 
 
+def test_multi_page_bill_sends_every_page_in_one_request(fake_openai):
+    calls = fake_openai(_answer())
+    pages = [_png_bytes(), _png_bytes(), _png_bytes()]
+    r = llm.run_llm_vision(pages, region_code="UAE")
+
+    assert r["total_amount"] == 1990.28
+    assert len(calls) == 1
+    content = calls[0]["messages"][1]["content"]
+    assert content[0]["type"] == "text" and "pages 1 to 3 of the same bill" in content[0]["text"]
+    assert [part["type"] for part in content[1:]] == ["image_url"] * 3
+    # Extra pages get more time and output room than a single photo.
+    assert calls[0]["_timeout"] == 60 + 2 * 20
+    assert calls[0]["max_completion_tokens"] == 4000 + 2 * 1000
+
+
+def test_single_page_list_reads_like_a_single_photo(fake_openai):
+    calls = fake_openai(_answer())
+    llm.run_llm_vision([_png_bytes()], region_code="UAE")
+
+    content = calls[0]["messages"][1]["content"]
+    assert len(content) == 2 and "pages" not in content[0]["text"]
+    assert calls[0]["_timeout"] == 60 and calls[0]["max_completion_tokens"] == 4000
+
+
 def test_runpod_provider_uses_the_vllm_endpoint_same_prompt_and_schema(fake_openai):
     calls = fake_openai(_answer(), provider="runpod")
     r = llm.run_llm_vision(_png_bytes(), region_code="UAE")
@@ -184,13 +208,15 @@ def test_unreadable_image_is_rejected_before_any_call(fake_openai):
 
 
 def test_ocr_service_always_uses_gpt_without_fallback(monkeypatch):
-    monkeypatch.setattr(ocr_service_module, "run_llm_vision", lambda b, region: {"engine": "ai", "region": region})
+    monkeypatch.setattr(
+        ocr_service_module, "run_llm_vision", lambda b, region, mode=None: {"engine": "ai", "region": region}
+    )
     monkeypatch.setattr(ocr_service_module, "_run_ocr", lambda *a, **k: pytest.fail("standard pipeline must not run"))
     assert ocr_service_module.OcrService().run(b"x", region_code="KSA") == {"engine": "ai", "region": "KSA"}
     # Older clients that still send engine=standard must still hit GPT.
     assert ocr_service_module.OcrService().run(b"x", engine="standard", region_code="KSA") == {"engine": "ai", "region": "KSA"}
 
-    def boom(b, region):
+    def boom(b, region, mode=None):
         raise llm.LlmVisionError("AI scan timed out.")
 
     monkeypatch.setattr(ocr_service_module, "run_llm_vision", boom)

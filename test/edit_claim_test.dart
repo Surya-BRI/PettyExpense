@@ -28,8 +28,35 @@ class _FakeApi extends ApiClient {
         status: 'draft',
         vendorName: 'Uber',
         billDate: '06/07/2026',
+        regionCode: 'DUBAI',
         billNumber: null, // the gap this whole feature exists to let the employee fill in
       );
+
+  @override
+  Future<List<RegionConfig>> listRegions() async => const [
+        RegionConfig(id: 1, regionCode: 'DUBAI', regionName: 'Dubai'),
+        RegionConfig(id: 2, regionCode: 'KSA', regionName: 'KSA'),
+      ];
+
+  @override
+  Future<List<PettyCashFund>> myFunds() async => const [];
+
+  @override
+  Future<ExchangeRateQuote> lookupExchangeRate({
+    required String from,
+    String? to,
+    String? regionCode,
+    String? date,
+  }) async {
+    final base = to ?? 'AED';
+    return ExchangeRateQuote(
+      rate: from == base ? 1 : 9.54,
+      asOf: '2026-07-06',
+      billCurrency: from,
+      baseCurrency: base,
+      source: 'test',
+    );
+  }
 
   @override
   Future<List<CategoryRef>> categories() async =>
@@ -98,6 +125,7 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Save as draft'));
     await tester.pumpAndSettle();
     expect(api.calls, ['updateDraft']);
+    expect(api.updatedBody?['region_code'], 'DUBAI');
     expect(find.text('claim 42'), findsOneWidget);
   });
 
@@ -122,6 +150,7 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(api.calls, ['updateDraft', 'submitClaim']);
+    expect(api.updatedBody?['region_code'], 'DUBAI');
     expect(find.text('claim 42'), findsOneWidget);
   });
 

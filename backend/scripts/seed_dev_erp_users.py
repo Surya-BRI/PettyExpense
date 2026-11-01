@@ -14,7 +14,7 @@ Usage:
 
 from sqlalchemy import text
 
-from auth.security import hash_password
+from auth.security import ERP_SUBSIDIARY_TO_REGION_CODE, hash_password
 from database.models import SessionLocal
 
 # ── Dev account definitions ────────────────────────────────────────────────
@@ -38,8 +38,31 @@ from database.models import SessionLocal
 # just made idempotent/reproducible instead of a one-off DB edit. The two HOD accounts
 # (priya_sales_hod, vikram_it_hod) also get an ErpExpenseHodAssignment row below so the
 # "hod" approval stage can actually resolve them as an approver.
+#
+# Home company is DUBAI (BRI UAE / Industries) so these logins show in Admin People and
+# petty-cash bills hit the Industries department pot, not Contracting. Extra companies
+# can still be ticked after first sign-in. Region-only accounts stay in
+# seed_dev_region_users.py (dev_dubai / dev_uae / dev_ksa / dev_oman).
 
 DEV_PASSWORD = "Test@1234"
+DEV_HOME_REGION = "DUBAI"
+
+
+def _find_region_id(db, region_code: str):
+    codes = [c for c, mapped in ERP_SUBSIDIARY_TO_REGION_CODE.items() if mapped == region_code]
+    for code in codes:
+        row = db.execute(
+            text(
+                "SELECT TOP 1 r.regionId "
+                "FROM ErpMasterSubsidiary s "
+                "JOIN ErpMasterRegion r ON r.subsidiaryId = s.subsidiaryId "
+                "WHERE s.subsidiaryCode = :code"
+            ),
+            {"code": code},
+        ).first()
+        if row:
+            return row.regionId
+    return None
 
 DEV_USERS = [
     (9001, "surya_sales_emp",     "Surya",  "Sales",      "surya_sales_emp@expense.local",     None,              "Sales"),
@@ -104,6 +127,9 @@ def seed_dev_erp_users() -> None:
         # erp_role_name in DEV_USERS refers to these roleIds by name, so just use the
         # fixed mapping directly -- no need to look anything up by name.
         erp_role_id: dict[str, int] = {name: rid for rid, name in DEV_ERP_ROLES}
+        home_region_id = _find_region_id(db, DEV_HOME_REGION)
+        if home_region_id is None:
+            print(f"  WARNING: no ERP subsidiary/region for {DEV_HOME_REGION} -- People/home company left unset")
 
         # ── 2. Insert / update ERP auth + employee rows ────────────────────
         for user_id, user_name, first, last, email, erp_role_name, _dept in DEV_USERS:
@@ -137,20 +163,21 @@ def seed_dev_erp_users() -> None:
                 db.execute(
                     text(
                         "UPDATE ErpMasterEmployee "
-                        "SET firstName=:f, lastName=:l, emailId=:e, isAllowLogin=1 "
+                        "SET firstName=:f, lastName=:l, emailId=:e, isAllowLogin=1, regionId=:rid "
                         "WHERE userId=:id"
                     ),
-                    {"f": first, "l": last, "e": email, "id": user_id},
+                    {"f": first, "l": last, "e": email, "id": user_id, "rid": home_region_id},
                 )
             else:
                 db.execute(
                     text(
                         "SET IDENTITY_INSERT ErpMasterEmployee ON; "
-                        "INSERT INTO ErpMasterEmployee (employeeId, userId, firstName, lastName, emailId, isAllowLogin, isActive, isDeleted) "
-                        "VALUES (:emp_id, :id, :f, :l, :e, 1, 1, 0); "
+                        "INSERT INTO ErpMasterEmployee "
+                        "(employeeId, userId, firstName, lastName, emailId, isAllowLogin, isActive, isDeleted, regionId) "
+                        "VALUES (:emp_id, :id, :f, :l, :e, 1, 1, 0, :rid); "
                         "SET IDENTITY_INSERT ErpMasterEmployee OFF"
                     ),
-                    {"emp_id": user_id, "id": user_id, "f": first, "l": last, "e": email},
+                    {"emp_id": user_id, "id": user_id, "f": first, "l": last, "e": email, "rid": home_region_id},
                 )
 
             # ErpAuthUserRoleMap — mapId is auto-identity, just insert userId+roleId
@@ -240,7 +267,8 @@ def seed_dev_erp_users() -> None:
         for uid, uname, *_, erp_role, dept_name in DEV_USERS:
             app_role = "finance_manager" if uid == 9004 else ROLE_CODE_BY_ERP_ROLE_NAME.get(erp_role, "employee")
             dept_suffix = f"  dept={dept_name}" if dept_name else ""
-            print(f"  {uname:<22} password={DEV_PASSWORD!r}  role={app_role}{dept_suffix}")
+            home = f"  home={DEV_HOME_REGION}" if home_region_id else ""
+            print(f"  {uname:<22} password={DEV_PASSWORD!r}  role={app_role}{dept_suffix}{home}")
 
     finally:
         db.close()

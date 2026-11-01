@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,10 +9,11 @@ import 'package:phosphor_icons/phosphor_icons.dart';
 import '../../api/api_client.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/authenticated_image.dart';
+import '../../utils/currency.dart';
+import '../../utils/money.dart';
 import '../../widgets/brand_app_bar.dart';
-import '../../widgets/image_preview_screen.dart';
 import '../../widgets/op_code_field.dart';
+import '../../widgets/receipt_pages_view.dart';
 import '../authentication/auth_controller.dart';
 import 'bill_line_mode.dart';
 import 'claim_field_validation.dart';
@@ -69,9 +69,10 @@ class ConfirmClaimScreen extends ConsumerStatefulWidget {
   const ConfirmClaimScreen({
     super.key,
     this.ocr,
-    this.localPath,
+    this.localPaths = const [],
     this.runOcr = false,
     this.lineMode = BillLineMode.single,
+    this.ocrMode = 'auto',
     this.existingClaimId,
   }) : assert(
          ocr != null || existingClaimId != null,
@@ -79,11 +80,15 @@ class ConfirmClaimScreen extends ConsumerStatefulWidget {
        );
 
   final OcrResult? ocr;
-  final String? localPath;
+  /// Pages just captured on this device, in order (one for a single-page bill).
+  final List<String> localPaths;
   final bool runOcr;
 
   /// Chosen on the Add receipt sheet before scanning.
   final BillLineMode lineMode;
+
+  /// Language hint chosen on Add receipt (`auto` / `en` / `ar`).
+  final String ocrMode;
 
   /// Set instead of [ocr] when opening this screen to edit a previously-saved draft --
   /// fetches and seeds the form from the server instead of from a fresh OCR read, and
@@ -105,7 +110,15 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   late final TextEditingController _remarks;
   int? _categoryId;
   String _type = 'reimbursement';
+  List<PettyCashFund> _myFunds = const [];
   String? _currency;
+  String? _billRegion;
+  List<RegionConfig> _regions = const [];
+  // Preview of today's rate from the bill currency into the company's base currency. The
+  // server re-quotes and locks the rate at submit; this is display-only.
+  ExchangeRateQuote? _quote;
+  String? _quoteKey;
+  bool _quoteFailed = false;
   bool _busy = false;
   // null when idle; true/false says which of Submit/Save-as-draft is the one in flight, so
   // only that button's label changes -- see _submit().
@@ -129,15 +142,163 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   // When editing an existing claim there's no pre-chosen BillLineMode -- single vs multi is
   // whatever the claim itself already is, set once it loads (see _loadExistingClaim).
   bool _editingMulti = false;
+  bool _editingDisputed = false;
   bool get _multi => widget.existingClaimId != null
       ? _editingMulti
       : widget.lineMode == BillLineMode.multiple;
+
+  void _onMoneyFieldsChanged() {
+    if (!mounted || _type != 'petty_cash') return;
+    setState(() {});
+  }
+
+  PettyCashFund? get _potForBill {
+    final code = _billRegion;
+    if (code == null || code.isEmpty) return null;
+    PettyCashFund? employee;
+    PettyCashFund? department;
+    for (final fund in _myFunds) {
+      if (fund.regionCode != code) continue;
+      if (fund.ownerType == 'employee') employee = fund;
+      if (fund.ownerType == 'department') department = fund;
+    }
+    return employee ?? department;
+  }
+
+  double get _claimAmount {
+    if (_multi) {
+      return double.tryParse(_linesTotal.toStringAsFixed(2)) ?? 0;
+    }
+    return double.tryParse(_total.text.trim()) ??
+        double.tryParse(_amount.text.trim()) ??
+        0;
+  }
+
+  /// What this bill may use: available minus bills already awaiting approval. A disputed
+  /// claim is itself one of those pending bills, so it gets the plain available figure.
+  double _usableFor(PettyCashFund pot) =>
+      _editingDisputed ? pot.available : pot.uncommitted;
+
+  /// Parts of this bill owned by another department (department name → amount on the
+  /// bill), e.g. IT items on a Sales bill. Those go to that department's HOD and, for
+  /// petty cash, come out of that department's fund — the server checks those funds.
+  Map<String, double> get _otherDepartmentAmounts {
+    final own = ref.read(authControllerProvider).user?.departmentId;
+    String? otherFor(int? categoryId) {
+      for (final c in _categories) {
+        if (c.id == categoryId) return c.otherDepartmentFor(own);
+      }
+      return null;
+    }
+
+    final out = <String, double>{};
+    if (!_multi) {
+      final dept = otherFor(_categoryId);
+      if (dept != null) out[dept] = _claimAmount;
+      return out;
+    }
+    for (final line in _lines) {
+      final dept = otherFor(line.categoryId ?? _categoryId);
+      if (dept == null) continue;
+      out[dept] = (out[dept] ?? 0) + (line.amountValue ?? 0);
+    }
+    return out;
+  }
+
+  /// The part of the bill paid from the employee's own pot.
+  double get _ownPotAmount {
+    final others = _otherDepartmentAmounts.values.fold(0.0, (sum, v) => sum + v);
+    return (_claimAmount - others).clamp(0.0, double.infinity);
+  }
+
+  String? get _otherDepartmentNote {
+    final others = _otherDepartmentAmounts;
+    if (others.isEmpty) return null;
+    final parts = [
+      for (final e in others.entries) '${e.key} items (${formatMoney(_currency ?? '', e.value)})',
+    ];
+    final depts = others.keys.join(' / ');
+    return _type == 'petty_cash'
+        ? '${parts.join(', ')} come out of $depts petty cash and need $depts HOD approval.'
+        : '${parts.join(', ')} need $depts HOD approval.';
+  }
+
+  /// 1 bill unit in the company's base currency; null while the rate is unknown.
+  double? get _rateToBase {
+    final bill = (_currency ?? '').toUpperCase();
+    if (bill.isEmpty || bill == _baseCurrency) return 1.0;
+    final q = _quote;
+    return q != null && q.billCurrency == bill && q.baseCurrency == _baseCurrency ? q.rate : null;
+  }
+
+  void _scheduleQuote() => WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _refreshQuote();
+      });
+
+  Future<void> _refreshQuote() async {
+    final bill = (_currency ?? '').toUpperCase();
+    final region = _billRegion ?? '';
+    final key = '$bill>$region';
+    if (key == _quoteKey) return;
+    _quoteKey = key;
+    if (bill.isEmpty || region.isEmpty || bill == _baseCurrency) {
+      if (mounted) setState(() => _quoteFailed = false);
+      return;
+    }
+    try {
+      final q = await ref.read(apiClientProvider).lookupExchangeRate(from: bill, regionCode: region);
+      if (!mounted || _quoteKey != key) return;
+      rememberRegionBaseCurrency(region, q.baseCurrency);
+      setState(() {
+        _quote = q;
+        _quoteFailed = false;
+      });
+    } catch (_) {
+      if (mounted && _quoteKey == key) setState(() => _quoteFailed = true);
+    }
+  }
+
+  bool get _pettyCashBlocksSubmit {
+    if (_type != 'petty_cash') return false;
+    final ownPart = _ownPotAmount;
+    if (ownPart <= 0.004) return false;
+    final pot = _potForBill;
+    if (pot == null) return true;
+    // The fund is held in the company's base currency; with no rate yet the server decides.
+    final rate = pot.currency.toUpperCase() == (_currency ?? '').toUpperCase() ? 1.0 : _rateToBase;
+    if (rate == null) return false;
+    return ownPart * rate > _usableFor(pot) + 0.004;
+  }
+
+  String get _pettyCashBlockMessage {
+    if (_billRegion == null || _billRegion!.isEmpty) {
+      return 'Select the company for this bill before submitting petty cash. '
+          'You can still save as draft.';
+    }
+    final pot = _potForBill;
+    if (pot == null) {
+      return 'No petty cash limit is set for this department in this company. '
+          'You can still save as draft.';
+    }
+    final left = formatMoney(pot.currency, _usableFor(pot));
+    final subject = _otherDepartmentAmounts.isEmpty ? 'This bill' : 'Your department\'s part of this bill';
+    final rate = _rateToBase;
+    final converted = rate != null && pot.currency.toUpperCase() != (_currency ?? '').toUpperCase()
+        ? ' (${formatMoney(pot.currency, _ownPotAmount * rate)})'
+        : '';
+    return '$subject$converted exceeds available petty cash ($left left). '
+        'Submit a smaller amount or wait for a top-up. You can still save as draft.';
+  }
 
   bool _analyzing = false;
   bool _ocrFailed = false;
   // Set once an existing draft loads -- the server-hosted receipt image to show instead of a
   // freshly-captured local file (there isn't one when editing, only when capturing).
-  String? _existingReceiptImageUrl;
+  List<String> _existingReceiptPages = const [];
+  // Invoice-already-submitted warning from a loaded draft (OCR's copy lives on `_ocr`).
+  DuplicateWarning? _loadedDuplicateWarning;
+  // The invoice number that clashed -- submit is blocked only while the field still matches this.
+  String? _blockedInvoice;
   int _progress = 0;
   Timer? _ticker;
 
@@ -151,6 +312,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     _total = TextEditingController();
     _date = TextEditingController();
     _remarks = TextEditingController();
+    _amount.addListener(_onMoneyFieldsChanged);
+    _vat.addListener(_onMoneyFieldsChanged);
+    _total.addListener(_onMoneyFieldsChanged);
     _loadReferenceData();
     if (widget.existingClaimId != null) {
       // No fresh OCR data to seed from when editing a saved draft -- an inert placeholder so
@@ -200,6 +364,12 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       _date.text = claim.billDate ?? '';
       _remarks.text = claim.remarks ?? '';
       _currency = _normalizeCurrency(claim.currency);
+      // A saved region wins; a blank draft keeps whatever default reference-data
+      // already applied so loading the claim can't wipe Dubai back to empty.
+      if (claim.regionCode != null && claim.regionCode!.trim().isNotEmpty) {
+        _billRegion = claim.regionCode;
+      }
+      _applyDefaultBillRegion();
       _categoryId = claim.categoryId;
       _type = claim.type;
       _selectedOp = claim.opNumber == null
@@ -207,7 +377,13 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
           : OpportunityResult(opCode: claim.opNumber!, name: claim.opNumber!);
       _editingMulti = claim.isMultiItem;
       if (_editingMulti) _seedLinesFromClaim(claim.lineItems);
-      _existingReceiptImageUrl = claim.receipt?.imageUrl;
+      _scheduleQuote();
+      _existingReceiptPages = claim.receipt?.pageImageUrls ?? const [];
+      _editingDisputed = claim.status == 'disputed';
+      _loadedDuplicateWarning = claim.duplicateWarning;
+      if (claim.duplicateWarning?.reason == 'same_bill_number') {
+        _blockedInvoice = claim.billNumber;
+      }
       setState(() => _analyzing = false);
     } catch (e) {
       if (!mounted) return;
@@ -221,17 +397,47 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
 
   String _money(double? value) => value == null ? '' : value.toStringAsFixed(2);
 
-  // Anything not recognized as AED/SAR is left unselected, never silently defaulted to AED — the employee must actively pick a currency.
-  String? _normalizeCurrency(String? value) =>
-      (value == 'AED' || value == 'SAR') ? value : null;
+  String get _baseCurrency => baseCurrencyForRegion(_billRegion ?? ref.read(authControllerProvider).user?.regionCode);
+
+  String? _normalizeCurrency(String? value) => normalizeBillCurrency(value);
+
+  /// Prefills Region * from the employee's home company (or the only company
+  /// they can pick). A value already on the form / saved draft is left alone.
+  /// Must run after `_regions` is known so a lone Dubai assignment actually
+  /// shows as selected instead of an empty required dropdown.
+  void _applyDefaultBillRegion() {
+    final next = defaultBillRegion(
+      visibleCodes: [for (final r in _regions) r.regionCode],
+      current: _billRegion,
+      homeRegion: ref.read(authControllerProvider).user?.regionCode,
+    );
+    _billRegion = next;
+    _ensureRegionOption(next);
+  }
+
+  void _ensureRegionOption(String? code) {
+    if (code == null || code.isEmpty) return;
+    if (_regions.any((r) => r.regionCode == code)) return;
+    _regions = [
+      ..._regions,
+      RegionConfig(id: 0, regionCode: code, regionName: code),
+    ];
+  }
 
   Future<void> _loadReferenceData() async {
     try {
       final api = ref.read(apiClientProvider);
       final categories = await api.categories();
+      final regions = await api.listRegions();
+      final allowed = ref.read(authControllerProvider).user?.allowedRegions ?? const <String>[];
+      final visible = allowed.isEmpty
+          ? regions
+          : regions.where((r) => allowed.contains(r.regionCode)).toList();
       if (mounted) {
         setState(() {
           _categories = categories;
+          _regions = visible.isNotEmpty ? List.of(visible) : List.of(regions);
+          _applyDefaultBillRegion();
           _categoryId ??=
               _matchExpenseType(categories) ??
               (categories.isNotEmpty ? categories.first.id : null);
@@ -240,7 +446,14 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             line.categoryId ??= _categoryId;
           }
         });
+        _scheduleQuote();
       }
+      // Funds are only used for the petty-cash remaining banner -- don't let a
+      // slow/failed call keep Region * empty and categories unset.
+      try {
+        final funds = await api.myFunds();
+        if (mounted) setState(() => _myFunds = funds);
+      } catch (_) {}
     } catch (_) {}
   }
 
@@ -310,6 +523,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     vendorText: _vendor.text,
     billDateText: _date.text,
     billNumberText: _billNumber.text,
+    regionCode: _billRegion,
   );
 
   /// Claim-level category for a multi-item bill: the category carrying the most money.
@@ -354,7 +568,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       try {
         final result = await ref
             .read(apiClientProvider)
-            .analyzeReceipt(_ocr.receiptId);
+            .analyzeReceipt(_ocr.receiptId, mode: widget.ocrMode);
         if (!mounted) return;
         _applyOcr(result);
         _ticker?.cancel();
@@ -391,9 +605,13 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     _total.text = _money(result.totalAmount);
     _date.text = result.date;
     _currency = _normalizeCurrency(result.currency);
+    _scheduleQuote();
     final matched = _matchExpenseType(_categories, result.expenseType);
     if (matched != null) _categoryId = matched;
     if (_multi) _seedLines(result.lineItems);
+    if (result.duplicateWarning?.reason == 'same_bill_number') {
+      _blockedInvoice = result.billNumber;
+    }
   }
 
   @override
@@ -403,6 +621,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     // first line of _handleLeaveAttempt checks `mounted` and treats a disposed screen as nothing
     // left to protect, and the next ConfirmClaimScreen that mounts overwrites it anyway.
     _ticker?.cancel();
+    _amount.removeListener(_onMoneyFieldsChanged);
+    _vat.removeListener(_onMoneyFieldsChanged);
+    _total.removeListener(_onMoneyFieldsChanged);
     _vendor.dispose();
     _billNumber.dispose();
     _amount.dispose();
@@ -468,7 +689,21 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         vendorText: _vendor.text,
         billDateText: _date.text,
         billNumberText: _billNumber.text,
+        regionCode: _billRegion,
       );
+      if (!asDraft && _pettyCashBlocksSubmit) {
+        throw ClaimFieldError(_pettyCashBlockMessage);
+      }
+      if (!asDraft) {
+        final clash = _ocr.duplicateWarning ?? _loadedDuplicateWarning;
+        final typed = _billNumber.text.trim().toLowerCase();
+        final blocked = (_blockedInvoice ?? '').trim().toLowerCase();
+        if (clash?.reason == 'same_bill_number' &&
+            typed.isNotEmpty &&
+            typed == blocked) {
+          throw ClaimFieldError(clash!.message);
+        }
+      }
       if (!asDraft &&
           !await _confirmBeforeSubmit(amount: amount!, vat: vat!, total: total!)) {
         return;
@@ -490,13 +725,18 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         'bill_number': _billNumber.text.trim(),
         'remarks': _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
         'line_items': ?lineItems,
+        'region_code': ?_billRegion,
       };
       ExpenseClaim claim;
       if (widget.existingClaimId != null) {
         final id = widget.existingClaimId!;
         await api.updateDraft(id, body);
         try {
-          claim = asDraft ? await api.getClaim(id) : await api.submitClaim(id);
+          claim = asDraft
+              ? await api.getClaim(id)
+              : _editingDisputed
+                  ? await api.resubmitClaim(id)
+                  : await api.submitClaim(id);
         } catch (e) {
           // The edit itself is already saved server-side at this point -- only the submit step
           // failed (e.g. the backend's own completeness check). Don't lose that: reload the
@@ -511,9 +751,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       } else {
         claim = await api.createClaim({
           ...body,
-          // The region the user signed in under (multi-region users pick one at login);
-          // falls back to UAE for single-region demo users who never had a region to pick.
-          'region_code': ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
+          'region_code': _billRegion ?? ref.read(authControllerProvider).user?.regionCode ?? 'UAE',
           'receipt_id': _ocr.receiptId,
           's3_key': _ocr.s3Key,
           'submit': !asDraft,
@@ -620,10 +858,13 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                     row('Vendor', _vendor.text.trim()),
                     row('Bill no.', _billNumber.text.trim()),
                     row('Date', _date.text.trim()),
+                    row('Bill currency', _currency ?? ''),
                     if (_multi) row('Items', '${_lines.length}'),
                     row('Amount excl. VAT', m(amount)),
                     row('VAT', m(vat)),
                     row('Total', m(total)),
+                    if ((_currency ?? '').toUpperCase() != _baseCurrency && _rateToBase != null)
+                      row('In $_baseCurrency', formatMoney(_baseCurrency, total * _rateToBase!)),
                   ],
                 ),
               ),
@@ -779,37 +1020,18 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       },
       child: Scaffold(
       appBar: BrandAppBar(
-        title: widget.existingClaimId != null ? 'Edit draft' : 'Confirm claim',
+        title: widget.existingClaimId != null
+            ? (_editingDisputed ? 'Correct claim' : 'Edit draft')
+            : 'Confirm claim',
         automaticallyImplyLeading: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          if (widget.localPath != null)
-            GestureDetector(
-              onTap: () => _openImagePreview(context, widget.localPath!),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.orange, width: 2),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: Image.file(
-                    File(widget.localPath!),
-                    height: 200,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            )
-          else if (_existingReceiptImageUrl != null)
-            AuthenticatedImage(
-              path: _existingReceiptImageUrl!,
-              height: 200,
-              width: double.infinity,
-            ),
+          if (widget.localPaths.isNotEmpty)
+            ReceiptPagesView.local(widget.localPaths, height: 200)
+          else if (_existingReceiptPages.isNotEmpty)
+            ReceiptPagesView.network(_existingReceiptPages, height: 200),
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerLeft,
@@ -840,9 +1062,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                   : () => _analyzeWithRetries(maxAttempts: 1),
             ),
           ],
-          if (_ocr.duplicateWarning != null) ...[
+          if ((_ocr.duplicateWarning ?? _loadedDuplicateWarning) != null) ...[
             const SizedBox(height: 12),
-            _notice(_ocr.duplicateWarning!.message),
+            _notice((_ocr.duplicateWarning ?? _loadedDuplicateWarning)!.message),
           ],
           // Only shown once amount, VAT, and total are ALL present — a field that wasn't extracted isn't a real mismatch, it's missing data.
           if (_ocr.reconciliationMismatch &&
@@ -887,9 +1109,40 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                         : (_ocr.confidenceFor('invoice_number') ?? _ocr.confidenceFor('transaction_number')),
                   ),
                   const SizedBox(height: 12),
-                  _CurrencyToggle(
-                    value: _currency,
-                    onChanged: (v) => setState(() => _currency = v),
+                  _BillCurrencyFields(
+                    currency: _currency,
+                    choices: billCurrencyChoices(_currency),
+                    baseCurrency: _baseCurrency,
+                    onCurrencyChanged: (v) {
+                      setState(() => _currency = v);
+                      _scheduleQuote();
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: _regions.any((r) => r.regionCode == _billRegion) ? _billRegion : null,
+                    decoration: InputDecoration(
+                      labelText: 'Region *',
+                      helperText: _regions.length <= 1 ? 'Your company' : 'Company this bill is charged to',
+                    ),
+                    items: [
+                      for (final r in _regions)
+                        DropdownMenuItem(value: r.regionCode, child: Text(r.regionName)),
+                    ],
+                    // One company only: nothing to choose, so the field is shown locked.
+                    onChanged: _regions.length <= 1
+                        ? null
+                        : (v) {
+                            setState(() => _billRegion = v);
+                            _scheduleQuote();
+                          },
+                  ),
+                  _ConvertedAmountCard(
+                    billCurrency: (_currency ?? '').toUpperCase(),
+                    baseCurrency: _baseCurrency,
+                    billTotal: _claimAmount,
+                    rate: _rateToBase,
+                    failed: _quoteFailed,
                   ),
                   if (_multi) ...[
                     const SizedBox(height: 16),
@@ -904,6 +1157,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                       categories: _categories,
                       currency: currency,
                       showProblems: _showLineProblems,
+                      ownDepartmentId: ref.read(authControllerProvider).user?.departmentId,
+                      pettyCash: _type == 'petty_cash',
                       onChanged: () => setState(() {
                         if (!_amountOverridden) _syncAmountExclVat();
                       }),
@@ -1065,6 +1320,24 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
               ),
             ),
           ),
+          if (_type == 'petty_cash') ...[
+            const SizedBox(height: 8),
+            _PotLimitBanner(
+              fund: _potForBill,
+              usable: _potForBill == null ? null : _usableFor(_potForBill!),
+              blocked: _pettyCashBlocksSubmit,
+              message: _pettyCashBlocksSubmit
+                  ? _pettyCashBlockMessage
+                  : null,
+            ),
+          ],
+          if (_otherDepartmentNote != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              _otherDepartmentNote!,
+              style: const TextStyle(fontSize: 12.5, color: AppColors.darkBlue, fontWeight: FontWeight.w600),
+            ),
+          ],
           const SizedBox(height: 12),
           OpCodeField(
             label: 'Project / OP code',
@@ -1090,7 +1363,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
           ],
           const SizedBox(height: 20),
           FilledButton(
-            onPressed: (_busy || _analyzing)
+            onPressed: (_busy || _analyzing || _pettyCashBlocksSubmit)
                 ? null
                 : () => _submit(asDraft: false),
             child: Text(
@@ -1112,10 +1385,6 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
       ),
       ),
     );
-  }
-
-  void _openImagePreview(BuildContext context, String localPath) {
-    openImagePreview(context, Image.file(File(localPath)));
   }
 
   Widget _notice(String text) {
@@ -1346,39 +1615,88 @@ class _OcrTextFieldState extends State<_OcrTextField> {
   }
 }
 
-class _CurrencyToggle extends StatelessWidget {
-  const _CurrencyToggle({required this.value, required this.onChanged});
+/// "Converted: AED 978.20" under the company picker when the bill isn't in the company's
+/// base currency. Employees see only the amount; the rate is shown to approvers.
+class _ConvertedAmountCard extends StatelessWidget {
+  const _ConvertedAmountCard({
+    required this.billCurrency,
+    required this.baseCurrency,
+    required this.billTotal,
+    required this.rate,
+    required this.failed,
+  });
 
-  // null = no currency selected yet — the employee must tap AED or SAR before submitting (see the required-field check in _submit()).
-  final String? value;
-  final ValueChanged<String> onChanged;
+  final String billCurrency;
+  final String baseCurrency;
+  final double billTotal;
+  final double? rate;
+  final bool failed;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: 'AED', label: Text('AED')),
-              ButtonSegment(value: 'SAR', label: Text('SAR')),
+    if (billCurrency.isEmpty || billCurrency == baseCurrency) return const SizedBox.shrink();
+    final r = rate;
+    final String headline;
+    String? detail;
+    if (r == null) {
+      headline = 'Converted to $baseCurrency at submit';
+      detail = failed ? null : 'Loading…';
+    } else {
+      headline = 'Converted: ${formatMoney(baseCurrency, billTotal * r)}';
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.lightBlue,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(headline, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.darkBlue)),
+            if (detail != null) ...[
+              const SizedBox(height: 4),
+              Text(detail, style: const TextStyle(fontSize: 12.5, color: AppColors.textSecondary)),
             ],
-            selected: value == null ? const <String>{} : {value!},
-            emptySelectionAllowed: true,
-            onSelectionChanged: (selection) => onChanged(selection.first),
-          ),
-          if (value == null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Currency not detected — select AED or SAR *',
-                style: TextStyle(color: AppColors.orange, fontSize: 12),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _BillCurrencyFields extends StatelessWidget {
+  const _BillCurrencyFields({
+    required this.currency,
+    required this.choices,
+    required this.baseCurrency,
+    required this.onCurrencyChanged,
+  });
+
+  final String? currency;
+  final List<String> choices;
+  final String baseCurrency;
+  final ValueChanged<String?> onCurrencyChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      value: currency != null && choices.contains(currency) ? currency : null,
+      decoration: const InputDecoration(
+        labelText: 'Bill currency *',
+        helperText: 'Currency printed on the receipt',
+      ),
+      items: [
+        for (final code in choices)
+          DropdownMenuItem(
+            value: code,
+            child: Text(code == baseCurrency ? '$code (region base)' : code),
+          ),
+      ],
+      onChanged: onCurrencyChanged,
     );
   }
 }
@@ -1510,6 +1828,45 @@ class _ItemsTotals extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _PotLimitBanner extends StatelessWidget {
+  const _PotLimitBanner({
+    required this.fund,
+    required this.usable,
+    required this.blocked,
+    this.message,
+  });
+
+  final PettyCashFund? fund;
+  final double? usable;
+  final bool blocked;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final left = fund == null || usable == null
+        ? null
+        : formatMoney(fund!.currency, usable!);
+    final text = blocked
+        ? (message ?? 'This bill exceeds available petty cash.')
+        : '$left left';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: blocked ? const Color(0xFFFFEBEE) : AppColors.lightBlue,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: blocked ? AppColors.danger : AppColors.textPrimary,
+        ),
       ),
     );
   }

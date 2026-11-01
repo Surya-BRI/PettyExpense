@@ -24,6 +24,7 @@ class RegionRequest(BaseModel):
     company_name: Optional[str] = None
     logo_url: Optional[str] = None
     brand_color: Optional[str] = None
+    base_currency: Optional[str] = None
 
 
 class RegionUpdateRequest(BaseModel):
@@ -34,6 +35,7 @@ class RegionUpdateRequest(BaseModel):
     company_name: Optional[str] = None
     logo_url: Optional[str] = None
     brand_color: Optional[str] = None
+    base_currency: Optional[str] = None
 
 
 class CategoryRequest(BaseModel):
@@ -95,6 +97,17 @@ def update_region(
 ):
     try:
         return config_service.update_region(db, region_id, body.model_dump(exclude_unset=True))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/regions/{region_id}/approvers")
+def region_approvers(region_id: int, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
+    """Who handles this company's bills at each step; an empty role falls back to Admin."""
+    try:
+        return config_service.region_approvers(db, region_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

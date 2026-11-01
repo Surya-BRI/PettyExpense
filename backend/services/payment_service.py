@@ -1,0 +1,270 @@
+"""Reimbursement payment step (Spec 5.5, payment_records).
+
+After the Finance Manager's final approval a reimbursement is "Approved – Unpaid"
+(status='approved'). Finance records how it was paid — method, reference and the actual
+payment date — which moves it to 'paid' and notifies the employee. Petty cash is settled from
+the fund at approval and never comes here. The region's Finance Manager (the companies they
+cover, see region_scope) or Admin may record payments.
+"""
+from datetime import date, datetime
+from typing import Any, Optional, Union
+
+from sqlalchemy import case, func
+from sqlalchemy.orm import Session, joinedload, selectinload
+
+from auth.security import CurrentUser
+from database.models import (
+    ErpAuthExpenseUsers,
+    ErpExpenseApprovalHistory,
+    ErpExpenseCategory,
+    ErpExpensePaymentRecord,
+    ErpExpenseRegionConfig,
+    ErpExpenseTransaction,
+)
+from services.currency import region_base_currency
+from services.region_scope import user_covers, user_region_ids
+
+PAYMENT_METHODS = ("bank_transfer", "cash", "payroll", "cheque")
+PAYMENT_METHOD_LABELS = {
+    "bank_transfer": "Bank transfer",
+    "cash": "Cash",
+    "payroll": "Payroll",
+    "cheque": "Cheque",
+}
+
+
+def payment_to_dict(p: ErpExpensePaymentRecord) -> dict[str, Any]:
+    return {
+        "id": p.payment_id,
+        "transaction_id": p.transaction_id,
+        "amount": p.amount,
+        "currency": p.currency,
+        "payment_method": p.payment_method,
+        "payment_method_label": PAYMENT_METHOD_LABELS.get(p.payment_method, p.payment_method),
+        "payment_reference": p.payment_reference,
+        "payment_date": p.payment_date.date().isoformat() if p.payment_date else None,
+        "paid_by": p.paid_by,
+        "paid_by_name": p.payer.display_name if p.payer else None,
+        "remarks": p.remarks,
+        "recorded_at": p.created_on.isoformat() if p.created_on else None,
+    }
+
+
+def _parse_date(value: Union[str, date, datetime, None]) -> datetime:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return datetime.combine(date.today(), datetime.min.time())
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", ""))
+    except ValueError as exc:
+        raise ValueError("Payment date must be a date like 2026-10-30") from exc
+    if parsed.date() > date.today():
+        raise ValueError("Payment date can't be in the future")
+    return parsed
+
+
+def _payable_amount(txn: ErpExpenseTransaction) -> tuple[float, str]:
+    """What the employee is owed, in the company's base currency."""
+    base = txn.base_currency or region_base_currency(txn.region)
+    if txn.total_amount_base is not None:
+        return round(float(txn.total_amount_base), 2), base
+    total = txn.total_amount if txn.total_amount is not None else (txn.amount or 0) + (txn.vat_amount or 0)
+    bill = (txn.currency or "").strip().upper()
+    rate = 1.0 if bill == base else float(txn.exchange_rate or 1.0)
+    return round(float(total or 0) * rate, 2), base
+
+
+def _payable_sql():
+    """(currency, amount) SQL expressions matching _payable_amount, so the page totals add
+    up the same figures the rows show -- including bills with no stored base amount yet.
+    Needs ErpExpenseRegionConfig joined to the query."""
+    t, r = ErpExpenseTransaction, ErpExpenseRegionConfig
+    currency = func.coalesce(t.base_currency, r.base_currency, "AED")
+    bill_total = func.coalesce(t.total_amount, func.coalesce(t.amount, 0) + func.coalesce(t.vat_amount, 0))
+    converted = case(
+        (func.upper(func.coalesce(t.currency, "")) == currency, bill_total),
+        else_=bill_total * func.coalesce(func.nullif(t.exchange_rate, 0), 1.0),
+    )
+    return currency, func.coalesce(t.total_amount_base, converted)
+
+
+class PaymentService:
+    def _require_payer(self, db: Session, user: CurrentUser, txn: ErpExpenseTransaction) -> None:
+        if user.is_admin:
+            return
+        if user.role != "finance_manager":
+            raise PermissionError("Only the Finance Manager or Admin can record a payment")
+        if not user_covers(db, user.id, txn.region_id):
+            raise PermissionError("This claim belongs to a company you don't handle")
+
+    def record_payment(
+        self,
+        db: Session,
+        user: CurrentUser,
+        transaction_id: int,
+        *,
+        payment_method: str,
+        payment_reference: str,
+        payment_date: Union[str, date, datetime, None],
+        remarks: Optional[str] = None,
+        notify: bool = True,
+    ) -> dict[str, Any]:
+        txn = (
+            db.query(ErpExpenseTransaction)
+            .options(joinedload(ErpExpenseTransaction.region), joinedload(ErpExpenseTransaction.payment))
+            .filter(ErpExpenseTransaction.transaction_id == transaction_id)
+            .first()
+        )
+        if not txn:
+            raise LookupError("Claim not found")
+        self._require_payer(db, user, txn)
+        if (txn.type or "").strip().lower() == "petty_cash":
+            raise ValueError("Petty cash claims are settled from the fund at final approval; there is no payment step")
+        if txn.payment is not None or txn.status == "paid":
+            raise ValueError("This claim has already been paid")
+        if txn.status != "approved":
+            raise ValueError("Only approved claims can be marked paid")
+        method = (payment_method or "").strip().lower()
+        if method not in PAYMENT_METHODS:
+            raise ValueError(f"Payment method must be one of: {', '.join(PAYMENT_METHODS)}")
+        reference = (payment_reference or "").strip()
+        if not reference:
+            raise ValueError("Enter the payment reference (transfer number, cheque number, payroll batch…)")
+        paid_on = _parse_date(payment_date)
+        amount, currency = _payable_amount(txn)
+        record = ErpExpensePaymentRecord(
+            transaction_id=txn.transaction_id,
+            amount=amount,
+            currency=currency,
+            payment_method=method,
+            payment_reference=reference[:128],
+            payment_date=paid_on,
+            paid_by=user.id,
+            remarks=(remarks or "").strip() or None,
+            created_by=user.id,
+            is_active=1,
+        )
+        db.add(record)
+        txn.status = "paid"
+        txn.paid_on = paid_on
+        label = PAYMENT_METHOD_LABELS[method]
+        db.add(
+            ErpExpenseApprovalHistory(
+                transaction_id=txn.transaction_id,
+                stage="finance_manager",
+                actor_id=user.id,
+                action="paid",
+                comment=f"{label} · ref {reference} · {paid_on.date().isoformat()}"
+                + (f" · {record.remarks}" if record.remarks else ""),
+            )
+        )
+        db.commit()
+        if notify:
+            from services.transaction_service import transaction_service
+
+            db.refresh(txn)
+            transaction_service._notify_employee(db, txn, "paid", record.remarks)
+        return payment_to_dict(record)
+
+    def record_batch(
+        self,
+        db: Session,
+        user: CurrentUser,
+        transaction_ids: list[int],
+        *,
+        payment_method: str,
+        payment_reference: str,
+        payment_date: Union[str, date, datetime, None],
+        remarks: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """One transfer covering several claims: same method, reference and date on each."""
+        paid: list[dict[str, Any]] = []
+        skipped: list[dict[str, Any]] = []
+        for transaction_id in dict.fromkeys(transaction_ids):
+            try:
+                paid.append(
+                    self.record_payment(
+                        db, user, transaction_id,
+                        payment_method=payment_method,
+                        payment_reference=payment_reference,
+                        payment_date=payment_date,
+                        remarks=remarks,
+                    )
+                )
+            except (LookupError, PermissionError, ValueError) as exc:
+                db.rollback()
+                skipped.append({"id": transaction_id, "reason": str(exc)})
+        return {"paid": paid, "skipped": skipped}
+
+    def list_claims(
+        self,
+        db: Session,
+        user: CurrentUser,
+        *,
+        status: str = "unpaid",
+        region_code: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Reimbursements waiting for payment (or already paid), for the companies this person
+        pays, newest approval first. `totals` sums every matching claim (not just this page)
+        per base currency."""
+        from services.transaction_service import transaction_to_dict
+
+        if not user.is_admin and user.role != "finance_manager":
+            raise PermissionError("Only the Finance Manager or Admin can see payments")
+        wanted = "paid" if status == "paid" else "approved"
+        q = (
+            db.query(ErpExpenseTransaction)
+            .outerjoin(ErpExpenseRegionConfig, ErpExpenseRegionConfig.region_id == ErpExpenseTransaction.region_id)
+            .filter(
+                ErpExpenseTransaction.status == wanted,
+                ErpExpenseTransaction.type != "petty_cash",
+            )
+        )
+        if not user.is_admin:
+            region_ids = user_region_ids(db, user.id)
+            if region_ids is not None:
+                q = q.filter(ErpExpenseTransaction.region_id.in_(region_ids or {-1}))
+        if region_code and region_code.strip():
+            q = q.filter(ErpExpenseRegionConfig.region_code == region_code.strip().upper())
+        pay_currency, pay_amount = _payable_sql()
+        totals = {
+            currency: round(float(amount or 0), 2)
+            for currency, amount in q.with_entities(pay_currency, func.sum(pay_amount))
+            .group_by(pay_currency)
+            .all()
+            if currency
+        }
+        total = q.order_by(None).count()
+        order = ErpExpenseTransaction.paid_on.desc() if wanted == "paid" else ErpExpenseTransaction.decided_on.desc()
+        rows = (
+            q.options(
+                joinedload(ErpExpenseTransaction.documents),
+                joinedload(ErpExpenseTransaction.region),
+                joinedload(ErpExpenseTransaction.category).joinedload(ErpExpenseCategory.owning_department),
+                joinedload(ErpExpenseTransaction.vendor),
+                joinedload(ErpExpenseTransaction.employee).joinedload(ErpAuthExpenseUsers.department),
+                joinedload(ErpExpenseTransaction.payment).joinedload(ErpExpensePaymentRecord.payer),
+                selectinload(ErpExpenseTransaction.line_items),
+            )
+            .order_by(order, ErpExpenseTransaction.transaction_id.desc())
+            .offset(max(0, offset))
+            .limit(max(1, min(limit, 200)))
+            .all()
+        )
+        items = []
+        for txn in rows:
+            data = transaction_to_dict(txn)
+            amount, currency = _payable_amount(txn)
+            data["payable_amount"] = amount
+            data["payable_currency"] = currency
+            data["payment"] = payment_to_dict(txn.payment) if txn.payment else None
+            items.append(data)
+        return {"items": items, "total": total, "offset": offset, "limit": limit, "totals": totals}
+
+
+payment_service = PaymentService()

@@ -14,6 +14,8 @@ from api.routes_claims import categories_router, router as claims_router
 from api.routes_config import router as config_router
 from api.routes_notifications import router as notifications_router
 from api.routes_projects import router as projects_router
+from api.routes_org import router as org_router
+from api.routes_payments import router as payments_router
 from api.routes_public import router as public_router
 from config import get_settings
 from database.models import init_db
@@ -39,6 +41,8 @@ app.include_router(approvals_router)
 app.include_router(config_router)
 app.include_router(projects_router)
 app.include_router(notifications_router)
+app.include_router(org_router)
+app.include_router(payments_router)
 app.include_router(public_router)
 
 

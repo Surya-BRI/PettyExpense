@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
@@ -9,10 +10,12 @@ import 'package:intl/intl.dart';
 
 import '../../utils/money.dart';
 import '../../widgets/app_card.dart';
-import '../../widgets/authenticated_image.dart';
+import '../../widgets/receipt_pages_view.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/claim_ui_helpers.dart';
 import '../claims/claim_detail_screen.dart' show ClaimLineItemsList, claimDetailProvider;
+import '../payments/payment_sheet.dart';
+import '../payments/payments_screen.dart' show paymentsProvider;
 import '../shared/status_chip.dart';
 import 'approval_queue_screen.dart';
 import 'approver_history_screen.dart' show approverHistoryProvider;
@@ -57,6 +60,7 @@ class ApprovalDetailScreen extends ConsumerStatefulWidget {
 class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
   final _comment = TextEditingController();
   bool _busy = false;
+  bool _showFullBill = false;
 
   @override
   void dispose() {
@@ -65,17 +69,23 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
     super.dispose();
   }
 
-  Future<void> _act(Future<ExpenseClaim> Function() action) async {
+  Future<void> _act(Future<ExpenseClaim> Function() action, {bool leave = true}) async {
     setState(() => _busy = true);
     try {
       await action();
       ref.invalidate(approvalDetailProvider(widget.transactionId));
+      // Department HOD steps are listed in the HOD's own queue.
+      final queueStage = widget.stage == 'department_hod' ? 'hod' : widget.stage;
       ref.invalidate(approvalsQueueProvider(widget.stage));
+      ref.invalidate(approvalsQueueProvider(queueStage));
       ref.invalidate(claimDetailProvider(widget.transactionId));
       ref.invalidate(approverHistoryProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Updated')));
+      if (!mounted) return;
+      if (leave) {
+        context.go('/approvals/$queueStage');
+        return;
       }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Updated')));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
@@ -96,11 +106,27 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('$e')),
         data: (claim) {
-          final imagePath = claim.receipt?.imageUrl;
+          final pages = claim.receipt?.pageImageUrls ?? const <String>[];
           final total = claim.totalAmount ?? (claim.amount + claim.vatAmount);
           final awaitingThisStage =
-              (claim.status == 'submitted' || claim.status == 'disputed') && claim.currentStage == widget.stage;
-          final awaitingPayment = claim.status == 'approved';
+              claim.status == 'submitted' && claim.currentStage == widget.stage;
+          final withEmployee = claim.status == 'disputed';
+          // Petty cash is settled from the fund at final approval -- only reimbursements get paid.
+          final awaitingPayment = claim.status == 'approved' && claim.type != 'petty_cash';
+          // At a department HOD step (e.g. IT HOD on a Sales bill) the reviewer approves only
+          // the lines their department owns.
+          final stageKey = claim.currentStageKey ?? '';
+          final reviewDeptId = awaitingThisStage && widget.stage == 'department_hod' && stageKey.contains(':')
+              ? int.tryParse(stageKey.split(':').last)
+              : null;
+          final deptLines = reviewDeptId == null
+              ? const <ClaimLineItem>[]
+              : claim.lineItems.where((l) => l.owningDepartmentId == reviewDeptId).toList();
+          final linesTotal = claim.lineItems.fold(0.0, (sum, l) => sum + l.amount);
+          final deptPart = deptLines.isEmpty || linesTotal <= 0
+              ? null
+              : total * deptLines.fold(0.0, (sum, l) => sum + l.amount) / linesTotal;
+          final onlyDeptLines = deptPart != null && !_showFullBill;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
@@ -117,7 +143,7 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                             style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                           ),
                         ),
-                        StatusChip(status: claim.status),
+                        StatusChip.forClaim(claim),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -127,28 +153,55 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                     const SizedBox(height: 6),
                     MoneyBreakdownRow('VAT', formatMoney(claim.currency, claim.vatAmount)),
                     const Divider(height: 20),
-                    MoneyBreakdownRow('Total', formatMoney(claim.currency, total), emphasize: true),
+                    MoneyBreakdownRow('Total', formatMoney(claim.currency, total), emphasize: deptPart == null),
+                    RegionTotalBreakdownRow(claim: claim, billTotal: total),
+                    if (deptPart != null) ...[
+                      const Divider(height: 20),
+                      MoneyBreakdownRow(
+                        'Your part (${deptLines.first.owningDepartmentName ?? 'department'})',
+                        formatMoney(claim.currency, deptPart),
+                        emphasize: true,
+                      ),
+                      if (claim.isConverted && claim.totalAmountBase != null && total > 0) ...[
+                        const SizedBox(height: 6),
+                        MoneyBreakdownRow(
+                          'In ${claim.baseCurrency}',
+                          formatMoney(claim.baseCurrency!, claim.totalAmountBase! * deptPart / total),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),
               if (claim.isMultiItem) ...[
                 const SizedBox(height: 16),
-                ClaimLineItemsList(claim: claim),
+                ClaimLineItemsList(claim: claim, onlyDepartmentId: onlyDeptLines ? reviewDeptId : null),
+                if (deptPart != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: () => setState(() => _showFullBill = !_showFullBill),
+                      child: Text(
+                        _showFullBill
+                            ? 'Show only your department\'s items'
+                            : 'Show full bill (${claim.lineItems.length} items)',
+                      ),
+                    ),
+                  ),
               ],
-              if (imagePath != null && imagePath.isNotEmpty) ...[
+              if (pages.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 AppCard(
                   padding: const EdgeInsets.all(12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Receipt', style: Theme.of(context).textTheme.titleSmall),
-                      const SizedBox(height: 10),
-                      AuthenticatedImage(
-                        path: imagePath,
-                        height: 240,
-                        width: double.infinity,
+                      Text(
+                        pages.length > 1 ? 'Receipt (${pages.length} pages)' : 'Receipt',
+                        style: Theme.of(context).textTheme.titleSmall,
                       ),
+                      const SizedBox(height: 10),
+                      ReceiptPagesView.network(pages, height: 240),
                     ],
                   ),
                 ),
@@ -157,14 +210,24 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
               ClaimDetailsCard(
                 title: 'Details',
                 rows: [
+                  ClaimDetailRow(
+                    label: 'Invoice no.',
+                    value: (claim.billNumber ?? '').trim().isEmpty ? '—' : claim.billNumber!.trim(),
+                  ),
                   ClaimDetailRow(label: 'Employee', value: claim.employeeDisplay),
+                  ClaimDetailRow(label: 'Bill currency', value: claim.currency),
+                  ...claimConversionDetailRows(claim, total, showRate: true),
                   ClaimDetailRow(label: 'Category', value: claim.category),
                   if (claim.regionCode != null) ClaimDetailRow(label: 'Region', value: claim.regionCode!),
                   ClaimDetailRow(label: 'Bill date', value: _formatBillDate(claim.billDate)),
                   if (claim.submittedAt != null) ClaimDetailRow(label: 'Submitted', value: _formatSubmittedAt(claim.submittedAt)),
                   ClaimDetailRow(
                     label: 'Current stage',
-                    value: _stageLabels[claim.currentStage] ?? claim.currentStage ?? 'None',
+                    value: claim.currentStageLabel,
+                  ),
+                  ClaimDetailRow(
+                    label: 'Remarks',
+                    value: (claim.remarks ?? '').trim().isEmpty ? '—' : claim.remarks!.trim(),
                   ),
                 ],
               ),
@@ -193,6 +256,7 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                     busy: _busy,
                     onResolve: (vendorId, createNew) => _act(
                       () => api.resolveVendor(widget.transactionId, vendorId: vendorId, createNew: createNew),
+                      leave: false,
                     ),
                   )
                 else
@@ -208,7 +272,21 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                     ),
                   ),
               ],
-              if (!awaitingThisStage && !awaitingPayment) ...[
+              if (withEmployee) ...[
+                const SizedBox(height: 16),
+                Material(
+                  color: AppColors.warningSoft,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'Sent back to the employee'
+                      '${(claim.lastReturnEntry?.remarks ?? '').trim().isEmpty ? '' : ': ${claim.lastReturnEntry!.remarks}'}. '
+                      'Approve and Reject return after they correct and resubmit.',
+                    ),
+                  ),
+                ),
+              ] else if (!awaitingThisStage && !awaitingPayment) ...[
                 const SizedBox(height: 16),
                 Material(
                   color: AppColors.warningSoft,
@@ -253,7 +331,13 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                       minimumSize: const Size.fromHeight(48),
                     ),
                     icon: Icon(PhosphorIcons.checkCircle(), size: 20),
-                    label: Text(requiresJustification ? 'Approve (justify duplicate above)' : 'Approve'),
+                    label: Text(
+                      requiresJustification
+                          ? 'Approve (justify duplicate above)'
+                          : deptPart != null
+                              ? 'Approve ${deptLines.first.owningDepartmentName ?? 'your'} items'
+                              : 'Approve',
+                    ),
                   );
                 }),
                 const SizedBox(height: 10),
@@ -285,34 +369,34 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                   label: const Text('Reject'),
                 ),
               ],
+              if (claim.payment != null) ...[
+                const SizedBox(height: 16),
+                PaymentDetailsCard(payment: claim.payment!),
+              ],
               if (awaitingPayment) ...[
                 const SizedBox(height: 16),
-                TextField(
-                  controller: _comment,
-                  focusNode: _commentFocus,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Remarks',
-                    hintText: 'Payment reference, note… (optional)',
-                  ),
-                ),
-                const SizedBox(height: 12),
                 FilledButton.icon(
-                  onPressed: _busy ? null : () => _act(() => api.markPaid(claim.id, remarks: _comment.text.trim())),
+                  onPressed: _busy
+                      ? null
+                      : () async {
+                          if (!await showRecordPaymentSheet(context, claim)) return;
+                          ref.invalidate(paymentsProvider);
+                          await _act(() => api.getApprovalTransaction(claim.id), leave: false);
+                        },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.success,
                     foregroundColor: Colors.white,
                     textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                     minimumSize: const Size.fromHeight(48),
                   ),
-                  icon: Icon(PhosphorIcons.checkCircle(), size: 20),
-                  label: const Text('Mark as paid'),
+                  icon: Icon(PhosphorIcons.money(), size: 20),
+                  label: const Text('Record payment'),
                 ),
               ],
               const SizedBox(height: 20),
               Text('History', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
-              ClaimHistoryList(history: claim.history ?? [], hideInternal: true),
+              ClaimHistoryList(history: claim.history ?? [], stageLabels: claim.stageLabels),
             ],
           );
         },
@@ -333,13 +417,6 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
     _act(action);
   }
 }
-
-const _stageLabels = {
-  'hod': 'HOD',
-  'department_hod': 'Department HOD',
-  'accountant': 'Accountant',
-  'finance_manager': 'Finance Manager',
-};
 
 /// Lets whoever's holding the claim at its current stage either link the unmatched vendor
 /// text to an existing known vendor, or confirm it's genuinely new — closing the loop the

@@ -71,6 +71,10 @@ class ErpAuthExpenseUsers(Base, AuditColumns):
     is_deleted: Mapped[int] = mapped_column("isDeleted", Integer, default=0)
     # New column on an existing table — create_all() will not add it, run the ALTER script separately.
     language_preference: Mapped[str] = mapped_column("languagePreference", String(8), default="en")
+    # Company the person belongs to in ERP, saved at login so approval routing never has to ask
+    # ERP. Together with ErpExpenseMultiRegionUserRegion it is the set of companies whose bills
+    # they handle. New column: see scripts/add_currency_region_payment_schema.py.
+    home_region_id: Mapped[Optional[int]] = mapped_column("homeRegionId", Integer, nullable=True)
 
     role: Mapped[ErpMasterExpenseRole] = relationship()
     department: Mapped[Optional[ErpExpenseDepartment]] = relationship()
@@ -88,6 +92,9 @@ class ErpExpenseRegionConfig(Base, AuditColumns):
     company_name: Mapped[Optional[str]] = mapped_column("companyName", Unicode(256), nullable=True)
     logo_url: Mapped[Optional[str]] = mapped_column("logoUrl", String(512), nullable=True)
     brand_color: Mapped[Optional[str]] = mapped_column("brandColor", String(16), nullable=True)
+    # The company's books currency: bills are converted into it and its petty-cash funds are
+    # held in it. New column: see scripts/add_currency_region_payment_schema.py.
+    base_currency: Mapped[Optional[str]] = mapped_column("baseCurrency", String(8), nullable=True)
 
 
 class ErpExpenseCategory(Base, AuditColumns):
@@ -121,6 +128,86 @@ class ErpExpenseMultiRegionUserRegion(Base):
     assigned_by: Mapped[Optional[int]] = mapped_column("assignedBy", Integer, nullable=True)
     assigned_on: Mapped[datetime] = mapped_column("assignedOn", DateTime, default=datetime.utcnow)
     is_active: Mapped[int] = mapped_column("isActive", Integer, default=1)
+
+
+class ErpExpensePettyCashFund(Base, AuditColumns):
+    """App-owned department PCA pot. ERP does not store limits.
+
+    openingBalance is the approved limit. Available = limit − unreplenished petty-cash spend.
+    Approved top-ups replenish spend; they never raise the limit. BRI / DUBAI is
+    department-only (ownerType=department).
+    """
+
+    __tablename__ = "ErpExpensePettyCashFund"
+
+    fund_id: Mapped[int] = mapped_column("fundId", Integer, primary_key=True, autoincrement=True)
+    region_id: Mapped[int] = mapped_column(
+        "regionId", Integer, ForeignKey("ErpExpenseRegionConfig.regionId"), index=True
+    )
+    owner_type: Mapped[str] = mapped_column("ownerType", String(16))  # department | employee
+    department_id: Mapped[Optional[int]] = mapped_column(
+        "departmentId", Integer, ForeignKey("ErpExpenseDepartment.departmentId"), nullable=True, index=True
+    )
+    employee_id: Mapped[Optional[int]] = mapped_column(
+        "employeeId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), nullable=True, index=True
+    )
+    currency: Mapped[str] = mapped_column("currency", String(8), default="AED")
+    opening_balance: Mapped[float] = mapped_column("openingBalance", Float, default=0.0)
+
+    region: Mapped[ErpExpenseRegionConfig] = relationship()
+    department: Mapped[Optional[ErpExpenseDepartment]] = relationship()
+    employee: Mapped[Optional[ErpAuthExpenseUsers]] = relationship()
+    topups: Mapped[list["ErpExpenseFundTopupRequest"]] = relationship(back_populates="fund")
+
+
+class ErpExpenseFundTopupRequest(Base, AuditColumns):
+    """PCA replenishment: HOD/Admin request → Accounts verify → Finance approve + payment."""
+
+    __tablename__ = "ErpExpenseFundTopupRequest"
+
+    topup_id: Mapped[int] = mapped_column("topupId", Integer, primary_key=True, autoincrement=True)
+    fund_id: Mapped[int] = mapped_column(
+        "fundId", Integer, ForeignKey("ErpExpensePettyCashFund.fundId"), index=True
+    )
+    amount: Mapped[float] = mapped_column("amount", Float)
+    requester_id: Mapped[int] = mapped_column("requesterId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"))
+    status: Mapped[str] = mapped_column("status", String(16), default="submitted", index=True)
+    remarks: Mapped[Optional[str]] = mapped_column("remarks", UnicodeText, nullable=True)
+    verified_by: Mapped[Optional[int]] = mapped_column(
+        "verifiedBy", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), nullable=True
+    )
+    verified_on: Mapped[Optional[datetime]] = mapped_column("verifiedOn", DateTime, nullable=True)
+    decided_by: Mapped[Optional[int]] = mapped_column(
+        "decidedBy", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), nullable=True
+    )
+    decided_on: Mapped[Optional[datetime]] = mapped_column("decidedOn", DateTime, nullable=True)
+    payment_method: Mapped[Optional[str]] = mapped_column("paymentMethod", String(32), nullable=True)
+    payment_reference: Mapped[Optional[str]] = mapped_column("paymentReference", String(128), nullable=True)
+    payment_date: Mapped[Optional[datetime]] = mapped_column("paymentDate", DateTime, nullable=True)
+
+    fund: Mapped[ErpExpensePettyCashFund] = relationship(back_populates="topups")
+    requester: Mapped[ErpAuthExpenseUsers] = relationship(foreign_keys=[requester_id])
+    verifier: Mapped[Optional[ErpAuthExpenseUsers]] = relationship(foreign_keys=[verified_by])
+    decider: Mapped[Optional[ErpAuthExpenseUsers]] = relationship(foreign_keys=[decided_by])
+    bills: Mapped[list["ErpExpenseFundTopupBill"]] = relationship(back_populates="topup")
+
+
+class ErpExpenseFundTopupBill(Base):
+    """Bills attached to a PCA top-up so Finance can reconcile the common bank account."""
+
+    __tablename__ = "ErpExpenseFundTopupBill"
+
+    map_id: Mapped[int] = mapped_column("mapId", Integer, primary_key=True, autoincrement=True)
+    topup_id: Mapped[int] = mapped_column(
+        "topupId", Integer, ForeignKey("ErpExpenseFundTopupRequest.topupId"), index=True
+    )
+    transaction_id: Mapped[int] = mapped_column(
+        "transactionId", Integer, ForeignKey("ErpExpenseTransaction.transactionId"), index=True
+    )
+    amount: Mapped[float] = mapped_column("amount", Float)
+
+    topup: Mapped[ErpExpenseFundTopupRequest] = relationship(back_populates="bills")
+    transaction: Mapped["ErpExpenseTransaction"] = relationship()
 
 
 class ErpExpenseEmployeeCache(Base):
@@ -191,6 +278,15 @@ class ErpExpenseTransaction(Base):
     # Bill/invoice number as printed on the receipt — extracted by OCR, editable by the employee.
     # New column: create_all() won't add it; run scripts/add_bill_number_column.py once.
     bill_number: Mapped[Optional[str]] = mapped_column("billNumber", String(128), nullable=True)
+    # Conversion into the company's base currency, locked at first submit (a dispute → resubmit
+    # keeps it unless the bill currency or company changes). exchangeRateDate is the date of
+    # the published rate actually used. New columns: see scripts/add_currency_region_payment_schema.py.
+    base_currency: Mapped[Optional[str]] = mapped_column("baseCurrency", String(8), nullable=True)
+    exchange_rate_date: Mapped[Optional[str]] = mapped_column("exchangeRateDate", String(32), nullable=True)
+    exchange_rate_source: Mapped[Optional[str]] = mapped_column("exchangeRateSource", String(32), nullable=True)
+    amount_base: Mapped[Optional[float]] = mapped_column("amountBase", Float, nullable=True)
+    vat_amount_base: Mapped[Optional[float]] = mapped_column("vatAmountBase", Float, nullable=True)
+    total_amount_base: Mapped[Optional[float]] = mapped_column("totalAmountBase", Float, nullable=True)
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
     modified_on: Mapped[datetime] = mapped_column(
         "modifiedOn", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -213,6 +309,31 @@ class ErpExpenseTransaction(Base):
     category: Mapped[ErpExpenseCategory] = relationship()
     vendor: Mapped[Optional[ErpExpenseVendor]] = relationship()
     project: Mapped[Optional[ErpExpenseProjectCache]] = relationship()
+    payment: Mapped[Optional["ErpExpensePaymentRecord"]] = relationship(
+        back_populates="transaction", uselist=False
+    )
+
+
+class ErpExpensePaymentRecord(Base, AuditColumns):
+    """Spec 5.5 payment_records: how and when Finance paid an approved reimbursement.
+    One row per claim. New table -- create_all() creates it on startup."""
+
+    __tablename__ = "ErpExpensePaymentRecord"
+
+    payment_id: Mapped[int] = mapped_column("paymentId", Integer, primary_key=True, autoincrement=True)
+    transaction_id: Mapped[int] = mapped_column(
+        "transactionId", Integer, ForeignKey("ErpExpenseTransaction.transactionId"), unique=True, index=True
+    )
+    amount: Mapped[float] = mapped_column("amount", Float)
+    currency: Mapped[str] = mapped_column("currency", String(8))
+    payment_method: Mapped[str] = mapped_column("paymentMethod", String(32))  # bank_transfer | cash | payroll | cheque
+    payment_reference: Mapped[str] = mapped_column("paymentReference", Unicode(128))
+    payment_date: Mapped[datetime] = mapped_column("paymentDate", DateTime)
+    paid_by: Mapped[int] = mapped_column("paidBy", Integer, ForeignKey("ErpAuthExpenseUsers.userId"))
+    remarks: Mapped[Optional[str]] = mapped_column("remarks", UnicodeText, nullable=True)
+
+    transaction: Mapped["ErpExpenseTransaction"] = relationship(back_populates="payment")
+    payer: Mapped[ErpAuthExpenseUsers] = relationship(foreign_keys=[paid_by])
 
 
 class ErpExpenseDocument(Base):
@@ -236,6 +357,28 @@ class ErpExpenseDocument(Base):
     uploaded_on: Mapped[datetime] = mapped_column("uploadedOn", DateTime, default=datetime.utcnow)
 
     transaction: Mapped[Optional[ErpExpenseTransaction]] = relationship(back_populates="documents")
+    # Pages 2..N of a multi-page bill; page 1 is this row's own s3_key.
+    pages: Mapped[list["ErpExpenseDocumentPage"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan", order_by="ErpExpenseDocumentPage.page_no"
+    )
+
+
+class ErpExpenseDocumentPage(Base):
+    """An extra page (2..N) of a multi-page bill. New table -- create_all() creates it on startup."""
+
+    __tablename__ = "ErpExpenseDocumentPage"
+
+    page_id: Mapped[int] = mapped_column("pageId", Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(
+        "documentId", Integer, ForeignKey("ErpExpenseDocument.documentId"), nullable=False, index=True
+    )
+    page_no: Mapped[int] = mapped_column("pageNo", Integer)
+    s3_key: Mapped[str] = mapped_column("s3Key", String(512))
+    content_type: Mapped[str] = mapped_column("contentType", String(128), default="image/jpeg")
+    hash: Mapped[Optional[str]] = mapped_column("hash", String(128), nullable=True)
+    uploaded_on: Mapped[datetime] = mapped_column("uploadedOn", DateTime, default=datetime.utcnow)
+
+    document: Mapped["ErpExpenseDocument"] = relationship(back_populates="pages")
 
 
 class ErpExpenseLineItem(Base):

@@ -7,6 +7,7 @@ import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
+import '../../widgets/region_branding.dart';
 import '../authentication/auth_controller.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -35,20 +36,10 @@ class ProfileScreen extends ConsumerWidget {
       case 'employee':
         return 'Employee';
       default:
-        return role?.isNotEmpty == true ? role! : 'User';
+        return role?.isNotEmpty == true ? role! : '';
     }
   }
 
-  // Per-legal-entity branding shown on the profile (see ERP_SUBSIDIARY_TO_REGION_CODE in
-  // backend/auth/security.py for how a user's region_code is derived). OMAN/IN have no
-  // dedicated logo yet, so they fall back to the generic Blue Rhine Industries mark.
-  static const _defaultLogoAsset = 'assets/logos/Dubai_LOGO.png';
-  static const _regionLogoAssets = {
-    'UAE': 'assets/logos/UAE_LOGO.png',
-    'KSA': 'assets/logos/KSA_LOGO.png',
-  };
-
-  String _regionLogoAsset(String? regionCode) => _regionLogoAssets[regionCode] ?? _defaultLogoAsset;
 
   static const _sectionLabelStyle = TextStyle(
     color: AppColors.textSecondary,
@@ -61,7 +52,17 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authControllerProvider);
     final user = auth.user;
-    final role = _roleLabel(user?.role);
+    if (user == null) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    final role = _roleLabel(user.role);
+    final branding = user?.regionCode == null
+        ? null
+        : ref.watch(regionBrandingProvider(user!.regionCode!)).valueOrNull;
+    final company = branding?.companyName?.trim();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -141,8 +142,8 @@ class ProfileScreen extends ConsumerWidget {
                               border: Border.all(color: AppColors.divider),
                             ),
                             padding: const EdgeInsets.all(3),
-                            child: Image.asset(
-                              _regionLogoAsset(user?.regionCode),
+                            child: RegionLogo(
+                              regionCode: user?.regionCode,
                               fit: BoxFit.contain,
                             ),
                           ),
@@ -155,7 +156,7 @@ class ProfileScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            user?.displayName ?? 'Guest',
+                            user?.displayName ?? '',
                             style: const TextStyle(
                               fontSize: 19,
                               fontWeight: FontWeight.w800,
@@ -168,8 +169,8 @@ class ProfileScreen extends ConsumerWidget {
                             style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
                           ),
                           const SizedBox(height: 8),
-                          Image.asset(
-                            _regionLogoAsset(user?.regionCode),
+                          RegionLogo(
+                            regionCode: user?.regionCode,
                             height: 48,
                             fit: BoxFit.contain,
                             alignment: Alignment.centerLeft,
@@ -189,6 +190,12 @@ class ProfileScreen extends ConsumerWidget {
                         label: user!.regionCode!,
                         background: AppColors.orange.withValues(alpha: 0.12),
                         foreground: AppColors.orange,
+                      ),
+                    if (company != null && company.isNotEmpty)
+                      _InfoChip(
+                        label: company,
+                        background: AppColors.lightBlue,
+                        foreground: AppColors.darkBlue,
                       ),
                   ],
                 ),
@@ -218,6 +225,15 @@ class ProfileScreen extends ConsumerWidget {
             label: 'Region',
             value: user?.regionCode ?? '—',
           ),
+          if ((user?.departmentName ?? '').isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _InfoRowCard(
+              icon: PhosphorIcons.buildings(),
+              iconColor: AppColors.darkBlue,
+              label: 'Department',
+              value: user!.departmentName!,
+            ),
+          ],
           const SizedBox(height: 26),
           const Text('Account', style: _sectionLabelStyle),
           const SizedBox(height: 10),

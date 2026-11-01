@@ -36,7 +36,7 @@ class AuthState {
 }
 
 class AuthController extends StateNotifier<AuthState> {
-  AuthController() : super(const AuthState()) {
+  AuthController() : super(const AuthState(isLoading: true)) {
     _bootstrap();
   }
 
@@ -103,7 +103,6 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   Future<void> login(String username, String password, {String? regionCode}) async {
-    state = state.copyWith(isLoading: true);
     try {
       final client = ApiClient(baseUrl: kDefaultApiBase);
       final data = await client.login(username, password, regionCode: regionCode);
@@ -114,9 +113,23 @@ class AuthController extends StateNotifier<AuthState> {
       await _storage.write(key: 'refresh_token', value: refresh);
       state = AuthState(user: user, accessToken: access, refreshToken: refresh);
     } catch (_) {
-      state = state.copyWith(isLoading: false);
       rethrow;
     }
+  }
+
+  Future<void> switchRegion(String regionCode) async {
+    final client = ApiClient(
+      baseUrl: kDefaultApiBase,
+      accessToken: state.accessToken,
+      onUnauthorized: refreshOnUnauthorized,
+    );
+    final data = await client.switchRegion(regionCode);
+    final user = AuthUser.fromJson(data['user'] as Map<String, dynamic>);
+    final access = data['access_token'] as String;
+    final refresh = data['refresh_token'] as String;
+    await _storage.write(key: 'access_token', value: access);
+    await _storage.write(key: 'refresh_token', value: refresh);
+    state = AuthState(user: user, accessToken: access, refreshToken: refresh);
   }
 
   Future<void> logout() async {

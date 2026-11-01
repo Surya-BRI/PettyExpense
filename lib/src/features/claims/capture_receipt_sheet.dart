@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
 import '../../theme/app_theme.dart';
+import 'bill_language.dart';
 import 'bill_line_mode.dart';
 import 'guided_capture_screen.dart';
 
@@ -33,6 +35,9 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
   final _picker = ImagePicker();
   // Must be chosen before the camera/gallery is enabled.
   BillLineMode? _mode;
+  BillLanguage _billLanguage = BillLanguage.auto;
+  // One page by default; multiple lets the scanner / gallery return several pages.
+  bool _multiPage = false;
   bool _busy = false;
   String? _error;
 
@@ -42,12 +47,53 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
       _error = null;
     });
     try {
-      final xfile = await _picker.pickImage(source: source, imageQuality: 85);
-      if (xfile == null) {
+      final List<String> paths;
+      if (_multiPage && source == ImageSource.gallery) {
+        final files = await _picker.pickMultiImage(imageQuality: 85, limit: _maxPages);
+        paths = files.map((f) => f.path).toList();
+      } else {
+        final xfile = await _picker.pickImage(source: source, imageQuality: 85);
+        paths = [if (xfile != null) xfile.path];
+      }
+      if (paths.isEmpty) {
         setState(() => _busy = false);
         return;
       }
-      await _uploadAndContinue(xfile.path);
+      await _uploadAndContinue(paths);
+    } catch (e) {
+      setState(() {
+        _busy = false;
+        _error = 'Could not upload receipt. Check connection and try again.';
+      });
+    }
+  }
+
+  /// Opens the phone's own document scanner (ML Kit on Android, VisionKit on iOS):
+  /// it finds the receipt, snaps it automatically and returns just the receipt,
+  /// cropped and flattened. Falls back to our doclens screen if it's unavailable.
+  Future<void> _scanReceipt() async {
+    final List<String>? paths;
+    try {
+      paths = await CunningDocumentScanner.getPictures(
+        noOfPages: _multiPage ? _maxPages : 1,
+        scannerSource: ScannerSource.camera,
+      );
+    } on CunningDocumentScannerException catch (e) {
+      if (!mounted) return;
+      if (e.code == 'permission_denied') {
+        setState(() => _error = 'Camera permission is needed to scan receipts.');
+        return;
+      }
+      await _openGuidedCapture();
+      return;
+    }
+    if (!mounted || paths == null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _uploadAndContinue(paths);
     } catch (e) {
       setState(() {
         _busy = false;
@@ -73,7 +119,7 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
       _error = null;
     });
     try {
-      await _uploadAndContinue(path);
+      await _uploadAndContinue([path]);
     } catch (e) {
       setState(() {
         _busy = false;
@@ -82,17 +128,21 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
     }
   }
 
-  Future<void> _uploadAndContinue(String path) async {
-    final stored = await ref.read(apiClientProvider).uploadReceipt(File(path));
+  /// Uploads every page of the bill in one request, then opens the confirm screen.
+  Future<void> _uploadAndContinue(List<String> paths) async {
+    final stored = await ref
+        .read(apiClientProvider)
+        .uploadReceipt([for (final p in paths) File(p)]);
     if (!mounted) return;
     Navigator.of(context).pop();
     context.push(
       '/confirm',
       extra: {
         'ocr': stored,
-        'localPath': path,
+        'localPaths': paths,
         'runOcr': true,
         'lineMode': _mode,
+        'ocrMode': _billLanguage.apiValue,
       },
     );
   }
@@ -133,7 +183,19 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
+          _PageCountToggle(
+            multiPage: _multiPage,
+            enabled: !_busy,
+            onChanged: (v) => setState(() => _multiPage = v),
+          ),
+          const SizedBox(height: 12),
+          _BillLanguageToggle(
+            value: _billLanguage,
+            enabled: !_busy,
+            onChanged: (v) => setState(() => _billLanguage = v),
+          ),
+          const SizedBox(height: 20),
           // IntrinsicHeight: both cards share the height of the taller one.
           IntrinsicHeight(
             child: Row(
@@ -188,7 +250,7 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
                 ),
               ),
             FilledButton.icon(
-              onPressed: _mode == null ? null : _openGuidedCapture,
+              onPressed: _mode == null ? null : _scanReceipt,
               icon: Icon(PhosphorIcons.camera()),
               label: const Text('Open camera'),
             ),
@@ -207,6 +269,152 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+const _maxPages = 5;
+
+/// Compact three-way switch: Mixed / English / Arabic, chosen before the camera opens.
+class _BillLanguageToggle extends StatelessWidget {
+  const _BillLanguageToggle({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final BillLanguage value;
+  final bool enabled;
+  final ValueChanged<BillLanguage> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Bill language',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Row(
+            children: [
+              for (final option in BillLanguage.values)
+                Expanded(child: _segment(option)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _segment(BillLanguage option) {
+    final selected = value == option;
+    final color = selected ? Colors.white : AppColors.textSecondary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: option.label,
+      child: GestureDetector(
+        onTap: enabled ? () => onChanged(option) : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.orange : Colors.transparent,
+            borderRadius: BorderRadius.circular(19),
+          ),
+          child: Text(
+            option.label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact two-way switch: is this bill one page or several?
+class _PageCountToggle extends StatelessWidget {
+  const _PageCountToggle({
+    required this.multiPage,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final bool multiPage;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.divider),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _segment('One page', PhosphorIcons.file(), selected: !multiPage, value: false),
+            _segment('Multiple pages', PhosphorIcons.files(), selected: multiPage, value: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _segment(String label, IconData icon, {required bool selected, required bool value}) {
+    final color = selected ? Colors.white : AppColors.textSecondary;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: GestureDetector(
+        onTap: enabled ? () => onChanged(value) : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.orange : Colors.transparent,
+            borderRadius: BorderRadius.circular(19),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

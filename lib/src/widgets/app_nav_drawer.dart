@@ -1,14 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../api/enums.dart';
+import '../api/models.dart';
+import '../features/admin/my_funds_screen.dart' show myFundsProvider;
 import '../features/authentication/auth_controller.dart';
 import '../features/claims/confirm_claim_screen.dart' show navigateGuarded;
 import '../features/notifications/notifications_screen.dart';
 import '../routing/role_routes.dart';
 import '../theme/app_theme.dart';
+import '../utils/money.dart';
+import 'region_branding.dart';
 
 /// Left-hand drawer mirroring the bottom nav bar (see MainShell) -- same destinations,
 /// role-aware, for screens that want a menu entry point instead of (or alongside) the
@@ -22,6 +27,9 @@ class AppNavDrawer extends ConsumerWidget {
     final role = UserRoleX.fromJson(user?.role);
     final isApprover = role.isApprover;
     final isFinanceManager = role == UserRole.financeManager;
+    final isAdmin = role == UserRole.admin;
+    final isHod = role == UserRole.hod;
+    final isAccountant = role == UserRole.accountant;
     final location = GoRouterState.of(context).uri.path;
     final unreadCount = ref.watch(unreadNotificationCountProvider).maybeWhen(data: (n) => n, orElse: () => 0);
 
@@ -36,7 +44,7 @@ class AppNavDrawer extends ConsumerWidget {
     // so only approvers (whose Home is the approvals queue, distinct from Claims) need
     // both entries.
     final items = <_DrawerItem>[
-      if (isApprover)
+      if (isApprover && !isAdmin)
         _DrawerItem(
           icon: PhosphorIcons.wallet(),
           selectedIcon: PhosphorIcons.wallet(PhosphorIconsStyle.fill),
@@ -45,7 +53,7 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location.startsWith('/approvals'),
           onTap: () => go('/approvals/${defaultStageFor(role)}'),
         )
-      else
+      else if (!isAdmin)
         _DrawerItem(
           icon: PhosphorIcons.receipt(),
           selectedIcon: PhosphorIcons.receipt(PhosphorIconsStyle.fill),
@@ -54,17 +62,49 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/claims' || location.startsWith('/claim/'),
           onTap: () => go('/claims'),
         ),
-      if (isFinanceManager)
+      if (isFinanceManager || isAdmin)
         _DrawerItem(
-          icon: PhosphorIcons.clock(),
-          selectedIcon: PhosphorIcons.clock(PhosphorIconsStyle.fill),
+          icon: PhosphorIcons.money(),
+          selectedIcon: PhosphorIcons.money(PhosphorIconsStyle.fill),
           accent: AppColors.success,
-          label: 'Payment pending',
-          selected: false,
-          onTap: () {
-            Navigator.of(context).pop();
-            context.go('/approvals/finance_manager?filter=approved');
-          },
+          label: 'Payments',
+          selected: location == '/payments',
+          onTap: () => go('/payments'),
+        ),
+      if (!kIsWeb && isAdmin)
+        _DrawerItem(
+          icon: PhosphorIcons.buildings(),
+          selectedIcon: PhosphorIcons.buildings(PhosphorIconsStyle.fill),
+          accent: AppColors.darkBlue,
+          label: 'Companies',
+          selected: location == '/admin' || location.startsWith('/admin/companies'),
+          onTap: () => go('/admin'),
+        ),
+        _DrawerItem(
+          icon: PhosphorIcons.users(),
+          selectedIcon: PhosphorIcons.users(PhosphorIconsStyle.fill),
+          accent: AppColors.darkBlue,
+          label: 'People',
+          selected: location == '/admin/people' || location.startsWith('/admin/people/'),
+          onTap: () => go('/admin/people'),
+        ),
+      if (!kIsWeb && isHod)
+        _DrawerItem(
+          icon: PhosphorIcons.money(),
+          selectedIcon: PhosphorIcons.money(PhosphorIconsStyle.fill),
+          accent: AppColors.orange,
+          label: 'Funds',
+          selected: location == '/topups' || location == '/funds',
+          onTap: () => go('/topups'),
+        ),
+      if (!kIsWeb && (isAccountant || isFinanceManager))
+        _DrawerItem(
+          icon: PhosphorIcons.arrowClockwise(),
+          selectedIcon: PhosphorIcons.arrowClockwise(PhosphorIconsStyle.fill),
+          accent: AppColors.success,
+          label: 'Top-ups',
+          selected: location == '/topups',
+          onTap: () => go('/topups'),
         ),
       _DrawerItem(
         icon: PhosphorIcons.bell(),
@@ -100,14 +140,19 @@ class AppNavDrawer extends ConsumerWidget {
                 color: AppColors.card,
                 border: Border(bottom: BorderSide(color: AppColors.divider)),
               ),
-              child: Image(
-                image: AssetImage(_regionLogoAsset(user?.regionCode)),
-                width: double.infinity,
+              child: RegionLogo(
+                regionCode: user?.regionCode,
                 height: 44,
+                width: double.infinity,
                 alignment: Alignment.centerLeft,
-                fit: BoxFit.contain,
               ),
             ),
+            if ((user?.allowedRegions.length ?? 0) > 1)
+              _CompanySwitcher(
+                current: user!.regionCode,
+                options: user.allowedRegions,
+              ),
+            if (!isAdmin) const _PettyCashLeft(),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 16, 12, 12),
@@ -139,16 +184,157 @@ class AppNavDrawer extends ConsumerWidget {
   }
 }
 
-// Per-legal-entity branding (see ERP_SUBSIDIARY_TO_REGION_CODE in backend/auth/security.py
-// for how a user's region_code is derived). OMAN/IN have no dedicated logo yet, so they
-// fall back to the generic Blue Rhine Industries mark.
-const _defaultRegionLogoAsset = 'assets/logos/Dubai_LOGO.png';
-const _regionLogoAssets = {
-  'UAE': 'assets/logos/UAE_LOGO.png',
-  'KSA': 'assets/logos/KSA_LOGO.png',
-};
+const _companyLabels = {'DUBAI': 'Dubai', 'UAE': 'UAE', 'KSA': 'KSA', 'OMAN': 'Oman'};
 
-String _regionLogoAsset(String? regionCode) => _regionLogoAssets[regionCode] ?? _defaultRegionLogoAsset;
+String companyLabel(String code) => _companyLabels[code.toUpperCase()] ?? code;
+
+/// Shown only for users assigned to more than one company. Switching re-issues the
+/// session, so every screen reloads its data for the new company.
+class _CompanySwitcher extends ConsumerStatefulWidget {
+  const _CompanySwitcher({required this.current, required this.options});
+
+  final String? current;
+  final List<String> options;
+
+  @override
+  ConsumerState<_CompanySwitcher> createState() => _CompanySwitcherState();
+}
+
+class _CompanySwitcherState extends ConsumerState<_CompanySwitcher> {
+  bool _busy = false;
+
+  Future<void> _switch(String code) async {
+    if (code == widget.current || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(authControllerProvider.notifier).switchRegion(code);
+      if (!mounted) return;
+      final role = UserRoleX.fromJson(ref.read(authControllerProvider).user?.role);
+      Navigator.of(context).pop();
+      context.go(homeRouteFor(role));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Couldn't switch company: $e")),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Company',
+          prefixIcon: PhosphorIcon(PhosphorIcons.buildings(), size: 20),
+          suffixIcon: _busy
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                )
+              : null,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: widget.options.contains(widget.current) ? widget.current : null,
+            isExpanded: true,
+            isDense: true,
+            items: [
+              for (final code in widget.options)
+                DropdownMenuItem(value: code, child: Text(companyLabel(code))),
+            ],
+            onChanged: _busy
+                ? null
+                : (code) {
+                    if (code != null) navigateGuarded(ref, () => _switch(code));
+                  },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Petty cash left for the company the user is signed in under: their own pot if they
+/// have one, otherwise their department's. Hidden when no pot is set up.
+class _PettyCashLeft extends ConsumerWidget {
+  const _PettyCashLeft();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final region = (ref.watch(authControllerProvider).user?.regionCode ?? '').toUpperCase();
+    final funds = ref.watch(myFundsProvider).valueOrNull ?? const <PettyCashFund>[];
+    PettyCashFund? fund;
+    for (final f in funds) {
+      if ((f.regionCode ?? '').toUpperCase() != region) continue;
+      if (f.ownerType == 'employee') {
+        fund = f;
+        break;
+      }
+      fund ??= f;
+    }
+    if (fund == null) return const SizedBox.shrink();
+
+    final owner = fund.ownerType == 'employee'
+        ? 'Your petty cash'
+        : '${(fund.departmentName ?? 'Department').trim()} petty cash';
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.divider)),
+      ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: AppColors.lightBlue,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                PhosphorIcon(PhosphorIcons.wallet(), size: 16, color: AppColors.darkBlue),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    owner,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.darkBlue),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${formatMoney(fund.currency, fund.available)} left',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.darkBlue),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'of ${formatMoney(fund.currency, fund.approvedLimit)} limit',
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            if (fund.pendingBills > 0) ...[
+              const SizedBox(height: 6),
+              Text(
+                '${formatMoney(fund.currency, fund.pendingBills)} awaiting approval\n'
+                '${formatMoney(fund.currency, fund.uncommitted)} free for new bills',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _DrawerItem extends StatelessWidget {
   const _DrawerItem({

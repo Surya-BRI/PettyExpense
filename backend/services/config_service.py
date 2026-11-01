@@ -1,16 +1,22 @@
 import json
 from typing import Any, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy import bindparam, or_, text
+from sqlalchemy.orm import Session, joinedload
 
 from database.models import (
+    ErpAuthExpenseUsers,
     ErpExpenseApproverDelegation,
     ErpExpenseCategory,
     ErpExpenseDepartment,
     ErpExpenseHodAssignment,
+    ErpExpenseMultiRegionUserRegion,
     ErpExpenseRegionConfig,
     ErpExpenseVendor,
+    ErpMasterExpenseRole,
 )
+from services.currency import default_base_currency, region_base_currency
+from services.region_scope import covers_region
 
 
 def department_to_dict(d: ErpExpenseDepartment) -> dict[str, Any]:
@@ -28,8 +34,16 @@ def region_to_dict(r: ErpExpenseRegionConfig) -> dict[str, Any]:
         "company_name": r.company_name,
         "logo_url": r.logo_url,
         "brand_color": r.brand_color,
+        "base_currency": region_base_currency(r),
         "is_active": bool(r.is_active),
     }
+
+
+def _clean_currency(value: Optional[str]) -> str:
+    code = (value or "").strip().upper()
+    if len(code) != 3 or not code.isalpha():
+        raise ValueError("Base currency must be a 3-letter code like AED")
+    return code
 
 
 def category_to_dict(c: ErpExpenseCategory) -> dict[str, Any]:
@@ -71,6 +85,124 @@ def delegation_to_dict(d: ErpExpenseApproverDelegation) -> dict[str, Any]:
     }
 
 
+def _assigned_regions_by_user_id(db: Session, user_ids: list[int]) -> dict[int, list[str]]:
+    if not user_ids:
+        return {}
+    rows = (
+        db.query(ErpExpenseMultiRegionUserRegion.user_id, ErpExpenseRegionConfig.region_code)
+        .join(
+            ErpExpenseRegionConfig,
+            ErpExpenseRegionConfig.region_id == ErpExpenseMultiRegionUserRegion.region_id,
+        )
+        .filter(
+            ErpExpenseMultiRegionUserRegion.user_id.in_(user_ids),
+            ErpExpenseMultiRegionUserRegion.is_active == 1,
+        )
+        .all()
+    )
+    out: dict[int, list[str]] = {}
+    for uid, code in rows:
+        if code:
+            out.setdefault(int(uid), []).append(code)
+    return out
+
+
+def _assigned_user_ids_for_region(db: Session, region_code: str) -> list[int]:
+    wanted = (region_code or "").strip().upper()
+    region = (
+        db.query(ErpExpenseRegionConfig)
+        .filter(ErpExpenseRegionConfig.region_code == wanted)
+        .first()
+    )
+    if not region:
+        return []
+    rows = (
+        db.query(ErpExpenseMultiRegionUserRegion.user_id)
+        .filter(
+            ErpExpenseMultiRegionUserRegion.region_id == region.region_id,
+            ErpExpenseMultiRegionUserRegion.is_active == 1,
+        )
+        .all()
+    )
+    return [int(row[0]) for row in rows if row[0] is not None]
+
+
+def _user_ids_for_region(db: Session, region_code: str) -> set[int]:
+    """Local expense-app users in this company. Used only when ERP directory is unreachable."""
+    ids: set[int] = set(_assigned_user_ids_for_region(db, region_code))
+    from auth.security import ERP_SUBSIDIARY_TO_REGION_CODE
+
+    wanted = (region_code or "").strip().upper()
+    codes = [code for code, mapped in ERP_SUBSIDIARY_TO_REGION_CODE.items() if mapped == wanted]
+    if codes:
+        stmt = text(
+            """
+            SELECT eu.userId
+            FROM ErpAuthExpenseUsers eu
+            JOIN ErpMasterEmployee me ON me.userId = eu.userId
+            JOIN ErpMasterRegion r ON r.regionId = me.regionId
+            JOIN ErpMasterSubsidiary s ON s.subsidiaryId = r.subsidiaryId
+            WHERE eu.isDeleted = 0
+              AND s.subsidiaryCode IN :codes
+            """
+        ).bindparams(bindparam("codes", expanding=True))
+        try:
+            rows = db.execute(stmt, {"codes": codes}).all()
+            ids.update(int(row[0]) for row in rows if row[0] is not None)
+        except Exception:
+            db.rollback()
+    return ids
+
+
+def _erp_display_name(
+    first: Optional[str],
+    last: Optional[str],
+    username: Optional[str],
+    fallback_id: int,
+    email: Optional[str] = None,
+) -> str:
+    name = " ".join(part.strip() for part in [first or "", last or ""] if part and part.strip())
+    if name:
+        return name
+    if username and username.strip():
+        return username.strip()
+    if email and email.strip():
+        return email.strip()
+    return f"Employee {fallback_id}"
+
+
+def _empty_people_page(limit: int, offset: int) -> dict[str, Any]:
+    return {"items": [], "total": 0, "limit": limit, "offset": offset}
+
+
+def _home_regions_by_user_id(db: Session, user_ids: list[int]) -> dict[int, str]:
+    """ERP subsidiary → app company for these local user ids. Empty if ERP is unreachable."""
+    if not user_ids:
+        return {}
+    from auth.security import ERP_SUBSIDIARY_TO_REGION_CODE
+
+    stmt = text(
+        """
+        SELECT me.userId, s.subsidiaryCode
+        FROM ErpMasterEmployee me
+        JOIN ErpMasterRegion r ON r.regionId = me.regionId
+        JOIN ErpMasterSubsidiary s ON s.subsidiaryId = r.subsidiaryId
+        WHERE me.userId IN :ids
+        """
+    ).bindparams(bindparam("ids", expanding=True))
+    try:
+        rows = db.execute(stmt, {"ids": user_ids}).all()
+    except Exception:
+        db.rollback()
+        return {}
+    out: dict[int, str] = {}
+    for uid, code in rows:
+        mapped = ERP_SUBSIDIARY_TO_REGION_CODE.get(code)
+        if mapped:
+            out[int(uid)] = mapped
+    return out
+
+
 class ConfigService:
     # -- Departments --
     def list_departments(self, db: Session) -> list[dict[str, Any]]:
@@ -97,6 +229,11 @@ class ConfigService:
             company_name=body.get("company_name"),
             logo_url=body.get("logo_url"),
             brand_color=body.get("brand_color"),
+            base_currency=(
+                _clean_currency(body["base_currency"])
+                if body.get("base_currency")
+                else default_base_currency(body["region_code"])
+            ),
             is_active=1,
         )
         db.add(r)
@@ -122,9 +259,46 @@ class ConfigService:
             r.logo_url = body["logo_url"]
         if "brand_color" in body:
             r.brand_color = body["brand_color"]
+        if body.get("base_currency"):
+            r.base_currency = _clean_currency(body["base_currency"])
         db.commit()
         db.refresh(r)
         return region_to_dict(r)
+
+    def region_approvers(self, db: Session, region_id: int) -> dict[str, Any]:
+        """Per role, who handles this company's bills (home company or Admin-assigned)."""
+        region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == region_id).first()
+        if not region:
+            raise LookupError("Region not found")
+        rows = (
+            db.query(ErpAuthExpenseUsers)
+            .join(ErpMasterExpenseRole)
+            .options(joinedload(ErpAuthExpenseUsers.role), joinedload(ErpAuthExpenseUsers.department))
+            .filter(
+                ErpMasterExpenseRole.role_code.in_(("hod", "accountant", "finance_manager")),
+                ErpAuthExpenseUsers.is_active == 1,
+                ErpAuthExpenseUsers.is_deleted == 0,
+                covers_region(region_id),
+            )
+            .order_by(ErpAuthExpenseUsers.display_name)
+            .all()
+        )
+        out: dict[str, list[dict[str, Any]]] = {"hod": [], "accountant": [], "finance_manager": []}
+        for u in rows:
+            out[u.role.role_code].append(
+                {
+                    "id": u.user_id,
+                    "display_name": u.display_name,
+                    "department_name": u.department.department_name if u.department else None,
+                    "home_region": u.home_region_id == region_id,
+                }
+            )
+        return {
+            "region_id": region.region_id,
+            "region_code": region.region_code,
+            "roles": out,
+            "missing": [role for role in ("accountant", "finance_manager") if not out[role]],
+        }
 
     # -- Categories --
     def list_categories(self, db: Session) -> list[dict[str, Any]]:
@@ -216,6 +390,367 @@ class ConfigService:
         db.commit()
         db.refresh(d)
         return delegation_to_dict(d)
+
+    # -- People / ERP directory (no local copy) --
+    def list_users(
+        self,
+        db: Session,
+        *,
+        region_code: Optional[str] = None,
+        q: Optional[str] = None,
+        limit: int = 25,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        limit = max(1, min(int(limit or 25), 100))
+        offset = max(0, int(offset or 0))
+        code = (region_code or "").strip()
+        if code:
+            erp_page = self._list_erp_employees(db, region_code=code, q=q, limit=limit, offset=offset)
+            if erp_page is not None:
+                return erp_page
+        return self._list_local_users(db, region_code=code or None, q=q, limit=limit, offset=offset)
+
+    def _list_erp_employees(
+        self,
+        db: Session,
+        *,
+        region_code: str,
+        q: Optional[str],
+        limit: int,
+        offset: int,
+    ) -> Optional[dict[str, Any]]:
+        """Page ErpMasterEmployee for this company. Returns None if ERP tables are unreachable."""
+        from auth.security import ERP_SUBSIDIARY_TO_REGION_CODE
+
+        wanted = region_code.strip().upper()
+        codes = [c for c, mapped in ERP_SUBSIDIARY_TO_REGION_CODE.items() if mapped == wanted]
+        assigned = _assigned_user_ids_for_region(db, wanted)
+        if not codes and not assigned:
+            return _empty_people_page(limit, offset)
+
+        where = ["me.isDeleted = 0", "(me.isActive = 1 OR me.isActive IS NULL)"]
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        binds: list[Any] = []
+        company_clause: list[str] = []
+        if codes:
+            company_clause.append("s.subsidiaryCode IN :codes")
+            params["codes"] = codes
+            binds.append(bindparam("codes", expanding=True))
+        if assigned:
+            company_clause.append("me.userId IN :assigned")
+            params["assigned"] = assigned
+            binds.append(bindparam("assigned", expanding=True))
+        where.append("(" + " OR ".join(company_clause) + ")")
+        needle = (q or "").strip()
+        if needle:
+            where.append(
+                "("
+                "me.firstName LIKE :like OR me.lastName LIKE :like "
+                "OR CONCAT(ISNULL(me.firstName, ''), ' ', ISNULL(me.lastName, '')) LIKE :like "
+                "OR me.emailId LIKE :like OR d.departmentName LIKE :like OR au.userName LIKE :like"
+                ")"
+            )
+            params["like"] = f"%{needle}%"
+        where_sql = " AND ".join(where)
+        count_from = f"""
+            FROM ErpMasterEmployee me
+            LEFT JOIN ErpMasterRegion r ON r.regionId = me.regionId
+            LEFT JOIN ErpMasterSubsidiary s ON s.subsidiaryId = r.subsidiaryId
+            {"" if not needle else "LEFT JOIN ErpMasterDepartment d ON d.departmentId = me.departmentId LEFT JOIN ErpAuthUsers au ON au.userId = me.userId AND au.isDeleted = 0"}
+            WHERE {where_sql}
+        """
+        page_from = f"""
+            FROM ErpMasterEmployee me
+            LEFT JOIN ErpMasterRegion r ON r.regionId = me.regionId
+            LEFT JOIN ErpMasterSubsidiary s ON s.subsidiaryId = r.subsidiaryId
+            LEFT JOIN ErpMasterDepartment d ON d.departmentId = me.departmentId
+            LEFT JOIN ErpAuthUsers au ON au.userId = me.userId AND au.isDeleted = 0
+            OUTER APPLY (
+              SELECT TOP 1 mr.roleName, mr.roleId
+              FROM ErpAuthUserRoleMap map
+              JOIN ErpMasterRole mr ON mr.roleId = map.roleId AND mr.isActive = 1 AND mr.isDeleted = 0
+              WHERE map.userId = me.userId AND map.isActive = 1
+              ORDER BY map.mapId DESC
+            ) erpRole
+            WHERE {where_sql}
+        """
+        count_stmt = text("SELECT COUNT(*) " + count_from)
+        page_stmt = text(
+            """
+            SELECT me.userId, me.employeeId, me.firstName, me.lastName, me.emailId,
+                   d.departmentName, au.userName, s.subsidiaryCode,
+                   erpRole.roleName, erpRole.roleId
+            """
+            + page_from
+            + """
+            ORDER BY CASE WHEN NULLIF(LTRIM(ISNULL(me.firstName, '') + ISNULL(me.lastName, '')), '') IS NULL THEN 1 ELSE 0 END,
+                     me.firstName, me.lastName, me.employeeId
+            OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
+            """
+        )
+        for item in binds:
+            count_stmt = count_stmt.bindparams(item)
+            page_stmt = page_stmt.bindparams(item)
+        try:
+            total = int(db.execute(count_stmt, params).scalar() or 0)
+            rows = db.execute(page_stmt, params).all()
+        except Exception:
+            db.rollback()
+            return None
+        user_ids = [
+            int(row.userId) if row.userId is not None else int(row.employeeId)
+            for row in rows
+            if row.userId is not None or row.employeeId is not None
+        ]
+        local_by_id = self._local_users_by_id(db, user_ids)
+        assigned = _assigned_regions_by_user_id(db, user_ids)
+        return {
+            "items": [
+                self._erp_employee_to_dict(
+                    db,
+                    row,
+                    home_region_code=wanted,
+                    local=local_by_id.get(int(row.userId) if row.userId is not None else int(row.employeeId)),
+                    region_codes=assigned.get(
+                        int(row.userId) if row.userId is not None else int(row.employeeId),
+                        [],
+                    ),
+                )
+                for row in rows
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+
+    def _list_local_users(
+        self,
+        db: Session,
+        *,
+        region_code: Optional[str],
+        q: Optional[str],
+        limit: int,
+        offset: int,
+    ) -> dict[str, Any]:
+        query = (
+            db.query(ErpAuthExpenseUsers)
+            .join(ErpMasterExpenseRole)
+            .outerjoin(ErpExpenseDepartment)
+            .options(
+                joinedload(ErpAuthExpenseUsers.role),
+                joinedload(ErpAuthExpenseUsers.department),
+            )
+            .filter(ErpAuthExpenseUsers.is_deleted == 0, ErpAuthExpenseUsers.is_active == 1)
+        )
+        if region_code:
+            ids = _user_ids_for_region(db, region_code)
+            if not ids:
+                return _empty_people_page(limit, offset)
+            query = query.filter(ErpAuthExpenseUsers.user_id.in_(ids))
+        needle = (q or "").strip()
+        if needle:
+            like = f"%{needle}%"
+            query = query.filter(
+                or_(
+                    ErpAuthExpenseUsers.display_name.like(like),
+                    ErpAuthExpenseUsers.user_name.like(like),
+                    ErpMasterExpenseRole.role_code.like(like),
+                    ErpExpenseDepartment.department_name.like(like),
+                )
+            )
+        total = query.order_by(None).count()
+        rows = query.order_by(ErpAuthExpenseUsers.display_name).offset(offset).limit(limit).all()
+        user_ids = [u.user_id for u in rows]
+        homes = _home_regions_by_user_id(db, user_ids)
+        assigned = _assigned_regions_by_user_id(db, user_ids)
+        return {
+            "items": [
+                self.user_to_dict(
+                    db,
+                    u,
+                    home_region_code=homes.get(u.user_id),
+                    region_codes=assigned.get(u.user_id, []),
+                )
+                for u in rows
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+
+    def _local_users_by_id(self, db: Session, user_ids: list[int]) -> dict[int, ErpAuthExpenseUsers]:
+        if not user_ids:
+            return {}
+        rows = (
+            db.query(ErpAuthExpenseUsers)
+            .options(joinedload(ErpAuthExpenseUsers.role), joinedload(ErpAuthExpenseUsers.department))
+            .filter(ErpAuthExpenseUsers.user_id.in_(user_ids), ErpAuthExpenseUsers.is_deleted == 0)
+            .all()
+        )
+        return {u.user_id: u for u in rows}
+
+    def _erp_employee_to_dict(
+        self,
+        db: Session,
+        row: Any,
+        *,
+        home_region_code: Optional[str] = None,
+        local: Optional[ErpAuthExpenseUsers] = None,
+        region_codes: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        from auth.security import ERP_SUBSIDIARY_TO_REGION_CODE
+
+        user_id = int(row.userId) if row.userId is not None else int(row.employeeId)
+        mapped_home = ERP_SUBSIDIARY_TO_REGION_CODE.get(row.subsidiaryCode) if row.subsidiaryCode else None
+        if local is None:
+            local = self._local_users_by_id(db, [user_id]).get(user_id)
+        assigned = region_codes if region_codes is not None else _assigned_regions_by_user_id(db, [user_id]).get(user_id, [])
+        erp_role = getattr(row, "roleName", None)
+        erp_role_id = getattr(row, "roleId", None)
+        from auth.security import mapped_app_role
+
+        role = local.role.role_code if local and local.role else mapped_app_role(erp_role_id, erp_role)
+        return {
+            "id": user_id,
+            "employee_id": int(row.employeeId) if row.employeeId is not None else None,
+            "username": row.userName or (local.user_name if local else None),
+            "display_name": _erp_display_name(row.firstName, row.lastName, row.userName, user_id, row.emailId),
+            "role": role,
+            "erp_role": erp_role,
+            "department_id": local.department_id if local else None,
+            "department_name": row.departmentName or (local.department.department_name if local and local.department else None),
+            "email": row.emailId or (local.email if local else None),
+            "home_region_code": mapped_home or home_region_code,
+            "region_codes": assigned,
+            "has_app_login": local is not None,
+        }
+
+    def get_user(self, db: Session, user_id: int) -> dict[str, Any]:
+        erp = self._get_erp_employee(db, user_id)
+        if erp is not None:
+            return erp
+        user = (
+            db.query(ErpAuthExpenseUsers)
+            .options(
+                joinedload(ErpAuthExpenseUsers.role),
+                joinedload(ErpAuthExpenseUsers.department),
+            )
+            .filter(
+                ErpAuthExpenseUsers.user_id == user_id,
+                ErpAuthExpenseUsers.is_deleted == 0,
+            )
+            .first()
+        )
+        if not user:
+            raise LookupError("User not found")
+        return self.user_to_dict(db, user)
+
+    def _get_erp_employee(self, db: Session, user_id: int) -> Optional[dict[str, Any]]:
+        stmt = text(
+            """
+            SELECT TOP 1 me.userId, me.employeeId, me.firstName, me.lastName, me.emailId,
+                   d.departmentName, au.userName, s.subsidiaryCode,
+                   erpRole.roleName, erpRole.roleId
+            FROM ErpMasterEmployee me
+            LEFT JOIN ErpMasterRegion r ON r.regionId = me.regionId
+            LEFT JOIN ErpMasterSubsidiary s ON s.subsidiaryId = r.subsidiaryId
+            LEFT JOIN ErpMasterDepartment d ON d.departmentId = me.departmentId
+            LEFT JOIN ErpAuthUsers au ON au.userId = me.userId AND au.isDeleted = 0
+            OUTER APPLY (
+              SELECT TOP 1 mr.roleName, mr.roleId
+              FROM ErpAuthUserRoleMap map
+              JOIN ErpMasterRole mr ON mr.roleId = map.roleId AND mr.isActive = 1 AND mr.isDeleted = 0
+              WHERE map.userId = me.userId AND map.isActive = 1
+              ORDER BY map.mapId DESC
+            ) erpRole
+            WHERE me.isDeleted = 0 AND (me.userId = :uid OR me.employeeId = :uid)
+            ORDER BY CASE WHEN me.userId = :uid THEN 0 ELSE 1 END
+            """
+        )
+        try:
+            row = db.execute(stmt, {"uid": user_id}).first()
+        except Exception:
+            db.rollback()
+            return None
+        if not row:
+            return None
+        return self._erp_employee_to_dict(db, row)
+
+    def user_to_dict(
+        self,
+        db: Session,
+        user: ErpAuthExpenseUsers,
+        home_region_code: Optional[str] = None,
+        region_codes: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        from auth.security import allowed_regions_for, resolve_default_region_code
+
+        assigned = region_codes if region_codes is not None else allowed_regions_for(db, user)
+        if home_region_code is None:
+            try:
+                home_region_code = resolve_default_region_code(db, user.user_id)
+            except Exception:
+                home_region_code = None
+        return {
+            "id": user.user_id,
+            "username": user.user_name,
+            "display_name": user.display_name,
+            "role": user.role.role_code if user.role else None,
+            "department_id": user.department_id,
+            "department_name": user.department.department_name if user.department else None,
+            "email": user.email,
+            "home_region_code": home_region_code,
+            "region_codes": assigned,
+            "erp_role": None,
+            "has_app_login": True,
+        }
+
+    def set_user_regions(self, db: Session, user_id: int, region_codes: list[str], assigned_by: int) -> dict[str, Any]:
+        user = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == user_id).first()
+        if not user:
+            raise ValueError(
+                "This person has not signed into the expense app yet. Extra companies can be set after first login."
+            )
+        wanted = {c.strip().upper() for c in region_codes if c and c.strip()}
+        regions = {
+            r.region_code: r
+            for r in db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code.in_(wanted)).all()
+        } if wanted else {}
+        missing = wanted - set(regions)
+        if missing:
+            raise ValueError(f"Unknown region_code: {sorted(missing)[0]}")
+        existing = (
+            db.query(ErpExpenseMultiRegionUserRegion)
+            .filter(ErpExpenseMultiRegionUserRegion.user_id == user_id)
+            .all()
+        )
+        by_region = {row.region_id: row for row in existing}
+        keep_ids = {r.region_id for r in regions.values()}
+        for row in existing:
+            if row.region_id not in keep_ids:
+                row.is_active = 0
+        for region in regions.values():
+            row = by_region.get(region.region_id)
+            if row:
+                row.is_active = 1
+                row.assigned_by = assigned_by
+            else:
+                db.add(
+                    ErpExpenseMultiRegionUserRegion(
+                        user_id=user_id,
+                        region_id=region.region_id,
+                        assigned_by=assigned_by,
+                        is_active=1,
+                    )
+                )
+        db.commit()
+        db.refresh(user)
+        user.department  # load
+        user.role
+        return self.user_to_dict(db, user)
+
+    def set_region_logo_key(self, db: Session, region_id: int, logo_key: str) -> dict[str, Any]:
+        return self.update_region(db, region_id, {"logo_url": logo_key})
 
 
 config_service = ConfigService()

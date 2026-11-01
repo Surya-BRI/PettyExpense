@@ -343,12 +343,12 @@ def _apply_currency_fallback(result: dict[str, Any], region_code: Optional[str])
 
 class OcrService:
     def run(
-        self, image_bytes: bytes, filename: str = "receipt.jpg", mode: str = _DEFAULT_OCR_MODE,
+        self, image_bytes: bytes | list[bytes], filename: str = "receipt.jpg", mode: str = _DEFAULT_OCR_MODE,
         region_code: Optional[str] = None, engine: str = "ai",
     ) -> dict[str, Any]:
-        # Camera, gallery and scripts all go through GPT. engine/mode are ignored
-        # (kept so older clients that still send them keep working).
-        return run_llm_vision(image_bytes, region_code)
+        # Camera, gallery and scripts all go through GPT. A list = pages of one bill.
+        # mode (auto/en/ar) is a language hint for the model, not a separate OCR engine.
+        return run_llm_vision(image_bytes, region_code, mode=mode)
 
     def extract_from_text(self, text: str, words: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
         ocr_words = (

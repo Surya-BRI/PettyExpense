@@ -6,10 +6,13 @@ real ERP users (see auth/security.py authenticate_user) rather than seeded here.
 """
 import json
 
+from sqlalchemy import text
+
 from database.models import (
     ErpExpenseCategory,
     ErpExpenseDepartment,
     ErpExpenseEmployeeCache,
+    ErpExpensePettyCashFund,
     ErpExpenseProjectCache,
     ErpExpenseRegionConfig,
     ErpExpenseVendor,
@@ -24,16 +27,20 @@ DEFAULT_APPROVAL_MATRIX = {
     "sla_hours": {"hod": 24, "department_hod": 24, "accountant": 48, "finance_manager": 48},
 }
 
-# App scope is UAE/KSA (see README) — UAE is the default region. IN is kept seeded
-# for existing pre-UAE/KSA data; not part of the app's actual scope going forward.
-# Same approval matrix for all three to start; regions can diverge later if the
-# business needs differ (e.g. different SLA/thresholds per country).
+# App scope is the GCC legal entities. India is no longer offered as a region.
+# Same approval matrix for all to start; regions can diverge later if needed.
 REGIONS = [
+    ("DUBAI", "Dubai"),
     ("UAE", "United Arab Emirates"),
     ("KSA", "Kingdom of Saudi Arabia"),
     ("OMAN", "Oman"),
-    ("IN", "India"),
 ]
+
+COMPANY_BY_REGION = {
+    "DUBAI": "Blue Rhine Industries",
+    "UAE": "Blue Rhine Contracting",
+    "KSA": "Professional Signs",
+}
 
 ROLE_NAMES = {
     "employee": "Employee",
@@ -61,7 +68,45 @@ PROJECTS = [
 ]
 
 
+def _sync_erp_departments(db) -> None:
+    """Pull ErpMasterDepartment names into the local expense department table."""
+    try:
+        rows = db.execute(
+            text(
+                "SELECT departmentName FROM ErpMasterDepartment "
+                "WHERE departmentName IS NOT NULL "
+                "AND (isActive = 1 OR isActive IS NULL)"
+            )
+        ).all()
+    except Exception:
+        db.rollback()
+        return
+    existing = {(d.department_name or "").strip().lower(): d for d in db.query(ErpExpenseDepartment).all()}
+    added = False
+    for row in rows:
+        name = (row[0] or "").strip()
+        if not name or name.lower() in existing:
+            continue
+        db.add(ErpExpenseDepartment(department_name=name, is_active=1))
+        existing[name.lower()] = True
+        added = True
+    if added:
+        db.commit()
+
+
 def seed_reference_data() -> None:
+    try:
+        from scripts.add_pca_topup_columns import ensure_pca_topup_columns
+
+        ensure_pca_topup_columns()
+    except Exception:
+        pass
+    try:
+        from scripts.add_currency_region_payment_schema import ensure_columns
+
+        ensure_columns()
+    except Exception:
+        pass
     db = SessionLocal()
     try:
         # Roles
@@ -79,11 +124,17 @@ def seed_reference_data() -> None:
                 continue
             db.add(ErpExpenseDepartment(department_name=name, is_active=1))
         db.commit()
+        _sync_erp_departments(db)
         dept_by_name = {d.department_name: d for d in db.query(ErpExpenseDepartment).all()}
 
         # Region config
+        existing_regions = {
+            (r.region_code or "").upper(): r for r in db.query(ErpExpenseRegionConfig).all()
+        }
         for region_code, region_name in REGIONS:
-            if not db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == region_code).first():
+            row = existing_regions.get(region_code.upper())
+            company = COMPANY_BY_REGION.get(region_code)
+            if not row:
                 db.add(
                     ErpExpenseRegionConfig(
                         region_code=region_code,
@@ -91,10 +142,18 @@ def seed_reference_data() -> None:
                         allocation_model="petty_cash",
                         approval_matrix_json=json.dumps(DEFAULT_APPROVAL_MATRIX),
                         petty_cash_hard_limit_enabled=0,
-                        company_name="Expense Receipt App",
+                        company_name=company or "Expense Receipt App",
                         is_active=1,
                     )
                 )
+            else:
+                row.is_active = 1
+                row.region_name = region_name
+                if company:
+                    row.company_name = company
+        india = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == "IN").first()
+        if india:
+            india.is_active = 0
         db.commit()
         region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == "UAE").first()
 
@@ -157,5 +216,46 @@ def seed_reference_data() -> None:
                 )
             )
         db.commit()
+
+        try:
+            from scripts.add_currency_region_payment_schema import backfill
+
+            backfill(db)
+        except Exception:
+            db.rollback()
     finally:
         db.close()
+
+
+def seed_department_pca_limits(db, amount: float = 5000.0) -> tuple[int, int]:
+    """One-shot helper. Do not call from uvicorn startup — list_department_funds is too slow."""
+    from services.currency import region_base_currency
+    from services.fund_service import fund_service
+
+    created = 0
+    skipped = 0
+    regions = (
+        db.query(ErpExpenseRegionConfig)
+        .filter(ErpExpenseRegionConfig.is_active == 1)
+        .all()
+    )
+    for region in regions:
+        currency = region_base_currency(region)
+        rows = fund_service.list_department_funds(db, region.region_id)
+        for row in rows:
+            if row.get("fund"):
+                skipped += 1
+                continue
+            db.add(
+                ErpExpensePettyCashFund(
+                    region_id=region.region_id,
+                    owner_type="department",
+                    department_id=row["department_id"],
+                    currency=currency,
+                    opening_balance=amount,
+                    is_active=1,
+                )
+            )
+            created += 1
+        db.commit()
+    return created, skipped
