@@ -5,11 +5,14 @@ import 'package:intl/intl.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
+import '../../api/enums.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
+import '../../widgets/region_filter_dropdown.dart';
+import '../authentication/auth_controller.dart';
 import 'payment_sheet.dart';
 
 typedef _PaymentsQuery = ({String status, String? regionCode});
@@ -49,7 +52,17 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(paymentsProvider(_query));
-    final regions = ref.watch(_paymentRegionsProvider).maybeWhen(data: (r) => r, orElse: () => const <RegionConfig>[]);
+    // Filtered server-side, so the options come from the region list, not the loaded page.
+    // A Finance Manager only sees the companies they cover (payment_service scopes the list).
+    final user = ref.watch(authControllerProvider).user;
+    final regions = regionFilterOptions(
+      user?.allowedRegions ?? const <String>[],
+      ref
+          .watch(_paymentRegionsProvider)
+          .maybeWhen(data: (r) => r, orElse: () => const <RegionConfig>[])
+          .map((r) => r.regionCode),
+      onlyAllowed: UserRoleX.fromJson(user?.role) != UserRole.admin,
+    );
 
     return Scaffold(
       drawer: const AppNavDrawer(),
@@ -58,35 +71,28 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'unpaid', label: Text('Waiting for payment')),
-                ButtonSegment(value: 'paid', label: Text('Paid')),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'unpaid', label: Text('Waiting for payment')),
+                    ButtonSegment(value: 'paid', label: Text('Paid')),
+                  ],
+                  selected: {_status},
+                  onSelectionChanged: (s) => setState(() => _status = s.first),
+                ),
+                if (regions.length > 1)
+                  RegionFilterDropdown(
+                    options: regions,
+                    selected: _region,
+                    onChanged: (code) => setState(() => _region = code),
+                  ),
               ],
-              selected: {_status},
-              onSelectionChanged: (s) => setState(() => _status = s.first),
             ),
           ),
-          if (regions.length > 1)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final code in [null, ...regions.map((r) => r.regionCode)])
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(code ?? 'All companies'),
-                          selected: _region == code,
-                          onSelected: (_) => setState(() => _region = code),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
           Expanded(
             child: async.when(
               loading: () => const Center(child: CircularProgressIndicator()),

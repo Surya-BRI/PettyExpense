@@ -47,7 +47,7 @@ export function ClaimsPage() {
       if (f.region && c.region_code !== f.region) return false;
       if (f.category && (c.category_name || 'Uncategorised') !== f.category) return false;
       if (f.type && c.type !== f.type) return false;
-      if (f.flagged && !(c.duplicate_flag || c.vendor_unmatched)) return false;
+      if (f.flagged && !c.duplicate_flag) return false;
       if (!q) return true;
       return [String(c.id), c.vendor_name, c.employee_name, c.category_name, c.op_number]
         .filter(Boolean)
@@ -229,9 +229,6 @@ export function ClaimsPage() {
                             {c.duplicate_flag && (
                               <span className="flag" data-tip="Same employee, vendor, amount and date as another claim">Dup</span>
                             )}
-                            {c.vendor_unmatched && (
-                              <span className="flag" data-tip="Vendor not in the vendor list yet (Accountant resolves)">New vendor</span>
-                            )}
                             {c.type === 'petty_cash' && <span className="tag" data-tip="Petty cash claim">PC</span>}
                           </div>
                         </td>
@@ -276,7 +273,7 @@ export function ClaimsPage() {
 
 function exportCsv(rows: Claim[], approver: boolean) {
   const header = ['ID', 'Submitted', ...(approver ? ['Employee'] : []), 'Vendor', 'Category', 'Region', 'Type',
-    'Currency', 'Amount excl. VAT', 'VAT', 'Total', 'Status', 'Waiting at', 'Bill date', 'OP number', 'Duplicate flag', 'Vendor unmatched'];
+    'Currency', 'Amount excl. VAT', 'VAT', 'Total', 'Status', 'Waiting at', 'Bill date', 'OP number', 'Duplicate flag'];
   const esc = (v: unknown) => {
     const s = v == null ? '' : String(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -285,7 +282,7 @@ function exportCsv(rows: Claim[], approver: boolean) {
     [c.id, formatDate(c.submitted_at ?? c.created_at), ...(approver ? [c.employee_name] : []), c.vendor_name, c.category_name,
       c.region_code, c.type, c.currency, c.amount, c.vat_amount, claimTotal(c), c.status,
       PENDING.includes(c.status) && c.current_stage ? STAGE_LABELS[c.current_stage] : '', c.bill_date, c.op_number,
-      c.duplicate_flag ? 'yes' : '', c.vendor_unmatched ? 'yes' : ''].map(esc).join(','),
+      c.duplicate_flag ? 'yes' : ''].map(esc).join(','),
   );
   // BOM so Excel opens Arabic vendor names correctly.
   const blob = new Blob(['﻿' + [header.join(','), ...lines].join('\r\n')], { type: 'text/csv;charset=utf-8' });

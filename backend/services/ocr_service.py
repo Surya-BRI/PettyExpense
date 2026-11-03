@@ -41,22 +41,17 @@ _reference_data: ReferenceData = ReferenceData()
 
 
 def refresh_reference_data(db: Session, region_code: Optional[str] = None) -> None:
-    # Rebuilds the cached ReferenceData from the DB and tax-rules config; called once per request so admin-added vendors/categories flow in automatically.
+    # Rebuilds the cached ReferenceData from the DB and tax-rules config; called once per request so admin-added categories flow in automatically.
+    # There is no vendor list any more: the vendor is read from the bill text alone.
     global _reference_data
-    from database.models import ErpExpenseCategory, ErpExpenseVendor
+    from database.models import ErpExpenseCategory
 
-    vendors = tuple(
-        row[0]
-        for row in db.query(ErpExpenseVendor.vendor_name).filter(ErpExpenseVendor.is_active == 1).all()
-        if row[0]
-    )
     categories = tuple(
         CategoryRef(name=c.category_name, name_ar=c.category_name_ar)
         for c in db.query(ErpExpenseCategory).filter(ErpExpenseCategory.is_active == 1).all()
     )
     currencies, rates = default_tax_rules_for_region(region_code)
     _reference_data = ReferenceData(
-        known_vendors=vendors,
         categories=categories,
         valid_currency_codes=currencies,
         plausible_vat_rates=rates,

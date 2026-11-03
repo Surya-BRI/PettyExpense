@@ -21,7 +21,7 @@ The site picks the backend from **`VITE_API_BASE_URL`**. If it isn't set, it fal
 production API above.
 
 Endpoints used: `/api/auth/*`, `/api/admin/claims`, `/api/claims/*`, `/api/approvals/*`,
-`/api/admin/claims/{id}/mark-paid`, `/api/vendors`, `/api/notifications/*`, and
+`/api/admin/claims/{id}/mark-paid`, `/api/notifications/*`, and
 `/api/admin/activity` (the dashboard's activity feed; shows a notice if the backend doesn't have it yet).
 
 ## Run locally
@@ -68,7 +68,7 @@ location / {
 | Role | Data | Actions |
 |---|---|---|
 | Employee | Own claims only (`/api/claims/mine`) | Submit draft, resubmit a disputed claim |
-| HOD / Accountant / Finance Manager / Admin | Every claim (`/api/admin/claims`) | Approve / dispute / reject at their stage; Accountant resolves unmatched vendors; Finance Manager marks paid |
+| HOD / Accountant / Finance Manager / Admin | Every claim (`/api/admin/claims`) | Approve / dispute / reject at their stage; Finance Manager marks paid |
 
 Buttons only appear when the backend would accept the action; the backend still enforces every rule.
 

@@ -80,7 +80,6 @@ export interface Claim {
   category_name: string | null;
   vendor_id: number | null;
   vendor_name: string | null;
-  vendor_unmatched: boolean;
   bill_date: string | null;
   currency: string;
   exchange_rate: number;
@@ -153,9 +152,4 @@ export interface AppNotification {
   sent_at: string | null;
   current_stage: Stage | null;
   claim_status: ClaimStatus | null;
-}
-
-export interface VendorRef {
-  id: number;
-  name: string;
 }

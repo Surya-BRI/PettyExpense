@@ -10,6 +10,7 @@ import '../../utils/money.dart';
 import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/pca_fund_figures.dart';
+import '../../widgets/region_filter_dropdown.dart';
 import '../../widgets/shimmer_box.dart';
 import '../authentication/auth_controller.dart';
 import 'admin_providers.dart';
@@ -60,15 +61,36 @@ void invalidateFundProviders(WidgetRef ref) {
   ref.invalidate(departmentFundsProvider);
 }
 
-class TopupsScreen extends ConsumerWidget {
+class TopupsScreen extends ConsumerStatefulWidget {
   const TopupsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final role = UserRoleX.fromJson(ref.watch(authControllerProvider).user?.role);
+  ConsumerState<TopupsScreen> createState() => _TopupsScreenState();
+}
+
+class _TopupsScreenState extends ConsumerState<TopupsScreen> {
+  String? _region; // null = all regions
+
+  Widget _regionFilter(List<String> regions) => Align(
+    alignment: Alignment.centerRight,
+    child: RegionFilterDropdown(
+      options: regions,
+      selected: _region,
+      onChanged: (code) => setState(() => _region = code),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authControllerProvider).user;
+    final role = UserRoleX.fromJson(user?.role);
     final isHod = role == UserRole.hod;
     final topupsAsync = ref.watch(topupsProvider);
     final fundsAsync = isHod ? ref.watch(myFundsProvider) : null;
+    final regions = regionFilterOptions(user?.allowedRegions ?? const <String>[], [
+      for (final t in topupsAsync.valueOrNull ?? const <TopupRequest>[]) t.fund?.regionCode,
+      for (final f in fundsAsync?.valueOrNull ?? const <PettyCashFund>[]) f.regionCode,
+    ], onlyAllowed: role != UserRole.admin);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -86,19 +108,35 @@ class TopupsScreen extends ConsumerWidget {
             )
           : null,
       body: isHod
-          ? _hodBody(context, ref, fundsAsync!, topupsAsync)
+          ? _hodBody(context, fundsAsync!, topupsAsync, regions)
           : topupsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('$e')),
-              data: (items) {
-                if (items.isEmpty) {
-                  return const Center(child: Text('No top-up requests yet'));
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) => TopupRequestTile(request: items[i]),
+              data: (all) {
+                final items = [
+                  for (final t in all)
+                    if (regionFilterMatches(_region, regions, t.fund?.regionCode)) t,
+                ];
+                final Widget list = items.isEmpty
+                    ? Center(
+                        child: Text(
+                          all.isNotEmpty && regions.contains(_region)
+                              ? 'No top-up requests for ${companyLabel(_region!)}'
+                              : 'No top-up requests yet',
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+                        itemCount: items.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        itemBuilder: (context, i) => TopupRequestTile(request: items[i]),
+                      );
+                if (regions.length < 2) return list;
+                return Column(
+                  children: [
+                    Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 0), child: _regionFilter(regions)),
+                    Expanded(child: list),
+                  ],
                 );
               },
             ),
@@ -107,9 +145,9 @@ class TopupsScreen extends ConsumerWidget {
 
   Widget _hodBody(
     BuildContext context,
-    WidgetRef ref,
     AsyncValue<List<PettyCashFund>> fundsAsync,
     AsyncValue<List<TopupRequest>> topupsAsync,
+    List<String> regions,
   ) {
     if ((fundsAsync.isLoading && !fundsAsync.hasValue) || (topupsAsync.isLoading && !topupsAsync.hasValue)) {
       return const Center(child: CircularProgressIndicator());
@@ -120,18 +158,32 @@ class TopupsScreen extends ConsumerWidget {
     final funds =
         [
           for (final f in fundsAsync.valueOrNull ?? const <PettyCashFund>[])
-            if (f.ownerType == 'department') f,
+            if (f.ownerType == 'department' && regionFilterMatches(_region, regions, f.regionCode)) f,
         ]..sort((a, b) {
           final ai = kAdminRegionOrder.indexOf((a.regionCode ?? '').toUpperCase());
           final bi = kAdminRegionOrder.indexOf((b.regionCode ?? '').toUpperCase());
           return (ai < 0 ? 99 : ai).compareTo(bi < 0 ? 99 : bi);
         });
-    final topups = topupsAsync.valueOrNull ?? const <TopupRequest>[];
+    final topups = [
+      for (final t in topupsAsync.valueOrNull ?? const <TopupRequest>[])
+        if (regionFilterMatches(_region, regions, t.fund?.regionCode)) t,
+    ];
+    final filtering = regions.contains(_region);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
       children: [
-        if (funds.isEmpty)
+        if (regions.length > 1) ...[_regionFilter(regions), const SizedBox(height: 12)],
+        if (funds.isEmpty && filtering)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 8, 20),
+            child: Text(
+              'No petty cash for ${companyLabel(_region!)}.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+          )
+        else if (funds.isEmpty)
           const Padding(
             padding: EdgeInsets.fromLTRB(8, 12, 8, 20),
             child: Text(

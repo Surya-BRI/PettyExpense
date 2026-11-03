@@ -153,10 +153,10 @@ class MainShell extends ConsumerWidget {
                   if (showApproverTopups)
                     Expanded(
                       child: _NavItem(
-                        icon: role == UserRole.hod ? PhosphorIcons.money() : PhosphorIcons.arrowClockwise(),
+                        icon: role == UserRole.hod ? PhosphorIcons.money() : PhosphorIcons.handCoins(),
                         selectedIcon: role == UserRole.hod
                             ? PhosphorIcons.money(PhosphorIconsStyle.fill)
-                            : PhosphorIcons.arrowClockwise(PhosphorIconsStyle.fill),
+                            : PhosphorIcons.handCoins(PhosphorIconsStyle.fill),
                         label: role == UserRole.hod ? 'Funds' : 'Top-ups',
                         selected: topupsSelected,
                         onTap: () => context.go('/topups'),

@@ -5,7 +5,6 @@ import type {
   Claim,
   Stage,
   TokenResponse,
-  VendorRef,
 } from './types';
 
 /** Backend base URL -- set VITE_API_BASE_URL in web-admin/.env. Falls back to production. */
@@ -144,9 +143,6 @@ export const api = {
   dispute: (id: number, comment: string) => post<Claim>(`/api/approvals/${id}/dispute`, { comment }),
   reject: (id: number, comment: string) => post<Claim>(`/api/approvals/${id}/reject`, { comment }),
   markPaid: (id: number, remarks?: string) => post<Claim>(`/api/admin/claims/${id}/mark-paid`, { remarks: remarks || null }),
-  resolveVendor: (id: number, body: { vendor_id?: number; create_new?: boolean }) =>
-    post<Claim>(`/api/approvals/${id}/resolve-vendor`, { vendor_id: body.vendor_id ?? null, create_new: !!body.create_new }),
-  vendors: () => request<VendorRef[]>('/api/vendors'),
 
   submitDraft: (id: number) => post<Claim>(`/api/claims/${id}/submit`),
   resubmit: (id: number) => post<Claim>(`/api/claims/${id}/resubmit`),

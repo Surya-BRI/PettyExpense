@@ -5,13 +5,16 @@ import 'package:phosphor_icons/phosphor_icons.dart';
 import 'package:intl/intl.dart';
 
 import '../../api/api_client.dart';
+import '../../api/enums.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency.dart';
 import '../../utils/money.dart';
-import '../../widgets/app_nav_drawer.dart';
+import '../../widgets/app_nav_drawer.dart' show AppNavDrawer, companyLabel;
 import '../../widgets/brand_app_bar.dart';
+import '../../widgets/region_filter_dropdown.dart';
 import '../../widgets/shimmer_box.dart';
+import '../authentication/auth_controller.dart';
 
 // 'submitted' (New) first, 'disputed' second, 'approved' (awaiting payment) last.
 const _statusSortPriority = {'submitted': 0, 'disputed': 1, 'approved': 2};
@@ -81,6 +84,7 @@ class ApprovalQueueScreen extends ConsumerStatefulWidget {
 
 class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
   late String _statusFilter;
+  String? _region; // null = all companies
 
   @override
   void initState() {
@@ -92,6 +96,12 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(approvalsQueueProvider(widget.stage));
+    final user = ref.watch(authControllerProvider).user;
+    final regions = regionFilterOptions(
+      user?.allowedRegions ?? const <String>[],
+      (async.asData?.value ?? const <ExpenseClaim>[]).map((c) => c.regionCode),
+      onlyAllowed: UserRoleX.fromJson(user?.role) != UserRole.admin,
+    );
 
     return Scaffold(
       drawer: const AppNavDrawer(),
@@ -100,22 +110,34 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _statusFilters
-                    .map(
-                      (s) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(_statusFilterLabels[s]!),
-                          selected: _statusFilter == s,
-                          onSelected: (_) => setState(() => _statusFilter = s),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _statusFilters
+                          .map(
+                            (s) => Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(_statusFilterLabels[s]!),
+                                selected: _statusFilter == s,
+                                onSelected: (_) => setState(() => _statusFilter = s),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ),
+                ),
+                if (regions.length > 1)
+                  RegionFilterDropdown(
+                    options: regions,
+                    selected: _region,
+                    onChanged: (code) => setState(() => _region = code),
+                  ),
+              ],
             ),
           ),
           Expanded(
@@ -129,16 +151,22 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
               ),
               data: (claims) {
                 final filtered = _sortedForQueue(
-                  _statusFilter == 'all' ? claims : claims.where((c) => c.status == _statusFilter).toList(),
+                  claims
+                      .where((c) => _statusFilter == 'all' || c.status == _statusFilter)
+                      .where((c) => regionFilterMatches(_region, regions, c.regionCode))
+                      .toList(),
                 );
                 if (filtered.isEmpty) {
+                  final statusWord = _statusFilter == 'all' ? '' : '${_statusFilterLabels[_statusFilter]!.toLowerCase()} ';
+                  final regionPart =
+                      regions.contains(_region) ? ' for ${companyLabel(_region!)}' : '';
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(32),
                       child: Text(
                         claims.isEmpty
                             ? 'Nothing waiting for your action.'
-                            : 'No ${_statusFilterLabels[_statusFilter]!.toLowerCase()} claims right now.',
+                            : 'No ${statusWord}claims$regionPart right now.',
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: AppColors.textSecondary),
                       ),

@@ -79,15 +79,7 @@ function Detail({ claim, user, onChanged }: { claim: Claim; user: AuthUser; onCh
   // Only fields that carry a value -- a grid of "-" rows is noise.
   const fields: { label: string; value: ReactNode; wide?: boolean }[] = [
     ...(isApprover(user) ? [{ label: 'Employee', value: claim.employee_name ?? `#${claim.employee_id}` }] : []),
-    {
-      label: 'Vendor',
-      value: (
-        <>
-          {vendorOf(claim)}
-          {claim.vendor_unmatched && <span className="flag" style={{ marginLeft: 8 }}>Not in vendor list</span>}
-        </>
-      ),
-    },
+    { label: 'Vendor', value: vendorOf(claim) },
     { label: 'Bill date', value: claim.bill_date },
     { label: 'Category', value: claim.category_name },
     { label: 'Claim type', value: claim.type === 'petty_cash' ? 'Petty cash' : 'Reimbursement' },
@@ -348,12 +340,10 @@ function Actions({ claim, user, onChanged }: { claim: Claim; user: AuthUser; onC
     claim.status === 'approved' &&
     claim.type !== 'petty_cash' &&
     (user.role === 'finance_manager' || user.role === 'admin');
-  const canResolveVendor =
-    pending && claim.vendor_unmatched && claim.current_stage === 'accountant' && (user.role === 'accountant' || user.role === 'admin');
   const isOwner = user.id === claim.employee_id;
   const needsJustification = claim.current_stage === 'accountant' && (claim.duplicate_flag || !!claim.duplicate_warning);
 
-  if (!myStage && !canPay && !canResolveVendor && !(isOwner && (claim.status === 'draft' || claim.status === 'disputed'))) {
+  if (!myStage && !canPay && !(isOwner && (claim.status === 'draft' || claim.status === 'disputed'))) {
     return null;
   }
 
@@ -381,7 +371,6 @@ function Actions({ claim, user, onChanged }: { claim: Claim; user: AuthUser; onC
   return (
     <Card title="Your action" subtitle={myStage ? `Waiting at the ${STAGE_LABELS[claim.current_stage!]} stage` : undefined}>
       <div className="stack" style={{ gap: 12 }}>
-        {canResolveVendor && <VendorResolver claim={claim} busy={busy} run={run} />}
         {(myStage || canPay) && (
           <label className="field">
             Comment
@@ -482,50 +471,5 @@ function Actions({ claim, user, onChanged }: { claim: Claim; user: AuthUser; onC
         />
       )}
     </Card>
-  );
-}
-
-function VendorResolver({
-  claim,
-  busy,
-  run,
-}: {
-  claim: Claim;
-  busy: boolean;
-  run: (done: string, fn: () => Promise<unknown>) => void;
-}) {
-  const vendors = useAsync(() => api.vendors(), []);
-  const [vendorId, setVendorId] = useState('');
-  return (
-    <div className="notice">
-      <div className="strong" style={{ marginBottom: 10 }}>
-        “{claim.vendor_name}” isn’t in the vendor list yet
-      </div>
-      <div className="row">
-        <select className="select" value={vendorId} onChange={(e) => setVendorId(e.target.value)} disabled={vendors.loading} aria-label="Existing vendor">
-          <option value="">{vendors.loading ? 'Loading vendors…' : 'Link to an existing vendor…'}</option>
-          {vendors.data?.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </select>
-        <button
-          className="btn btn-sm"
-          disabled={busy || !vendorId}
-          onClick={() => run('Vendor linked', () => api.resolveVendor(claim.id, { vendor_id: Number(vendorId) }))}
-        >
-          Link
-        </button>
-        <span className="muted small">or</span>
-        <button
-          className="btn btn-sm"
-          disabled={busy}
-          onClick={() => run('New vendor confirmed', () => api.resolveVendor(claim.id, { create_new: true }))}
-        >
-          Confirm as new vendor
-        </button>
-      </div>
-    </div>
   );
 }

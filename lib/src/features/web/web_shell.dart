@@ -73,7 +73,7 @@ class _Sidebar extends ConsumerWidget {
       if (role == UserRole.hod)
         _NavEntry(PhosphorIcons.money(), PhosphorIcons.money(PhosphorIconsStyle.fill), 'Funds', '/topups', matchPrefix: '/funds'),
       if (role == UserRole.accountant || role == UserRole.financeManager || role == UserRole.admin)
-        _NavEntry(PhosphorIcons.arrowClockwise(), PhosphorIcons.arrowClockwise(PhosphorIconsStyle.fill), 'Top-ups', '/topups'),
+        _NavEntry(PhosphorIcons.handCoins(), PhosphorIcons.handCoins(PhosphorIconsStyle.fill), 'Top-ups', '/topups'),
       if (role == UserRole.financeManager || role == UserRole.admin)
         _NavEntry(PhosphorIcons.wallet(), PhosphorIcons.wallet(PhosphorIconsStyle.fill), 'Payments', '/payments'),
       if (role == UserRole.admin) ...[

@@ -247,31 +247,6 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                   ),
                 ),
               ],
-              if (claim.vendorUnmatched && widget.stage == 'accountant') ...[
-                const SizedBox(height: 16),
-                if (awaitingThisStage)
-                  _VendorResolveCard(
-                    transactionId: widget.transactionId,
-                    rawVendorText: claim.vendorName ?? '',
-                    busy: _busy,
-                    onResolve: (vendorId, createNew) => _act(
-                      () => api.resolveVendor(widget.transactionId, vendorId: vendorId, createNew: createNew),
-                      leave: false,
-                    ),
-                  )
-                else
-                  Material(
-                    color: AppColors.warningSoft,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        'Unmatched vendor: "${claim.vendorName}" is not in the vendor list yet — '
-                        'the Accountant will confirm or link it.',
-                      ),
-                    ),
-                  ),
-              ],
               if (withEmployee) ...[
                 const SizedBox(height: 16),
                 Material(
@@ -415,92 +390,5 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
       return;
     }
     _act(action);
-  }
-}
-
-/// Lets whoever's holding the claim at its current stage either link the unmatched vendor
-/// text to an existing known vendor, or confirm it's genuinely new — closing the loop the
-/// plain warning banner used to leave dead-ended (see PETTY_CASH_PHASED_PLAN.md Phase 4).
-class _VendorResolveCard extends ConsumerStatefulWidget {
-  const _VendorResolveCard({
-    required this.transactionId,
-    required this.rawVendorText,
-    required this.busy,
-    required this.onResolve,
-  });
-
-  final int transactionId;
-  final String rawVendorText;
-  final bool busy;
-
-  /// (vendorId, createNew) -- exactly one of vendorId or createNew=true is meaningful per call.
-  final void Function(int? vendorId, bool createNew) onResolve;
-
-  @override
-  ConsumerState<_VendorResolveCard> createState() => _VendorResolveCardState();
-}
-
-class _VendorResolveCardState extends ConsumerState<_VendorResolveCard> {
-  late Future<List<VendorRef>> _vendorsFuture;
-  VendorRef? _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _vendorsFuture = ref.read(apiClientProvider).vendors();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.warningSoft,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Unmatched vendor: "${widget.rawVendorText}" is not in the vendor list.'),
-            const SizedBox(height: 10),
-            FutureBuilder<List<VendorRef>>(
-              future: _vendorsFuture,
-              builder: (context, snapshot) {
-                final vendors = snapshot.data ?? const <VendorRef>[];
-                return Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<VendorRef>(
-                        initialValue: _selected,
-                        isExpanded: true,
-                        hint: Text(snapshot.connectionState == ConnectionState.waiting ? 'Loading vendors…' : 'Link to existing vendor'),
-                        items: vendors
-                            .map((v) => DropdownMenuItem(value: v, child: Text(v.name, overflow: TextOverflow.ellipsis)))
-                            .toList(),
-                        onChanged: widget.busy ? null : (v) => setState(() => _selected = v),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: widget.busy || _selected == null
-                          ? null
-                          : () => widget.onResolve(_selected!.id, false),
-                      child: const Text('Link'),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton(
-                onPressed: widget.busy ? null : () => widget.onResolve(null, true),
-                child: Text('Confirm "${widget.rawVendorText}" as a new vendor'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

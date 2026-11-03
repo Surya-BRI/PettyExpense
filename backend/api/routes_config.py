@@ -51,12 +51,6 @@ class CategoryUpdateRequest(BaseModel):
     is_active: Optional[bool] = None
 
 
-class VendorRequest(BaseModel):
-    name: str
-    trn_number: Optional[str] = None
-    source: str = "manual"
-
-
 class HodAssignmentRequest(BaseModel):
     user_id: int
     department_id: int
@@ -140,26 +134,6 @@ def update_category(
 def delete_category(category_id: int, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
     try:
         config_service.delete_category(db, category_id)
-        return {"ok": True}
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-
-# -- Vendors --
-@router.get("/vendors")
-def list_vendors(user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
-    return config_service.list_vendors(db)
-
-
-@router.post("/vendors")
-def create_vendor(body: VendorRequest, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
-    return config_service.create_vendor(db, body.model_dump())
-
-
-@router.delete("/vendors/{vendor_id}")
-def delete_vendor(vendor_id: int, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
-    try:
-        config_service.delete_vendor(db, vendor_id)
         return {"ok": True}
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from auth.security import CurrentUser, get_current_user
-from database.models import ErpExpenseCategory, ErpExpenseRegionConfig, ErpExpenseVendor, get_db
+from database.models import ErpExpenseCategory, ErpExpenseRegionConfig, get_db
 from services import approval_service
 from services.currency import region_base_currency
 from services.exchange_rate_service import ExchangeRateError, lookup_rate
@@ -40,15 +40,6 @@ def list_active_categories(user: CurrentUser = Depends(get_current_user), db: Se
         }
         for c in categories
     ]
-
-
-@categories_router.get("/vendors")
-def list_active_vendors(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Read-only vendor list (any authenticated user) — used by the Accountant's unmatched-vendor
-    resolve action to pick an existing vendor to link to. Admin-only vendor CRUD stays in
-    routes_config.py; this is deliberately just a lookup, no create/edit/delete."""
-    vendors = db.query(ErpExpenseVendor).filter(ErpExpenseVendor.is_active == 1).order_by(ErpExpenseVendor.vendor_name).all()
-    return [{"id": v.vendor_id, "name": v.vendor_name} for v in vendors]
 
 
 class LineItemIn(BaseModel):

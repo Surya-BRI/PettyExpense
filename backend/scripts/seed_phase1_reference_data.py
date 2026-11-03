@@ -1,7 +1,7 @@
 """Idempotent seed data for Phase 1 (config) + Phase 2 (approval) demo gates.
 
 Called from main.py on_startup(): seed_reference_data() -- roles, departments, region
-config, categories, vendors, caches. HOD assignments are admin-managed by hand against
+config, categories, caches. HOD assignments are admin-managed by hand against
 real ERP users (see auth/security.py authenticate_user) rather than seeded here.
 """
 import json
@@ -15,7 +15,6 @@ from database.models import (
     ErpExpensePettyCashFund,
     ErpExpenseProjectCache,
     ErpExpenseRegionConfig,
-    ErpExpenseVendor,
     ErpMasterExpenseRole,
     SessionLocal,
 )
@@ -59,7 +58,6 @@ CATEGORIES = [
     ("Other", None, "IN"),
 ]
 
-VENDORS = ["Al Futtaim Fuel Station", "City Mart Supplies", "Tech Bazaar Electronics"]
 
 PROJECTS = [
     ("PRJ-1001", "Site Alpha", "OP-2201"),
@@ -170,14 +168,6 @@ def seed_reference_data() -> None:
                     is_active=1,
                 )
             )
-        db.commit()
-
-        # Vendors
-        existing_vendors = {v.vendor_name for v in db.query(ErpExpenseVendor).all()}
-        for name in VENDORS:
-            if name in existing_vendors:
-                continue
-            db.add(ErpExpenseVendor(vendor_name=name, source="manual", is_active=1))
         db.commit()
 
         # Project cache (replaces the old hardcoded routes_projects.py stub list)

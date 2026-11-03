@@ -83,6 +83,14 @@ def _department_stage_label(txn) -> Optional[str]:
     return resolve_stage_labels(txn).get(txn.current_stage)
 
 
+def _vendor_name(txn) -> str:
+    # Vendor is plain bill text; older rows may still carry a linked vendor record.
+    if getattr(txn, "vendor_raw_text", None):
+        return txn.vendor_raw_text
+    vendor = getattr(txn, "vendor", None)
+    return vendor.vendor_name if vendor else "Unknown vendor"
+
+
 def build_context(txn, comment: Optional[str] = None, approver=None) -> ClaimEmailContext:
     region = txn.region
     employee = txn.employee
@@ -106,7 +114,7 @@ def build_context(txn, comment: Optional[str] = None, approver=None) -> ClaimEma
         transaction_id=txn.transaction_id,
         employee_name=employee.display_name if employee else "-",
         employee_department=employee.department.department_name if employee and employee.department else None,
-        vendor_name=txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "Unknown vendor"),
+        vendor_name=_vendor_name(txn),
         amount=txn.amount,
         vat_amount=txn.vat_amount,
         total_amount=txn.total_amount,

@@ -769,14 +769,12 @@ class _AttentionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final open = claims.where((c) => kPendingStatuses.contains(c.status)).toList();
     final duplicates = open.where((c) => c.duplicateFlag).toList();
-    final unmatched = open.where((c) => c.vendorUnmatched).toList();
     final disputed = open.where((c) => c.status == 'disputed').toList();
     final drafts = claims.where((c) => c.status == 'draft').toList();
 
     final groups = role.isApprover
         ? [
             (PhosphorIcons.copy(), 'Possible duplicates', duplicates),
-            (PhosphorIcons.storefront(), 'Unmatched vendors', unmatched),
             (PhosphorIcons.arrowCounterClockwise(), 'Disputed, with the employee', disputed),
           ]
         : [

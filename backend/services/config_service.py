@@ -12,7 +12,6 @@ from database.models import (
     ErpExpenseHodAssignment,
     ErpExpenseMultiRegionUserRegion,
     ErpExpenseRegionConfig,
-    ErpExpenseVendor,
     ErpMasterExpenseRole,
 )
 from services.currency import default_base_currency, region_base_currency
@@ -53,16 +52,6 @@ def category_to_dict(c: ErpExpenseCategory) -> dict[str, Any]:
         "name_ar": c.category_name_ar,
         "owning_department_id": c.owning_department_id,
         "is_active": bool(c.is_active),
-    }
-
-
-def vendor_to_dict(v: ErpExpenseVendor) -> dict[str, Any]:
-    return {
-        "id": v.vendor_id,
-        "name": v.vendor_name,
-        "trn_number": v.trn_number,
-        "source": v.source,
-        "is_active": bool(v.is_active),
     }
 
 
@@ -342,29 +331,6 @@ class ConfigService:
         if not c:
             raise LookupError("Category not found")
         db.delete(c)
-        db.commit()
-
-    # -- Vendors --
-    def list_vendors(self, db: Session) -> list[dict[str, Any]]:
-        return [vendor_to_dict(v) for v in db.query(ErpExpenseVendor).all()]
-
-    def create_vendor(self, db: Session, body: dict[str, Any]) -> dict[str, Any]:
-        v = ErpExpenseVendor(
-            vendor_name=body["name"],
-            trn_number=body.get("trn_number"),
-            source=body.get("source", "manual"),
-            is_active=1,
-        )
-        db.add(v)
-        db.commit()
-        db.refresh(v)
-        return vendor_to_dict(v)
-
-    def delete_vendor(self, db: Session, vendor_id: int) -> None:
-        v = db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_id == vendor_id).first()
-        if not v:
-            raise LookupError("Vendor not found")
-        db.delete(v)
         db.commit()
 
     # -- HOD assignments (Phase 2) --

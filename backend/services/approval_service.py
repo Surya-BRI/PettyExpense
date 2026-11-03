@@ -491,7 +491,8 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
     db.commit()
     txn = _load_txn(db, transaction_id)
 
-    vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
+    from services.transaction_service import vendor_display_name
+    vendor_name = vendor_display_name(txn, "unknown vendor")
     from services import email_templates
 
     if action == "approve":
@@ -547,65 +548,6 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
     return transaction_to_dict(txn, include_history=True, db=db)
 
 
-def resolve_vendor(
-    db: Session,
-    user: CurrentUser,
-    transaction_id: int,
-    vendor_id: Optional[int] = None,
-    create_new: bool = False,
-) -> dict[str, Any]:
-    # Closes the loop left open by transaction_service._resolve_vendor no longer auto-creating
-    # on a miss: whoever's holding this claim at its current approval stage explicitly links it
-    # to an existing vendor or confirms it's genuinely new, instead of a flag nobody can act on.
-    from database.models import ErpExpenseVendor
-    from services.transaction_service import transaction_to_dict
-
-    txn = _load_txn(db, transaction_id)
-    if txn.status not in ACTIONABLE_STATUSES:
-        raise ValueError("Transaction is not awaiting approval")
-
-    _ensure_stage(db, txn)
-    stage = txn.current_stage
-    if not stage:
-        raise ValueError("No approval stage resolved for this transaction")
-
-    if not user.is_admin:
-        # Vendor matching is an Accountant decision per spec, not any current-stage approver's
-        # call -- an HOD sitting earlier in the sequence shouldn't be resolving this.
-        if stage != "accountant":
-            raise PermissionError("Only the Accountant stage (or an Admin) can resolve an unmatched vendor")
-        approvers = resolve_stage_approvers(db, txn, stage)
-        if user.id not in {a.user_id for a in approvers}:
-            raise PermissionError("You are not the approver for this stage")
-
-    if txn.vendor_id:
-        raise ValueError("Vendor is already resolved for this transaction")
-    if not txn.vendor_raw_text:
-        raise ValueError("No unmatched vendor text on this transaction")
-    if (vendor_id is None) == (not create_new):
-        raise ValueError("Pass exactly one of vendor_id or create_new=true")
-
-    if vendor_id is not None:
-        vendor = (
-            db.query(ErpExpenseVendor)
-            .filter(ErpExpenseVendor.vendor_id == vendor_id, ErpExpenseVendor.is_active == 1)
-            .first()
-        )
-        if not vendor:
-            raise LookupError("Vendor not found")
-    else:
-        vendor = ErpExpenseVendor(vendor_name=txn.vendor_raw_text, source="accountant_confirmed", is_active=1)
-        db.add(vendor)
-        db.flush()
-
-    txn.vendor_id = vendor.vendor_id
-    txn.vendor_raw_text = None
-    _history(db, txn.transaction_id, user.id, stage, "vendor_resolved", f"Linked to vendor #{vendor.vendor_id} ({vendor.vendor_name})")
-    db.commit()
-    txn = _load_txn(db, transaction_id)
-    return transaction_to_dict(txn, include_history=True, db=db)
-
-
 def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) -> dict[str, Any]:
     from services import notification_service
     from services.transaction_service import transaction_to_dict
@@ -634,7 +576,8 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
     txn = _load_txn(db, transaction_id)
 
     approvers = resolve_current_approvers(db, txn)
-    vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
+    from services.transaction_service import vendor_display_name
+    vendor_name = vendor_display_name(txn, "unknown vendor")
     # "resubmit" is a distinct type from "submission" -- reusing "submission" collided with the
     # (transactionId, type, userId, channel) idempotency key whenever the resubmit lands on the
     # same approver who received the original submission notification (e.g. a dispute at the
@@ -717,16 +660,11 @@ def bulk_approve(db: Session, user: CurrentUser, transaction_ids: list[int]) -> 
         if not user.is_admin and user.id not in {a.user_id for a in approvers}:
             skipped.append({"id": transaction_id, "reason": "not_your_stage"})
             continue
-        # Duplicate and unmatched-vendor review are Accountant-stage concerns (per spec) --
-        # an HOD or Finance Manager's bulk-approve isn't blocked by either; only the
-        # Accountant's is, forcing a manual look exactly where that judgment call belongs.
-        if txn.current_stage == "accountant":
-            if txn.duplicate_flag:
-                skipped.append({"id": transaction_id, "reason": "duplicate_flagged"})
-                continue
-            if not txn.vendor_id:
-                skipped.append({"id": transaction_id, "reason": "vendor_unresolved"})
-                continue
+        # Duplicate review is an Accountant-stage concern (per spec) -- an HOD or Finance
+        # Manager's bulk-approve isn't blocked by it; only the Accountant's is.
+        if txn.current_stage == "accountant" and txn.duplicate_flag:
+            skipped.append({"id": transaction_id, "reason": "duplicate_flagged"})
+            continue
         region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == txn.region_id).first()
         threshold = _matrix(region).get("bulk_approve_threshold")
         if threshold is not None and txn.amount > threshold:

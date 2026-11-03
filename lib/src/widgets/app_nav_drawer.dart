@@ -102,8 +102,8 @@ class AppNavDrawer extends ConsumerWidget {
         ),
       if (!kIsWeb && (isAccountant || isFinanceManager || isAdmin))
         _DrawerItem(
-          icon: PhosphorIcons.arrowClockwise(),
-          selectedIcon: PhosphorIcons.arrowClockwise(PhosphorIconsStyle.fill),
+          icon: PhosphorIcons.handCoins(),
+          selectedIcon: PhosphorIcons.handCoins(PhosphorIconsStyle.fill),
           accent: AppColors.success,
           label: 'Top-ups',
           selected: location == '/topups',

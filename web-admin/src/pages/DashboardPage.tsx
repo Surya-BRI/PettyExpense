@@ -367,7 +367,6 @@ function Attention({ claims, approver, onOpen }: { claims: Claim[]; approver: bo
   const groups: { label: string; items: Claim[] }[] = approver
     ? [
         { label: 'Possible duplicates', items: open.filter((c) => c.duplicate_flag) },
-        { label: 'Unmatched vendors', items: open.filter((c) => c.vendor_unmatched) },
         { label: 'Disputed, with employee', items: open.filter((c) => c.status === 'disputed') },
       ]
     : [

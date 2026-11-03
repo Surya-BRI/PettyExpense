@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from auth.security import CurrentUser
@@ -50,15 +50,22 @@ def _history(db: Session, transaction_id: int, actor_id: int, stage: str, action
     )
 
 
-def _resolve_vendor(db: Session, vendor_name: Optional[str]) -> Optional[ErpExpenseVendor]:
-    # Exact-match lookup only -- no auto-create on a miss. A miss (new vendor, or OCR/typo
-    # variance on a known one) is left unmatched and surfaced to the Accountant via
-    # vendor_raw_text / vendor_unmatched instead of silently fragmenting the vendor table
-    # with near-duplicate rows ("Uber" / "uber" / "Ubar").
+def _clean_vendor(vendor_name: Optional[str]) -> Optional[str]:
+    # The vendor is plain text from the bill: no matching against a vendor master.
     if not vendor_name or not vendor_name.strip():
         return None
-    vendor_name = vendor_name.strip()
-    return db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_name == vendor_name).first()
+    return vendor_name.strip()
+
+
+def vendor_display_name(txn: Optional[ErpExpenseTransaction], default: Optional[str] = None) -> Optional[str]:
+    """The bill's vendor text. Older rows may still carry a linked vendor instead."""
+    if txn is None:
+        return default
+    if txn.vendor_raw_text:
+        return txn.vendor_raw_text
+    if txn.vendor_id and txn.vendor:
+        return txn.vendor.vendor_name
+    return default
 
 
 def _replace_line_items(db: Session, txn: ErpExpenseTransaction, lines: list[dict[str, Any]]) -> None:
@@ -245,8 +252,7 @@ def transaction_to_dict(
         "category_id": txn.category_id,
         "category_name": txn.category.category_name if txn.category else None,
         "vendor_id": txn.vendor_id,
-        "vendor_name": txn.vendor.vendor_name if txn.vendor else txn.vendor_raw_text,
-        "vendor_unmatched": bool(txn.vendor_raw_text) and not txn.vendor_id,
+        "vendor_name": vendor_display_name(txn),
         "bill_date": txn.bill_date,
         "currency": txn.currency,
         "exchange_rate": txn.exchange_rate,
@@ -537,25 +543,29 @@ class TransactionService:
         # Scoped to the same employee: two different employees legitimately spending the same
         # amount at the same vendor on the same day (e.g. a common fixed-fare taxi route) is a
         # coincidence, not a duplicate -- only the same person resubmitting/reusing a bill is.
+        vendor_name = _clean_vendor(vendor_name)
         if vendor_name and amount is not None and bill_date and employee_id is not None:
-            vendor = db.query(ErpExpenseVendor).filter(ErpExpenseVendor.vendor_name == vendor_name).first()
-            if vendor:
-                q = db.query(ErpExpenseTransaction).filter(
-                    ErpExpenseTransaction.vendor_id == vendor.vendor_id,
-                    ErpExpenseTransaction.amount == amount,
-                    ErpExpenseTransaction.bill_date == bill_date,
-                    ErpExpenseTransaction.employee_id == employee_id,
-                    ErpExpenseTransaction.status != "rejected",
-                )
-                if exclude_transaction_id:
-                    q = q.filter(ErpExpenseTransaction.transaction_id != exclude_transaction_id)
-                hit_txn = q.first()
-                if hit_txn:
-                    return {
-                        "reason": "same_vendor_amount_date",
-                        "existing_claim_id": hit_txn.transaction_id,
-                        "message": "This employee already has another claim with the same vendor, amount, and date.",
-                    }
+            # Vendor is compared as text. Older rows linked to a vendor record match on its name.
+            legacy_vendor_ids = db.query(ErpExpenseVendor.vendor_id).filter(ErpExpenseVendor.vendor_name == vendor_name)
+            q = db.query(ErpExpenseTransaction).filter(
+                or_(
+                    ErpExpenseTransaction.vendor_raw_text == vendor_name,
+                    ErpExpenseTransaction.vendor_id.in_(legacy_vendor_ids),
+                ),
+                ErpExpenseTransaction.amount == amount,
+                ErpExpenseTransaction.bill_date == bill_date,
+                ErpExpenseTransaction.employee_id == employee_id,
+                ErpExpenseTransaction.status != "rejected",
+            )
+            if exclude_transaction_id:
+                q = q.filter(ErpExpenseTransaction.transaction_id != exclude_transaction_id)
+            hit_txn = q.first()
+            if hit_txn:
+                return {
+                    "reason": "same_vendor_amount_date",
+                    "existing_claim_id": hit_txn.transaction_id,
+                    "message": "This employee already has another claim with the same vendor, amount, and date.",
+                }
         return None
 
     def create_claim(
@@ -595,16 +605,14 @@ class TransactionService:
             raise ValueError("Unknown category_id")
         if submit:
             self._require_unique_submitted_bill_number(db, bill_number)
-        vendor_obj = _resolve_vendor(db, vendor)
-
         txn = ErpExpenseTransaction(
             type=type,
             employee_id=user.id,
             region_id=region.region_id,
             project_cache_id=project_id,
             category_id=category.category_id,
-            vendor_id=vendor_obj.vendor_id if vendor_obj else None,
-            vendor_raw_text=None if vendor_obj else (vendor.strip() if vendor and vendor.strip() else None),
+            vendor_id=None,
+            vendor_raw_text=_clean_vendor(vendor),
             bill_date=bill_date,
             currency=currency,
             amount=amount,
@@ -673,10 +681,9 @@ class TransactionService:
         old_currency = (txn.currency or "").strip().upper()
         old_region_id = txn.region_id
 
-        if "vendor" in updates and updates["vendor"]:
-            vendor_obj = _resolve_vendor(db, updates["vendor"])
-            txn.vendor_id = vendor_obj.vendor_id if vendor_obj else None
-            txn.vendor_raw_text = None if vendor_obj else updates["vendor"].strip()
+        if "vendor" in updates and _clean_vendor(updates["vendor"]):
+            txn.vendor_id = None
+            txn.vendor_raw_text = _clean_vendor(updates["vendor"])
         for field, attr in (
             ("amount", "amount"),
             ("vat_amount", "vat_amount"),
@@ -752,7 +759,7 @@ class TransactionService:
         txn.submitted_on = datetime.utcnow()
         # Re-check for duplicates at submission time — draft edits can change vendor/amount/date after the initial check, making it stale.
         duplicate = self._find_duplicate(
-            db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id,
+            db, vendor_display_name(txn), txn.amount, txn.bill_date, txn.transaction_id,
             employee_id=txn.employee_id, bill_number=txn.bill_number,
         )
         txn.duplicate_flag = 1 if duplicate else 0
@@ -836,7 +843,7 @@ class TransactionService:
             raise PermissionError("Not allowed")
         data = transaction_to_dict(txn, include_history=True, db=db)
         data["duplicate_warning"] = self._find_duplicate(
-            db, txn.vendor.vendor_name if txn.vendor else None, txn.amount, txn.bill_date, txn.transaction_id,
+            db, vendor_display_name(txn), txn.amount, txn.bill_date, txn.transaction_id,
             employee_id=txn.employee_id, bill_number=txn.bill_number,
         )
         return data
@@ -891,7 +898,7 @@ class TransactionService:
     def recent_activity(self, db: Session, limit: int = 50) -> list[dict[str, Any]]:
         """Newest-first feed of workflow events (submit, approve, dispute, reject, paid, ...)
         across all claims -- backs the web dashboard's activity panel. Draft/internal
-        bookkeeping (created, edited, vendor_resolved) is omitted."""
+        bookkeeping (created, edited, and the old vendor_resolved rows) is omitted."""
         from services.approval_service import INTERNAL_HISTORY_ACTIONS
 
         rows = (
@@ -922,7 +929,7 @@ class TransactionService:
                 "actor_id": r.actor_id,
                 "actor_name": actors.get(r.actor_id),
                 "employee_name": txn.employee.display_name if txn and txn.employee else None,
-                "vendor_name": (txn.vendor.vendor_name if txn.vendor else txn.vendor_raw_text) if txn else None,
+                "vendor_name": vendor_display_name(txn),
                 "currency": txn.currency if txn else None,
                 "total_amount": txn.total_amount if txn else None,
                 "region_code": txn.region.region_code if txn and txn.region else None,
@@ -963,7 +970,7 @@ class TransactionService:
         from services import approval_service, email_templates, notification_service
 
         approvers = approval_service.resolve_current_approvers(db, txn)
-        vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
+        vendor_name = vendor_display_name(txn, "unknown vendor")
         content = email_templates.submission_email(email_templates.build_context(txn))
         for approver in approvers:
             notification_service.send(
@@ -978,7 +985,7 @@ class TransactionService:
         from services import email_templates, notification_service
 
         employee = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == txn.employee_id).first()
-        vendor_name = txn.vendor.vendor_name if txn.vendor else (txn.vendor_raw_text or "unknown vendor")
+        vendor_name = vendor_display_name(txn, "unknown vendor")
         action_ar = {"paid": "دفع"}.get(action, action)  # only "paid" is used via this path today
         html = None
         body_en = f"Your claim {txn.transaction_id} was {action}. Remarks: {remarks or '-'}"

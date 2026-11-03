@@ -69,8 +69,7 @@ export function ApprovalsPage() {
                   <div className="grow">
                     <div className="title">
                       {vendorOf(c)}{' '}
-                      {c.duplicate_flag && <span className="flag">Duplicate?</span>}{' '}
-                      {c.vendor_unmatched && <span className="flag">New vendor</span>}
+                      {c.duplicate_flag && <span className="flag">Duplicate?</span>}
                     </div>
                     <div className="sub">
                       #{c.id} · {c.employee_name ?? `Employee #${c.employee_id}`} · {c.category_name ?? '-'} · bill {c.bill_date ?? '-'} · submitted{' '}

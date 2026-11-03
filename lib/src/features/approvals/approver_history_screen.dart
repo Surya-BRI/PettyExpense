@@ -5,11 +5,15 @@ import 'package:intl/intl.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
+import '../../api/enums.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency.dart';
 import '../../utils/money.dart';
+import '../../widgets/app_nav_drawer.dart' show companyLabel;
 import '../../widgets/brand_app_bar.dart';
+import '../../widgets/region_filter_dropdown.dart';
 import '../../widgets/shimmer_box.dart';
+import '../authentication/auth_controller.dart';
 
 final approverHistoryProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
   return ref.watch(apiClientProvider).approvalsHistory();
@@ -22,12 +26,22 @@ String _formatDate(String? raw) {
   return DateFormat('MMM d, yyyy · h:mm a').format(dt.toLocal());
 }
 
-class ApproverHistoryScreen extends ConsumerWidget {
+class ApproverHistoryScreen extends ConsumerStatefulWidget {
   const ApproverHistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ApproverHistoryScreen> createState() => _ApproverHistoryScreenState();
+}
+
+class _ApproverHistoryScreenState extends ConsumerState<ApproverHistoryScreen> {
+  String? _region; // null = all regions
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(approverHistoryProvider);
+    final user = ref.watch(authControllerProvider).user;
+    final allowed = user?.allowedRegions ?? const <String>[];
+    final coveredOnly = UserRoleX.fromJson(user?.role) != UserRole.admin;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -41,11 +55,44 @@ class ApproverHistoryScreen extends ConsumerWidget {
           ),
         ),
         data: (allItems) {
-          final items = allItems
+          final actions = allItems
               .where((item) =>
                   !const {'created', 'edited', 'vendor_resolved'}
                       .contains(item['my_action'] as String? ?? ''))
               .toList();
+          final regions = regionFilterOptions(
+            allowed,
+            actions.map((i) => i['region_code'] as String?),
+            onlyAllowed: coveredOnly,
+          );
+          final items = actions
+              .where((i) => regionFilterMatches(_region, regions, i['region_code'] as String?))
+              .toList();
+          final list = _buildList(context, items, filteredOut: actions.isNotEmpty);
+          if (regions.length < 2) return list;
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: RegionFilterDropdown(
+                    options: regions,
+                    selected: _region,
+                    onChanged: (code) => setState(() => _region = code),
+                  ),
+                ),
+              ),
+              Expanded(child: list),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// [filteredOut] = there are actions, just none in the selected region.
+  Widget _buildList(BuildContext context, List<Map<String, dynamic>> items, {required bool filteredOut}) {
           if (items.isEmpty) {
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(approverHistoryProvider),
@@ -71,8 +118,10 @@ class ApproverHistoryScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
-                          'No actions yet',
+                        Text(
+                          filteredOut && _region != null
+                              ? 'No actions for ${companyLabel(_region!)}'
+                              : 'No actions yet',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
@@ -226,9 +275,6 @@ class ApproverHistoryScreen extends ConsumerWidget {
               },
             ),
           );
-        },
-      ),
-    );
   }
 
   Color _actionColor(String action) {

@@ -52,7 +52,7 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
       if (_region != null && c.regionCode != _region) return false;
       if (_category != null && c.category != _category) return false;
       if (_type != null && c.type != _type) return false;
-      if (_flaggedOnly && !(c.duplicateFlag || c.vendorUnmatched)) return false;
+      if (_flaggedOnly && !c.duplicateFlag) return false;
       if (q.isEmpty) return true;
       return '${c.id}'.contains(q) ||
           c.vendor.toLowerCase().contains(q) ||
@@ -320,12 +320,6 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
               Tooltip(
                 message: 'Possible duplicate (same employee, vendor, amount and date)',
                 child: Icon(PhosphorIcons.copy(), size: 16, color: AppColors.orange),
-              ),
-            if (c.duplicateFlag && c.vendorUnmatched) const SizedBox(width: 6),
-            if (c.vendorUnmatched)
-              Tooltip(
-                message: 'Vendor not matched yet (Accountant resolves)',
-                child: Icon(PhosphorIcons.storefront(), size: 16, color: AppColors.orange),
               ),
             if (c.type == 'petty_cash') ...[
               const SizedBox(width: 6),
