@@ -10,6 +10,7 @@ from auth.security import CurrentUser, get_current_user, get_user_by_id, require
 from database.models import ErpExpenseRegionConfig, get_db
 from services.config_service import config_service, region_to_dict
 from services.fund_service import fund_service
+from services.region_scope import user_covers
 from services.storage import storage_service
 
 router = APIRouter(tags=["org"])
@@ -218,6 +219,46 @@ def admin_credit_fund(
 @router.get("/api/funds/mine")
 def my_funds(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     return fund_service.list_mine(db, _orm_user(db, user))
+
+
+@router.get("/api/funds/department-funds")
+def covered_department_funds(
+    region_id: int = Query(...),
+    user: CurrentUser = Depends(require_role("finance_manager")),
+    db: Session = Depends(get_db),
+):
+    """Read-only view of every department's pot in one company, for the Finance Manager
+    (Admin's /api/admin/department-funds without the editing). Only companies they cover --
+    the same rule that routes bills to their queue. Limits stay Admin's; top-ups stay
+    HOD request -> Accounts verify -> FM approve (BRI_DEPARTMENT_PETTY_CASH.md section 7.5)."""
+    if not user.is_admin and not user_covers(db, user.id, region_id):
+        raise HTTPException(status_code=403, detail="You don't cover this company")
+    try:
+        return fund_service.list_department_funds(db, region_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/api/approvals/{transaction_id}/funds")
+def bill_funds(
+    transaction_id: int,
+    user: CurrentUser = Depends(require_role("hod", "finance_manager")),
+    db: Session = Depends(get_db),
+):
+    """The petty-cash pots a bill is paid from (one per paying department) with this bill's
+    part in each. The Finance Manager sees every pot, to check the bill fits before final
+    approval (PETTY_CASH_PHASED_PLAN.md: limit check at the FM stage); an HOD sees only
+    their own department's pot. Empty for a reimbursement. Only for the bill's company."""
+    try:
+        region_id, rows = fund_service.bill_funds(db, transaction_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not user.is_admin and not user_covers(db, user.id, region_id):
+        raise HTTPException(status_code=403, detail="You don't cover this company")
+    if user.role == "hod":
+        mine = fund_service.my_fund_ids(db, _orm_user(db, user))
+        rows = [r for r in rows if r["fund"]["id"] in mine]
+    return rows
 
 
 @router.get("/api/funds/{fund_id}/replenishable-bills")

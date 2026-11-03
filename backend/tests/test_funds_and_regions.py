@@ -664,3 +664,72 @@ def test_dubai_rejects_individual_fund(db):
             db, region_id=dubai.region_id, owner_type="employee",
             opening_balance=1000, employee_id=employee.user_id,
         )
+
+
+def test_bill_funds_lists_each_paying_pot_with_its_part(db):
+    """A Sales bill with IT items draws on both pots; the parts add up to the bill."""
+    employee, _, _, _, uae, _, sales, _ = _setup(db)
+    _, _, food, it_kit, sales_fund, it_fund = _it_setup(db, uae, sales)
+    txn = _split_bill(db, employee, uae, food, it_kit, 300, 120, status="submitted")
+
+    region_id, rows = fund_service.bill_funds(db, txn.transaction_id)
+
+    assert region_id == uae.region_id
+    parts = {r["fund"]["department_name"]: r["bill_part"] for r in rows}
+    assert parts == {"Sales": 300, "IT": 120}
+    assert rows[0]["fund"]["department_name"] == "Sales"  # biggest share first
+    # While awaiting approval the bill is reserved in each pot, not spent.
+    by_name = {r["fund"]["department_name"]: r["fund"] for r in rows}
+    assert by_name["IT"]["spent"] == 0
+    assert by_name["IT"]["pending_bills"] == 120
+
+
+def test_bill_funds_converts_foreign_bill_to_pot_currency(db):
+    employee, _, _, _, uae, _, sales, _ = _setup(db)
+    _, _, food, it_kit, _, _ = _it_setup(db, uae, sales)
+    # 100 SAR of food + 50 SAR of IT kit at 0.98 AED per SAR.
+    txn = _split_bill(db, employee, uae, food, it_kit, 100, 50, currency="SAR", rate=0.98)
+
+    _, rows = fund_service.bill_funds(db, txn.transaction_id)
+
+    parts = {r["fund"]["department_name"]: r["bill_part"] for r in rows}
+    assert parts == {"Sales": 98, "IT": 49}
+
+
+def test_bill_funds_empty_for_reimbursement(db):
+    employee, _, _, _, uae, _, sales, _ = _setup(db)
+    cat = ErpExpenseCategory(category_name="Taxi")
+    db.add(cat)
+    db.commit()
+    fund_service.create(
+        db, region_id=uae.region_id, owner_type="department",
+        opening_balance=1000, department_id=sales.department_id,
+    )
+    txn = ErpExpenseTransaction(
+        employee_id=employee.user_id, region_id=uae.region_id, category_id=cat.category_id,
+        type="reimbursement", status="submitted", amount=80, total_amount=80, currency="AED",
+    )
+    db.add(txn)
+    db.commit()
+
+    assert fund_service.bill_funds(db, txn.transaction_id) == (uae.region_id, [])
+
+
+def test_bill_funds_unknown_claim(db):
+    _setup(db)
+    with pytest.raises(LookupError):
+        fund_service.bill_funds(db, 99999)
+
+
+def test_hod_sees_only_own_pot_of_a_shared_bill(db):
+    """The claim-page funds route filters bill_funds to the HOD's pots: IT HOD -> IT only."""
+    employee, _, _, _, uae, _, sales, _ = _setup(db)
+    _, it_hod, food, it_kit, sales_fund, it_fund = _it_setup(db, uae, sales)
+    txn = _split_bill(db, employee, uae, food, it_kit, 300, 120, status="submitted")
+
+    _, rows = fund_service.bill_funds(db, txn.transaction_id)
+    mine = fund_service.my_fund_ids(db, it_hod)
+    visible = [r for r in rows if r["fund"]["id"] in mine]
+
+    assert [r["fund"]["department_name"] for r in visible] == ["IT"]
+    assert visible[0]["bill_part"] == 120

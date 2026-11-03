@@ -533,6 +533,10 @@ class FundService:
         """Permission check only: which funds are this user's (no balances worked out)."""
         return {fid for (fid,) in self._my_funds_query(db, user).with_entities(ErpExpensePettyCashFund.fund_id)}
 
+    def my_fund_ids(self, db: Session, user: ErpAuthExpenseUsers) -> set[int]:
+        """The ids of the pots this user owns or whose department they belong to / are HOD of."""
+        return self._my_fund_ids(db, user)
+
     def list_mine(self, db: Session, user: ErpAuthExpenseUsers) -> list[dict[str, Any]]:
         funds = (
             self._my_funds_query(db, user)
@@ -625,6 +629,50 @@ class FundService:
             (f for f in funds if f.owner_type == "department" and f.department_id == user.department_id),
             None,
         )
+
+    def bill_funds(self, db: Session, transaction_id: int) -> tuple[Optional[int], list[dict[str, Any]]]:
+        """The petty-cash pots one bill is paid from, with this bill's part in each -- e.g. a
+        Sales employee's bill with IT items draws on the Sales pot and the IT pot. Same split
+        as the balances (_fund_portion), so the parts add up to what the pots are debited.
+        Returns (the bill's region_id, rows); rows are empty for a reimbursement.
+        Raises LookupError if the bill doesn't exist."""
+        txn = (
+            db.query(ErpExpenseTransaction)
+            .options(
+                joinedload(ErpExpenseTransaction.employee),
+                joinedload(ErpExpenseTransaction.category),
+                selectinload(ErpExpenseTransaction.line_items).joinedload(ErpExpenseLineItem.category),
+            )
+            .filter(ErpExpenseTransaction.transaction_id == transaction_id)
+            .first()
+        )
+        if txn is None:
+            raise LookupError("Claim not found")
+        if (txn.type or "").strip().lower() != "petty_cash" or not txn.region_id:
+            return txn.region_id, []
+        funds = (
+            db.query(ErpExpensePettyCashFund)
+            .options(
+                joinedload(ErpExpensePettyCashFund.region),
+                joinedload(ErpExpensePettyCashFund.department),
+                joinedload(ErpExpensePettyCashFund.employee),
+                joinedload(ErpExpensePettyCashFund.topups),
+            )
+            .filter(ErpExpensePettyCashFund.region_id == txn.region_id, ErpExpensePettyCashFund.is_active == 1)
+            .all()
+        )
+        individuals = _individual_employee_ids(db, txn.region_id)
+        rows = []
+        for fund in funds:
+            part = _fund_portion(fund, txn, individuals)
+            if part <= 0:
+                continue
+            # Figures include this bill: while it awaits approval it is already reserved
+            # against the pot (pending_bills), once approved it is in `spent`.
+            rows.append({"bill_part": round(part, 2), "fund": fund_to_dict(db, fund)})
+        # Biggest share first (usually the employee's own department).
+        rows.sort(key=lambda r: -r["bill_part"])
+        return txn.region_id, rows
 
     def list_department_funds(self, db: Session, region_id: int) -> list[dict[str, Any]]:
         """Departments + this company's pot. Two reads: department rows, then funds for
