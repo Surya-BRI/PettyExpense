@@ -8,6 +8,7 @@ import '../../api/api_client.dart';
 import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/app_nav_drawer.dart' show companyLabel;
 import '../../widgets/brand_app_bar.dart';
 import '../authentication/auth_controller.dart';
 
@@ -20,6 +21,7 @@ class AppNotification {
     required this.kind,
     required this.unread,
     this.route,
+    this.regionCode,
   });
 
   final int id;
@@ -29,6 +31,10 @@ class AppNotification {
   final String kind; // submitted | approved | rejected | paid | info
   final bool unread;
   final String? route;
+
+  /// Company the notification is about. A multi-company user is switched to it before the
+  /// notification opens, so the right menus and screens (e.g. KSA Advances) are there.
+  final String? regionCode;
 }
 
 const _titleByType = {
@@ -67,18 +73,24 @@ const _approverFacingTypes = {'submission', 'approval_pending', 'resubmit'};
 
 // Petty-cash top-up steps ('topup_verified_12') and low-fund alerts ('fund_low_3_0') carry
 // their id in the type, aren't tied to a claim, and open the Top-ups / Funds screen.
-bool _isFundType(String? type) => type != null && (type.startsWith('topup_') || type.startsWith('fund_low_'));
+// Employee advances (Professional Signs: 'pca_advance_paid_7', 'pca_reminder_4_0') open Advances.
+bool _isAdvanceType(String? type) => type != null && type.startsWith('pca_');
+bool _isFundType(String? type) =>
+    type != null && (type.startsWith('topup_') || type.startsWith('fund_low_') || _isAdvanceType(type));
 
 String _subjectOf(String message) => message.split('\n\n').first.trim();
 
 String _fundKind(String type) {
-  if (type.startsWith('topup_approved')) return 'approved';
-  if (type.startsWith('topup_rejected') || type.startsWith('topup_returned')) return 'rejected';
+  if (type.startsWith('topup_approved') || type.contains('_paid_')) return 'approved';
+  if (type.startsWith('topup_rejected') || type.startsWith('topup_returned') || type.contains('_rejected_')) {
+    return 'rejected';
+  }
   return 'info';
 }
 
 String? _routeFor(Map<String, dynamic> row, UserRole role) {
   final type = row['type'] as String?;
+  if (_isAdvanceType(type)) return '/advances';
   if (_isFundType(type)) return '/topups';
   final txnId = row['transaction_id'];
   if (txnId == null) return null;
@@ -108,6 +120,7 @@ final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(
         kind: _kindByType[type] ?? (_isFundType(type) ? _fundKind(type) : 'info'),
         unread: row['status'] != 'read',
         route: _routeFor(row, role),
+        regionCode: row['region_code'] as String?,
       );
     }).toList();
   },
@@ -119,6 +132,34 @@ final unreadNotificationCountProvider = FutureProvider.autoDispose<int>((
   final api = ref.watch(apiClientProvider);
   return api.unreadNotificationCount();
 });
+
+/// Marks the notification read, switches to its company when it belongs to another one the
+/// user covers (e.g. a KSA advance to pay while signed in under Dubai), then opens it.
+Future<void> openNotification(BuildContext context, WidgetRef ref, AppNotification n) async {
+  if (n.unread) {
+    await ref.read(apiClientProvider).markNotificationRead(n.id);
+    ref.invalidate(unreadNotificationCountProvider);
+  }
+  final route = n.route;
+  if (route == null || !context.mounted) return;
+  final user = ref.read(authControllerProvider).user;
+  final target = (n.regionCode ?? '').toUpperCase();
+  final current = (user?.regionCode ?? '').toUpperCase();
+  final canSwitch = (user?.allowedRegions ?? const <String>[]).any((c) => c.toUpperCase() == target);
+  if (target.isNotEmpty && target != current && canSwitch) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(SnackBar(content: Text('Switching to ${companyLabel(target)}…')));
+    try {
+      await ref.read(authControllerProvider.notifier).switchRegion(target);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text("Couldn't switch to ${companyLabel(target)}: $e")));
+      return;
+    }
+    messenger.hideCurrentSnackBar();
+    ref.invalidate(notificationsProvider);
+  }
+  if (context.mounted) context.push(route);
+}
 
 DateTime? _parseDate(String? raw) {
   if (raw == null || raw.isEmpty) return null;
@@ -228,15 +269,7 @@ class NotificationsScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(14),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    onTap: () async {
-                      if (n.unread) {
-                        await ref
-                            .read(apiClientProvider)
-                            .markNotificationRead(n.id);
-                        ref.invalidate(unreadNotificationCountProvider);
-                      }
-                      if (n.route != null) context.push(n.route!);
-                    },
+                    onTap: () => openNotification(context, ref, n),
                     child: Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(

@@ -2,6 +2,11 @@
 
 > Companion to [`PETTY_CASH_PHASED_PLAN.md`](PETTY_CASH_PHASED_PLAN.md). Scopes a React + TypeScript
 > web app for the Accountant and HOD approval roles, reusing the existing FastAPI backend as-is.
+>
+> **Update 2026-11-04:** this plan was built as [`web-admin/`](../../web-admin/README.md), not `webapp/`.
+> Vendor matching and vendor resolution were removed on 2026-11-02 (see [`CHANGELOG.md`](CHANGELOG.md)),
+> so the vendor items below are struck out. The current endpoint list is in the root `README.md`
+> ("API sketch"). Marking a claim paid now goes through `/api/payments`, for the FM and Admin only.
 
 ---
 
@@ -39,7 +44,7 @@ The Flutter app has **no dedicated accountant/hod feature folders**. Both roles 
 
 **Implication:** the new web app should follow the same pattern — one shared "approval queue" +
 "claim detail" UI, with role only changing which `stage` is queried and which actions are visible
-(e.g. accountant also gets "mark paid" / vendor resolution). Do not build two parallel UIs.
+(e.g. accountant also gets "mark paid" / ~~vendor resolution~~ — removed 2026-11-02). Do not build two parallel UIs.
 
 ---
 
@@ -76,7 +81,7 @@ Source: `backend/auth/security.py`
 | POST | `/{id}/approve` | |
 | POST | `/{id}/dispute` | |
 | POST | `/{id}/reject` | |
-| POST | `/{id}/resolve-vendor` | Vendor match resolution |
+| ~~POST~~ | ~~`/{id}/resolve-vendor`~~ | Removed 2026-11-02 |
 | POST | `/bulk-approve` | Batch approve |
 
 ### Admin — `routes_admin.py` (prefix `/api/admin`)
@@ -92,7 +97,7 @@ Mostly employee-facing (`POST /`, `GET /mine`, `PATCH /{id}`, `POST /{id}/submit
 OCR endpoints) — **not** accountant/HOD specific, not needed for this web app's first cut.
 
 ### Config — `routes_config.py` (prefix `/api/admin/config`, all `require_admin`)
-CRUD for `departments`, `regions`, `categories`, `vendors`, `hod-assignments`, `delegations`.
+CRUD for `departments`, `regions`, `categories`, `hod-assignments`, `delegations` (`vendors` removed 2026-11-02).
 Admin-only today; out of scope unless accountant/HOD need read access to these for filters.
 
 ### Notifications — `routes_notifications.py` (prefix `/api/notifications`)
@@ -165,7 +170,7 @@ webapp/                     # new React + TypeScript project (Vite)
 Pages (first cut):
 1. **Login** — shared, redirects by role (accountant → stage `accountant`, hod → stage `hod`)
 2. **Approval Queue** — list by stage/status, filters
-3. **Claim Detail** — approve / reject / dispute, vendor resolution; accountant additionally sees
+3. **Claim Detail** — approve / reject / dispute (~~vendor resolution~~ removed 2026-11-02); accountant additionally sees
    "mark paid"
 4. **Notifications** — list, unread count, mark read
 

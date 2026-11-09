@@ -64,6 +64,8 @@ local `ErpAuthExpenseUsers` row is created for them (role defaults to `employee`
 ERP role maps to something higher — see `ERP_ROLE_ID_TO_APP_ROLE` in `backend/auth/security.py`).
 Elevating someone to `hod`/`accountant`/`finance_manager`/`admin`, or assigning their
 department, is currently done by hand against that local row (no admin UI for it yet).
+The companies a person covers are set in the app (Admin → People); their home company is
+saved at login.
 
 ---
 
@@ -136,26 +138,43 @@ Camera / gallery need an emulator camera or a real device; gallery works with sa
 ```
 expense_app/
 ├── lib/src/
-│   ├── features/   # authentication, claims, finance, home, profile
+│   ├── features/   # admin (people, companies, funds, top-ups), approvals, authentication,
+│   │               # claims, home, notifications, payments, pca (employee advances), profile,
+│   │               # web (dashboard)
 │   ├── api/
 │   ├── routing/
+│   ├── widgets/
 │   └── theme/
 ├── backend/
-│   ├── api/          # routes_auth, routes_claims, routes_admin, routes_notifications, ...
-│   ├── services/     # claims, OCR, notifications, S3/local storage, email
+│   ├── api/          # routes_auth, routes_claims, routes_approvals, routes_payments, routes_org
+│   │                 # (regions, branding, users, funds, top-ups), routes_config, routes_admin, ...
+│   ├── services/     # transaction, approval, fund, payment, region_scope, currency/exchange_rate,
+│   │                 # department_split, OCR + llm_vision, notifications/email, storage
 │   ├── extraction/   # OCR-line → structured-field pipeline (candidates, scoring, validation, select)
 │   ├── auth/
 │   ├── database/
+│   ├── scripts/      # one-off schema/backfill/seed scripts
 │   ├── tests/        # pytest — see "Backend tests" below
 │   ├── main.py
 │   ├── .env.example
 │   └── requirements.txt
-├── assets/docs/       # schema.sql (legacy reference), OCR_ENGINE_EVALUATION.md, PETTY_CASH_PHASED_PLAN.md
+├── web-admin/         # React web admin (see web-admin/README.md)
+├── assets/docs/       # plans, findings and CHANGELOG.md — see "Docs" below
 ├── assets/ksa/, assets/dubai/  # real bill photos used by the OCR comparison harness
 └── EXPENSE_RECEIPT_APP_PLAN.md
 ```
 
-See [`assets/docs/PETTY_CASH_PHASED_PLAN.md`](assets/docs/PETTY_CASH_PHASED_PLAN.md) for the current, code-verified status of the petty-cash/multi-region rework — the schema, roles, and API surface below describe the original single-approver MVP and are simpler than what's actually running today.
+### Docs
+
+| Doc | What it is |
+|---|---|
+| [`assets/docs/CHANGELOG.md`](assets/docs/CHANGELOG.md) | What changed recently, for users and in code. Start here |
+| [`assets/docs/EXPENSE_FLOW_GAP_ANALYSIS_AND_PLAN.md`](assets/docs/EXPENSE_FLOW_GAP_ANALYSIS_AND_PLAN.md) | Plan and status for currency, region approvers, payments, top-ups and cross-department routing |
+| [`assets/docs/BRI_DEPARTMENT_PETTY_CASH.md`](assets/docs/BRI_DEPARTMENT_PETTY_CASH.md) | BRI department petty cash rules (limit, top-up, reimbursement) mapped to this app |
+| [`assets/docs/PS_EMPLOYEE_PCA_COMPARISON.md`](assets/docs/PS_EMPLOYEE_PCA_COMPARISON.md) | Professional Signs (KSA) employee advances compared with the app: gaps, build order and open questions |
+| [`assets/docs/PETTY_CASH_PHASED_PLAN.md`](assets/docs/PETTY_CASH_PHASED_PLAN.md) | Phase-by-phase status against the v1.2 spec |
+| [`assets/docs/APPROVAL_WORKFLOW_FINDINGS.md`](assets/docs/APPROVAL_WORKFLOW_FINDINGS.md) | Approval workflow findings and ERP-Dev query timing |
+| `assets/docs/*OCR*`, `AI_VISION_SCAN_FINDINGS.md` | OCR engine and vision-model evaluations |
 
 ---
 
@@ -179,13 +198,20 @@ Tables are created on ERP-Dev at backend startup (`create_all`, additive only �
 
 ## API sketch
 
-- Auth: `POST /api/auth/login`, `POST /api/auth/refresh`, `GET /api/auth/me`, `POST /api/auth/logout`
-- Claims (salesman): `POST /api/claims/ocr` (upload + OCR in one call), `POST /api/claims/ocr/upload` (store only), `POST /api/claims/receipts/{id}/ocr` (analyze a stored receipt), `POST /api/claims`, `GET /api/claims/mine`, `GET /api/claims/{id}`, `PATCH /api/claims/{id}`, `POST /api/claims/{id}/submit`, `POST /api/claims/{id}/resubmit`
-- Approvals (HOD / dept-HOD / Accountant / Finance Manager): `GET /api/approvals/queue`, `GET /api/approvals/{id}`, `POST /api/approvals/{id}/approve`, `POST /api/approvals/{id}/dispute`, `POST /api/approvals/{id}/reject`, `POST /api/approvals/bulk-approve` (backend-complete; **no Flutter UI calls this today** — every approval in the app goes through the individual endpoints above)
-- Admin: `GET /api/admin/claims`, `GET /api/admin/claims/{id}`, `POST /api/admin/claims/{id}/mark-paid`
-- Admin config: `GET/POST /api/admin/config/{departments,regions,categories,hod-assignments,delegations}`
-- Reference (any authenticated user, read-only): `GET /api/projects`, `GET /api/categories`. The vendor on a bill is plain text from the bill; there is no vendor matching or resolve step.
-- Receipt image: `GET /api/claims/receipts/{id}/image`
+Approvers only see bills for the companies they cover: their home company plus any companies Admin ticked for them (`services/region_scope.py`).
+
+- Auth: `POST /api/auth/login`, `POST /api/auth/switch-region`, `POST /api/auth/refresh`, `GET /api/auth/me`, `POST /api/auth/logout`
+- Claims (employee): `POST /api/claims/ocr` (upload + OCR in one call), `POST /api/claims/ocr/upload` (store only), `POST /api/claims/receipts/{id}/ocr` (analyze a stored receipt), `GET /api/claims/exchange-rate?from=&region_code=` (preview conversion), `POST /api/claims`, `GET /api/claims/mine`, `GET /api/claims/{id}`, `PATCH /api/claims/{id}`, `POST /api/claims/{id}/submit`, `POST /api/claims/{id}/resubmit`
+- Approvals (HOD / dept-HOD / Accountant / Finance Manager): `GET /api/approvals/queue`, `GET /api/approvals/history`, `GET /api/approvals/{id}`, `GET /api/approvals/{id}/funds` (the pots a petty-cash bill is paid from: all of them for the FM, only the HOD's own pot for an HOD), `POST /api/approvals/{id}/approve`, `POST /api/approvals/{id}/dispute`, `POST /api/approvals/{id}/reject`, `POST /api/approvals/bulk-approve` (backend-complete; **no Flutter UI calls this today**)
+- Payments (Finance Manager / Admin): `GET /api/payments?status=unpaid|paid&region_code=`, `POST /api/payments`, `POST /api/payments/batch`, `GET /api/payments/methods`
+- Funds: `GET /api/funds/mine`, `GET /api/funds/department-funds?region_id=` (FM, read-only, companies they cover), `GET /api/funds/{id}/replenishable-bills`, `POST /api/funds/{id}/topups`
+- Top-ups (HOD request → Accountant verify → FM approve with payment): `GET /api/topups`, `POST /api/topups/{id}/verify`, `POST /api/topups/{id}/return`, `POST /api/topups/{id}/approve`, `POST /api/topups/{id}/reject`
+- Employee advances (Professional Signs / companies with `pca_model: employee`): `GET/POST /api/pca/advances`, `GET /api/pca/summary?region_id=` (by department and by project, with employees), `GET /api/pca/staff?region_id=` (who an HOD/Admin can propose for), `GET /api/pca/advances/{fund_id}/replenishable-bills`, `POST /api/pca/advances/{fund_id}/topups`, `GET /api/pca/requests`, `GET /api/pca/requests/{id}`, `POST /api/pca/requests/{id}/{hod-approve|manager-approve|pay|reject}`, `GET /api/pca/payment-sources`
+- Regions and branding: `GET /api/regions`, `GET /api/branding/{region_code}`, `GET /api/branding/{region_code}/logo`
+- Admin: `GET /api/admin/claims`, `GET /api/admin/claims/{id}`, `GET /api/admin/activity`, `POST /api/admin/claims/{id}/mark-paid` (kept as a wrapper around payments), `GET /api/admin/users`, `GET /api/admin/users/{id}`, `PUT /api/admin/users/{id}/regions`, `GET/POST /api/admin/funds`, `PUT /api/admin/funds/{id}`, `POST /api/admin/funds/{id}/credit`, `GET /api/admin/department-funds`
+- Admin config: `GET/POST /api/admin/config/{departments,regions,categories,hod-assignments,delegations}`, `PUT /api/admin/config/regions/{id}`, `GET /api/admin/config/regions/{id}/approvers`, `POST /api/admin/config/regions/{id}/logo`, `PUT/DELETE /api/admin/config/categories/{id}`
+- Reference (any authenticated user, read-only): `GET /api/projects`, `GET /api/opportunities/search`, `GET /api/categories`. The vendor on a bill is plain text from the bill; there is no vendor matching or resolve step.
+- Receipt image: `GET /api/claims/receipts/{id}/image`, `GET /api/claims/receipts/{id}/pages/{page_no}/image`
 - Notifications: `GET /api/notifications`, `GET /api/notifications/unread-count`, `POST /api/notifications/{id}/read`, `POST /api/notifications/read-all` — backed by an `ErpExpenseNotification` table (email + in-app, per-user language for plain-text bodies, HTML email bodies are English-only, dedup'd per event); see [`assets/docs/PETTY_CASH_PHASED_PLAN.md`](assets/docs/PETTY_CASH_PHASED_PLAN.md) Phase 5 for what's still missing (push/FCM, preference UI)
 - Public (no auth): `GET /claims/{id}` — plain HTML fallback page the "View this claim" button in notification emails links to; shows no claim data, just confirms the id, since the link isn't scoped to the recipient
 
@@ -197,10 +223,12 @@ Tables are created on ERP-Dev at backend startup (`create_all`, additive only �
 cd backend
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt   # pulls in pytest (test-only, listed in requirements.txt)
-python -m pytest
+python -m pytest tests
 ```
 
-Covers the `extraction/` pipeline (normalization, candidate scoring, validation, field selection), duplicate detection, notification service, and known regression cases (e.g. ENOC receipts) — no DB or live OCR engine required, all pure-function/unit level.
+Pass `tests`: a bare `python -m pytest` in `backend/` also collects `test_one.py`, a scratch script that calls the live vision API.
+
+Covers the `extraction/` pipeline, duplicate detection and notifications. It also covers funds and regions, top-ups, currency and payments, cross-department routing, and dispute → resubmit, plus known OCR regression cases (e.g. ENOC receipts). No live ERP-Dev DB or OCR engine is required; workflow tests run against an in-memory SQLite database.
 
 ---
 
@@ -222,6 +250,7 @@ Status as of 2026-08-16: backend deployed and running; public HTTPS live and ver
 | Deploy loop | WinSCP upload of `backend/`'s `main.py`, `api/`, `services/`, `database/`, `auth/`, `config.py`, `requirements.txt`, `scripts/` (never `.venv`, `uploads/`, `.env`) → `pip install -r requirements.txt` if deps changed → `pm2 restart expensetracker-api` |
 
 **Open items:**
+
 - [x] DNS A record + certbot SSL — done. Public HTTPS live and verified.
 - [x] Commit + push this session's local changes — done (`6409e0c` on `main`).
 - [ ] Confirm `pm2 save` actually completed for `expensetracker-api` (id `75`) — needed so it survives a server reboot; a `pm2 restart 75` was confirmed, but `pm2 save`'s own success output hasn't been.

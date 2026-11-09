@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
@@ -10,6 +11,7 @@ import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/pca_fund_figures.dart';
 import '../../widgets/region_branding.dart';
+import '../pca/advances_screen.dart' show PcaDepartmentsView, PcaRequestsView;
 import 'admin_providers.dart';
 import 'admin_regions_screen.dart';
 import 'limit_amount_sheet.dart';
@@ -148,6 +150,13 @@ class _CompanyWorkspaceState extends ConsumerState<_CompanyWorkspace> with Singl
         title: title,
         automaticallyImplyLeading: true,
         actions: [
+          // Admin approves / pays employee advances and top-ups on the Advances screen.
+          if (region.usesEmployeeAdvances)
+            IconButton(
+              tooltip: 'Advance requests',
+              onPressed: () => context.push('/advances'),
+              icon: Icon(PhosphorIcons.handCoins()),
+            ),
           IconButton(
             tooltip: 'Company name and logo',
             onPressed: _editCompany,
@@ -165,27 +174,33 @@ class _CompanyWorkspaceState extends ConsumerState<_CompanyWorkspace> with Singl
               labelColor: AppColors.darkBlue,
               unselectedLabelColor: AppColors.textSecondary,
               indicatorColor: AppColors.orange,
-              tabs: const [
-                Tab(text: 'Departments'),
-                Tab(text: 'Top-ups'),
-                Tab(text: 'Approvers'),
-              ],
+              // Employee-advance company (Professional Signs): no department funding, so the
+              // first two tabs are each employee's petty cash and the top-up requests instead.
+              tabs: region.usesEmployeeAdvances
+                  ? const [Tab(text: 'Employees'), Tab(text: 'Requests'), Tab(text: 'Approvers')]
+                  : const [Tab(text: 'Departments'), Tab(text: 'Top-ups'), Tab(text: 'Approvers')],
             ),
           ),
           Expanded(
             child: TabBarView(
               controller: _tabs,
-              children: [
-                _DepartmentsTab(
-                  region: region,
-                  search: _search,
-                  onChanged: () => setState(() {}),
-                  onSetup: _setup,
-                  onChange: _change,
-                ),
-                _CompanyTopupsTab(regionId: region.id),
-                _ApproversTab(region: region),
-              ],
+              children: region.usesEmployeeAdvances
+                  ? [
+                      PcaDepartmentsView(regionId: region.id),
+                      const PcaRequestsView(),
+                      _ApproversTab(region: region),
+                    ]
+                  : [
+                      _DepartmentsTab(
+                        region: region,
+                        search: _search,
+                        onChanged: () => setState(() {}),
+                        onSetup: _setup,
+                        onChange: _change,
+                      ),
+                      _CompanyTopupsTab(regionId: region.id),
+                      _ApproversTab(region: region),
+                    ],
             ),
           ),
         ],
@@ -270,6 +285,8 @@ class _ApproversTab extends ConsumerWidget {
         List<Map<String, dynamic>> people(String role) => [
               for (final p in (roles[role] as List? ?? const [])) Map<String, dynamic>.from(p as Map),
             ];
+        // Professional Signs (employee advances) names and describes the steps its own way.
+        final ps = region.usesEmployeeAdvances;
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(_regionApproversProvider(region.id)),
           child: ListView(
@@ -279,7 +296,9 @@ class _ApproversTab extends ConsumerWidget {
               const SizedBox(height: 16),
               _ApproverSection(
                 title: '1. Department HOD',
-                subtitle: 'Approves bills from their own department. IT items on a Sales bill go to the IT HOD after Sales.',
+                subtitle: ps
+                    ? 'Sets each employee\'s petty cash amount, and approves their staff\'s bills and top-ups.'
+                    : 'Approves bills from their own department. IT items on a Sales bill go to the IT HOD after Sales.',
                 emptyText: 'No HOD for $company — those bills go to Admin.',
                 people: people('hod'),
                 company: company,
@@ -289,23 +308,31 @@ class _ApproversTab extends ConsumerWidget {
                   return dept == null || dept.isEmpty ? 'Approves department bills' : 'Approves $dept bills';
                 },
               ),
+              // Professional Signs has no Accountant step: Employee -> HOD -> Accounts Manager.
+              if (!ps) ...[
+                const SizedBox(height: 16),
+                _ApproverSection(
+                  title: '2. Accountant',
+                  subtitle: 'Checks every bill for this company after the HODs.',
+                  emptyText: 'No Accountant for $company — those bills go to Admin.',
+                  people: people('accountant'),
+                  company: company,
+                  whatTheyApprove: (_) => 'Checks all $company bills',
+                ),
+              ],
               const SizedBox(height: 16),
               _ApproverSection(
-                title: '2. Accountant',
-                subtitle: 'Checks every bill for this company after the HODs.',
-                emptyText: 'No Accountant for $company — those bills go to Admin.',
-                people: people('accountant'),
-                company: company,
-                whatTheyApprove: (_) => 'Checks all $company bills',
-              ),
-              const SizedBox(height: 16),
-              _ApproverSection(
-                title: '3. Finance Manager',
-                subtitle: 'Final approval. Petty cash is deducted here. Reimbursements then wait for payment.',
-                emptyText: 'No Finance Manager for $company — those bills go to Admin.',
+                title: ps ? '2. Accounts Manager (Finance Manager role)' : '3. Finance Manager',
+                subtitle: ps
+                    ? 'Final approval of bills (records the EJV / EJVB), verifies and pays top-ups, '
+                        'and pays reimbursements.'
+                    : 'Final approval. Petty cash is deducted here. Reimbursements then wait for payment.',
+                emptyText: ps
+                    ? 'No Accounts Manager for $company — those bills go to Admin.'
+                    : 'No Finance Manager for $company — those bills go to Admin.',
                 people: people('finance_manager'),
                 company: company,
-                whatTheyApprove: (_) => 'Final approval for $company',
+                whatTheyApprove: (_) => ps ? 'Accounts Manager for $company' : 'Final approval for $company',
               ),
             ],
           ),

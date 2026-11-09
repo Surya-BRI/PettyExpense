@@ -27,21 +27,31 @@ const kPaymentMethods = <String, String>{
   return (claim.totalAmount ?? (claim.amount + claim.vatAmount), claim.currency);
 }
 
+/// Professional Signs (PCA PDF section 7): how an approved bill was paid.
+const kPaymentProcesses = <String, (String, String)>{
+  'bank': ('Process 1 · Cash withdrawal from bank', 'Cash withdrawn from the bank and paid out'),
+  'accounts_petty_cash': ('Process 2 · Direct payment by Accounts', 'Paid directly by the Accounts Department'),
+};
+
 /// Opens the "Record payment" sheet; true once the payment is saved.
-Future<bool> showRecordPaymentSheet(BuildContext context, ExpenseClaim claim) async {
+Future<bool> showRecordPaymentSheet(BuildContext context, ExpenseClaim claim) =>
+    showRecordPaymentsSheet(context, [claim]);
+
+/// One payment for several approved bills (same process/method, reference and date).
+Future<bool> showRecordPaymentsSheet(BuildContext context, List<ExpenseClaim> claims) async {
   final saved = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => _RecordPaymentSheet(claim: claim),
+    builder: (_) => _RecordPaymentSheet(claims: claims),
   );
   return saved ?? false;
 }
 
 class _RecordPaymentSheet extends ConsumerStatefulWidget {
-  const _RecordPaymentSheet({required this.claim});
+  const _RecordPaymentSheet({required this.claims});
 
-  final ExpenseClaim claim;
+  final List<ExpenseClaim> claims;
 
   @override
   ConsumerState<_RecordPaymentSheet> createState() => _RecordPaymentSheetState();
@@ -51,6 +61,9 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
   final _reference = TextEditingController();
   final _remarks = TextEditingController();
   String _method = 'bank_transfer';
+  String _process = 'bank';
+
+  bool get _byProcess => widget.claims.any((c) => c.paysByProcess);
   DateTime _date = DateUtils.dateOnly(DateTime.now());
   bool _busy = false;
   String? _error;
@@ -83,13 +96,35 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
       _error = null;
     });
     try {
-      await ref.read(apiClientProvider).recordPayment(
-            claimId: widget.claim.id,
-            method: _method,
-            reference: reference,
-            paymentDate: DateFormat('yyyy-MM-dd').format(_date),
-            remarks: _remarks.text.trim().isEmpty ? null : _remarks.text.trim(),
+      final api = ref.read(apiClientProvider);
+      final date = DateFormat('yyyy-MM-dd').format(_date);
+      final remarks = _remarks.text.trim().isEmpty ? null : _remarks.text.trim();
+      final method = _byProcess ? null : _method;
+      final source = _byProcess ? _process : null;
+      if (widget.claims.length == 1) {
+        await api.recordPayment(
+          claimId: widget.claims.single.id,
+          method: method,
+          source: source,
+          reference: reference,
+          paymentDate: date,
+          remarks: remarks,
+        );
+      } else {
+        final out = await api.recordPaymentBatch(
+          claimIds: [for (final c in widget.claims) c.id],
+          method: method,
+          source: source,
+          reference: reference,
+          paymentDate: date,
+          remarks: remarks,
+        );
+        if (out.skipped.isNotEmpty && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${out.paid} paid. Not paid: ${out.skipped.join('; ')}')),
           );
+        }
+      }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -100,37 +135,65 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final (amount, currency) = payableFor(widget.claim);
+    final claims = widget.claims;
+    final currency = payableFor(claims.first).$2;
+    final amount = claims.fold(0.0, (sum, c) => sum + payableFor(c).$1);
+    final first = claims.first;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text('Record payment', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'Claim #${widget.claim.id} · ${widget.claim.employeeDisplay}',
+            claims.length == 1
+                ? 'Claim #${first.id} · ${first.employeeDisplay}'
+                    '${first.type == 'petty_cash' && first.paysByProcess ? ' · petty cash (refills their PCA)' : ''}'
+                : '${claims.length} bills · one payment',
             style: const TextStyle(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 16),
           MoneyBreakdownRow('Amount to pay', formatMoney(currency, amount), emphasize: true),
           const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: _method,
-            decoration: const InputDecoration(labelText: 'Payment method'),
-            items: [
-              for (final e in kPaymentMethods.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
-            ],
-            onChanged: _busy ? null : (v) => setState(() => _method = v ?? _method),
-          ),
+          if (_byProcess) ...[
+            const Text('How was it paid?', style: TextStyle(fontWeight: FontWeight.w700)),
+            RadioGroup<String>(
+              groupValue: _process,
+              onChanged: (v) => setState(() => _process = v ?? _process),
+              child: Column(
+                children: [
+                  for (final e in kPaymentProcesses.entries)
+                    RadioListTile<String>(
+                      value: e.key,
+                      enabled: !_busy,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(e.value.$1, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(e.value.$2),
+                    ),
+                ],
+              ),
+            ),
+          ] else
+            DropdownButtonFormField<String>(
+              initialValue: _method,
+              decoration: const InputDecoration(labelText: 'Payment method'),
+              items: [
+                for (final e in kPaymentMethods.entries) DropdownMenuItem(value: e.key, child: Text(e.value)),
+              ],
+              onChanged: _busy ? null : (v) => setState(() => _method = v ?? _method),
+            ),
           const SizedBox(height: 12),
           TextField(
             controller: _reference,
             enabled: !_busy,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: 'Payment reference *',
-              hintText: 'Transfer no., cheque no., payroll batch…',
+              hintText: _byProcess
+                  ? (_process == 'bank' ? 'Bank withdrawal no.' : 'Payment voucher / transfer no.')
+                  : 'Transfer no., cheque no., payroll batch…',
             ),
           ),
           const SizedBox(height: 12),
@@ -162,9 +225,10 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
               minimumSize: const Size.fromHeight(48),
             ),
             icon: Icon(PhosphorIcons.checkCircle(), size: 20),
-            label: const Text('Mark as paid'),
+            label: Text(claims.length == 1 ? 'Mark as paid' : 'Mark ${claims.length} as paid'),
           ),
         ],
+        ),
       ),
     );
   }

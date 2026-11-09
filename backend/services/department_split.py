@@ -39,8 +39,18 @@ def _own_department_id(txn: ErpExpenseTransaction) -> Optional[int]:
     return txn.employee.department_id if txn.employee else None
 
 
+def splits(txn: ErpExpenseTransaction) -> bool:
+    """False for a company where the whole bill stays with the employee (Professional
+    Signs: the employee's own HOD approves it and it all comes off their advance)."""
+    from services.region_policy import splits_by_department
+
+    return splits_by_department(getattr(txn, "region", None))
+
+
 def cross_department_ids(txn: ErpExpenseTransaction) -> list[int]:
     """Departments other than the employee's own that own part of this bill, in line order."""
+    if not splits(txn):
+        return []
     own = _own_department_id(txn)
     categories = [li.category or txn.category for li in txn.line_items] if txn.line_items else [txn.category]
     out: list[int] = []
@@ -57,6 +67,8 @@ def department_shares(txn: ErpExpenseTransaction) -> dict[Optional[int], float]:
     shares always add up to the bill total."""
     own = _own_department_id(txn)
     total = float(txn.total_amount or ((txn.amount or 0) + (txn.vat_amount or 0)))
+    if not splits(txn):
+        return {None: total}
     if not txn.line_items:
         return {_other_department(txn.category, own): total}
     raw: dict[Optional[int], float] = {}

@@ -23,23 +23,6 @@ class ProfileScreen extends ConsumerWidget {
     return ('${parts[0][0]}${parts[1][0]}').toUpperCase();
   }
 
-  String _roleLabel(String? role) {
-    switch ((role ?? '').toLowerCase()) {
-      case 'finance_manager':
-        return 'Finance Manager';
-      case 'accountant':
-        return 'Accountant';
-      case 'hod':
-        return 'Head of Department';
-      case 'admin':
-        return 'Admin';
-      case 'employee':
-        return 'Employee';
-      default:
-        return role?.isNotEmpty == true ? role! : '';
-    }
-  }
-
 
   static const _sectionLabelStyle = TextStyle(
     color: AppColors.textSecondary,
@@ -58,7 +41,8 @@ class ProfileScreen extends ConsumerWidget {
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    final role = _roleLabel(user.role);
+    // "Accounts Manager" when signed in under Professional Signs (KSA).
+    final role = user.roleLabel;
     final branding = user?.regionCode == null
         ? null
         : ref.watch(regionBrandingProvider(user!.regionCode!)).valueOrNull;

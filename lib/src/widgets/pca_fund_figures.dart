@@ -58,18 +58,23 @@ class _HeroAvailable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Employee advance with a hard limit (Professional Signs: 50%): lead with what can still
+    // be used until the approved bills are paid (which refills it), not the whole balance.
+    final limit = fund.spendLimit;
+    final canUse = fund.uncommitted < 0 ? 0.0 : fund.uncommitted;
+    final blocked = limit != null && canUse <= 0.004;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.symmetric(horizontal: 14, vertical: compact ? 10 : 14),
       decoration: BoxDecoration(
-        color: AppColors.lightBlue,
+        color: blocked ? AppColors.warningSoft : AppColors.lightBlue,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Available',
+            limit != null ? 'Can use now' : 'Available',
             style: TextStyle(
               color: AppColors.darkBlue,
               fontWeight: FontWeight.w700,
@@ -79,7 +84,7 @@ class _HeroAvailable extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            formatMoney(fund.currency, fund.available),
+            formatMoney(fund.currency, limit != null ? canUse : fund.available),
             style: TextStyle(
               color: AppColors.darkBlue,
               fontWeight: FontWeight.w800,
@@ -87,6 +92,19 @@ class _HeroAvailable extends StatelessWidget {
               height: 1.15,
             ),
           ),
+          if (limit != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              blocked
+                  ? 'Limit reached: you can use more once Accounts pays your approved bills.'
+                  : 'Up to ${formatMoney(fund.currency, limit)} of bills until they are paid',
+              style: TextStyle(
+                fontSize: compact ? 11.5 : 12,
+                color: blocked ? AppColors.orange : AppColors.textSecondary,
+                fontWeight: blocked ? FontWeight.w700 : FontWeight.w400,
+              ),
+            ),
+          ],
         ],
       ),
     );

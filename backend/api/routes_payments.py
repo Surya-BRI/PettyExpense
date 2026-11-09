@@ -10,23 +10,29 @@ from services.payment_service import PAYMENT_METHOD_LABELS, payment_service
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
-require_payer = require_role("finance_manager")
+# Who pays is per company (region_policy.payer_roles): the Finance Manager by default, and at
+# Professional Signs the Accounts Department (accountant) too. The service checks the company.
+require_payer = require_role("finance_manager", "accountant")
 
 
 class PaymentRequest(BaseModel):
     transaction_id: int
-    payment_method: str  # bank_transfer | cash | payroll | cheque
+    payment_method: Optional[str] = None  # bank_transfer | cash | payroll | cheque (required outside KSA)
     payment_reference: str
     payment_date: Optional[str] = None  # YYYY-MM-DD, defaults to today
     remarks: Optional[str] = None
+    # Professional Signs (PDF section 7), required there: bank (Process 1, cash withdrawal from
+    # bank) | accounts_petty_cash (Process 2, direct payment by the Accounts Department).
+    payment_source: Optional[str] = None
 
 
 class BatchPaymentRequest(BaseModel):
     transaction_ids: list[int]
-    payment_method: str
+    payment_method: Optional[str] = None
     payment_reference: str
     payment_date: Optional[str] = None
     remarks: Optional[str] = None
+    payment_source: Optional[str] = None
 
 
 def _errors(fn):
@@ -71,6 +77,7 @@ def record_payment(body: PaymentRequest, user: CurrentUser = Depends(require_pay
             payment_reference=body.payment_reference,
             payment_date=body.payment_date,
             remarks=body.remarks,
+            payment_source=body.payment_source,
         )
     )
 
@@ -85,5 +92,6 @@ def record_batch(body: BatchPaymentRequest, user: CurrentUser = Depends(require_
             payment_reference=body.payment_reference,
             payment_date=body.payment_date,
             remarks=body.remarks,
+            payment_source=body.payment_source,
         )
     )

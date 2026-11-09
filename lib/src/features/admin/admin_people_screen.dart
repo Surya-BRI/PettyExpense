@@ -460,7 +460,7 @@ class _PersonCard extends StatelessWidget {
         ((user.homeRegionCode ?? '').isNotEmpty &&
             user.regionCodes.any((c) => c.toUpperCase() != (user.homeRegionCode ?? '').toUpperCase()));
     final subtitle = [
-      if (user.hasAppLogin) _roleLabel(user.role),
+      if (user.hasAppLogin) _roleLabel(user.role, user.homeRegionCode),
       user.departmentName ?? '',
     ].where((s) => s.isNotEmpty).join(' · ');
     return Material(
@@ -656,10 +656,10 @@ class _AdminPersonScreenState extends ConsumerState<AdminPersonScreen> {
                         rows: [
                           ClaimDetailRow(
                             label: 'Role',
-                            value: _roleLabel(user.role).isNotEmpty ? _roleLabel(user.role) : '—',
+                            value: _roleLabel(user.role, user.homeRegionCode).isNotEmpty ? _roleLabel(user.role, user.homeRegionCode) : '—',
                           ),
                           if ((user.erpRole ?? '').trim().isNotEmpty &&
-                              (user.erpRole ?? '').trim().toLowerCase() != _roleLabel(user.role).toLowerCase())
+                              (user.erpRole ?? '').trim().toLowerCase() != _roleLabel(user.role, user.homeRegionCode).toLowerCase())
                             ClaimDetailRow(label: 'ERP role', value: user.erpRole!.trim()),
                           ClaimDetailRow(
                             label: 'Department',
@@ -763,7 +763,7 @@ class _PersonHeader extends StatelessWidget {
                   Text(user.displayName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
                   const SizedBox(height: 4),
                   Text(
-                    _roleLabel(user.role).isNotEmpty ? _roleLabel(user.role) : (user.hasAppLogin ? 'Signed in' : 'ERP employee'),
+                    _roleLabel(user.role, user.homeRegionCode).isNotEmpty ? _roleLabel(user.role, user.homeRegionCode) : (user.hasAppLogin ? 'Signed in' : 'ERP employee'),
                     style: const TextStyle(color: AppColors.darkBlue, fontWeight: FontWeight.w700, fontSize: 13),
                   ),
                   if ((user.departmentName ?? '').isNotEmpty) ...[
@@ -818,19 +818,11 @@ String _initials(String name) {
   return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
 }
 
-String _roleLabel(String? role) {
-  switch ((role ?? '').toLowerCase()) {
-    case 'finance_manager':
-      return 'Finance Manager';
-    case 'accountant':
-      return 'Accountant';
-    case 'hod':
-      return 'Head of Department';
-    case 'admin':
-      return 'Admin';
-    case 'employee':
-      return 'Employee';
-    default:
-      return role ?? '';
-  }
-}
+/// Companies on the employee-advance model, where the Finance Manager is the "Accounts
+/// Manager" (mirrors backend seed EMPLOYEE_PCA_REGIONS).
+const _employeeAdvanceCompanies = {'KSA'};
+
+String _roleLabel(String? role, [String? homeRegion]) => roleLabelFor(
+      role,
+      employeeAdvances: _employeeAdvanceCompanies.contains((homeRegion ?? '').toUpperCase()),
+    );

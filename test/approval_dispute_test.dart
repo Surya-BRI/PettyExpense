@@ -55,7 +55,12 @@ class _FakeApi extends ApiClient {
   }
 
   @override
-  Future<ExpenseClaim> approveTransaction(int id, {String? comment}) async {
+  Future<ExpenseClaim> approveTransaction(
+    int id, {
+    String? comment,
+    String? journalType,
+    String? journalReference,
+  }) async {
     calls.add('approve');
     return _claim(status);
   }

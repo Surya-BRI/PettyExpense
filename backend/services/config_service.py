@@ -15,6 +15,7 @@ from database.models import (
     ErpMasterExpenseRole,
 )
 from services.currency import default_base_currency, region_base_currency
+from services.region_policy import pca_model
 from services.region_scope import covers_region
 
 
@@ -34,6 +35,8 @@ def region_to_dict(r: ErpExpenseRegionConfig) -> dict[str, Any]:
         "logo_url": r.logo_url,
         "brand_color": r.brand_color,
         "base_currency": region_base_currency(r),
+        # 'employee' = per-employee, per-project advances (Professional Signs); else 'department'.
+        "pca_model": pca_model(r),
         "is_active": bool(r.is_active),
     }
 

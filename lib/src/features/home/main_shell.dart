@@ -46,7 +46,9 @@ class MainShell extends ConsumerWidget {
     final peopleSelected = location == '/admin/people' || location.startsWith('/admin/people/');
     final showApproverTopups =
         role == UserRole.hod || role == UserRole.financeManager || role == UserRole.accountant;
-    final topupsSelected = location == '/topups' || location == '/funds';
+    // Professional Signs: the money tab is employee advances, not department top-ups.
+    final employeeAdvances = user?.usesEmployeeAdvances ?? false;
+    final topupsSelected = location == '/topups' || location == '/funds' || location == '/advances';
     final claimsSelected =
         location == '/claims' ||
         location == '/all-claims' ||
@@ -157,9 +159,13 @@ class MainShell extends ConsumerWidget {
                         selectedIcon: role == UserRole.hod
                             ? PhosphorIcons.money(PhosphorIconsStyle.fill)
                             : PhosphorIcons.handCoins(PhosphorIconsStyle.fill),
-                        label: role == UserRole.hod ? 'Funds' : 'Top-ups',
+                        label: employeeAdvances
+                            ? 'Advances'
+                            : role == UserRole.hod
+                                ? 'Funds'
+                                : 'Top-ups',
                         selected: topupsSelected,
-                        onTap: () => context.go('/topups'),
+                        onTap: () => context.go(employeeAdvances ? '/advances' : '/topups'),
                       ),
                     ),
                   Expanded(

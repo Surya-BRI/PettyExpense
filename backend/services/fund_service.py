@@ -27,6 +27,8 @@ from database.models import (
 from services.currency import default_base_currency, region_base_currency
 from services.department_split import department_shares
 from services.notification_service import send
+from services.opportunity_lookup import normalize_op
+from services.region_policy import is_employee_model, pca_reminder_ratio, pca_spend_limit_ratio
 from services.region_scope import user_covers, user_region_ids
 
 # A petty-cash bill comes off the fund at final Finance Manager approval (spec 5.3).
@@ -44,6 +46,8 @@ def base_currency_for_region(region_code: Optional[str]) -> str:
 def _fund_label(fund: ErpExpensePettyCashFund) -> str:
     if fund.owner_type == "employee":
         name = fund.employee.display_name if fund.employee else f"employee #{fund.employee_id}"
+        if is_employee_model(fund.region):
+            return f"{name} · advance"
         return f"{name} · individual"
     name = fund.department.department_name if fund.department else f"department #{fund.department_id}"
     return f"{name} · department"
@@ -93,13 +97,53 @@ def _individual_employee_ids(db: Session, region_id: int) -> set[int]:
     }
 
 
+def project_shares(row: ErpExpenseTransaction, fund_currency: Optional[str] = None) -> dict[Optional[str], float]:
+    """Bill total in the fund's currency split by project (OP code): each line goes to its own
+    OP code, else the claim's. Key None = no OP code. Rounded per share, with the remainder on
+    the largest so the shares add up to _tx_amount. Used for the project-wise report: in an
+    employee-advance company the advance covers all the employee's projects."""
+    total = _tx_amount(row, fund_currency)
+    claim_op = normalize_op(row.op_number)
+    if not row.line_items:
+        return {claim_op: total}
+    raw: dict[Optional[str], float] = {}
+    for li in row.line_items:
+        key = normalize_op(li.op_number) or claim_op
+        raw[key] = raw.get(key, 0.0) + float(li.amount or 0)
+    raw_total = sum(raw.values())
+    if len(raw) <= 1 or raw_total <= 0:
+        return {next(iter(raw), claim_op): total}
+    shares = {key: round(total * part / raw_total, 2) for key, part in raw.items()}
+    largest = max(shares, key=lambda k: shares[k])
+    shares[largest] = round(shares[largest] + total - sum(shares.values()), 2)
+    return shares
+
+
+def require_bill_projects(row: ErpExpenseTransaction) -> None:
+    """Employee-advance company: every bill names its project -- the claim's OP code, or an
+    OP code on each line that has none of the claim's."""
+    if None in project_shares(row):
+        raise ValueError("Enter the project OP code for this bill (or for each item)")
+
+
+def _department_pot_unused(fund: ErpExpensePettyCashFund) -> bool:
+    """In an employee-advance company (Professional Signs) bills only ever come off the
+    employee's own advance, so a department pot there (e.g. left from before the switch)
+    pays for nothing."""
+    return fund.owner_type == "department" and is_employee_model(fund.region)
+
+
 def _fund_portion(
     fund: ErpExpensePettyCashFund, row: ErpExpenseTransaction, individual_ids: set[int]
 ) -> float:
     """How much of this bill comes out of this fund."""
     shares = bill_shares(row, fund.currency)
     if fund.owner_type == "employee":
-        return shares.get(None, 0.0) if row.employee_id == fund.employee_id else 0.0
+        if row.employee_id != fund.employee_id:
+            return 0.0
+        return shares.get(None, 0.0)
+    if _department_pot_unused(fund):
+        return 0.0
     portion = shares.get(fund.department_id, 0.0)
     employee = row.employee
     if (
@@ -111,16 +155,28 @@ def _fund_portion(
     return round(portion, 2)
 
 
+# Top-up statuses. Department model: submitted -> verified -> approved (paid on approval).
+# Employee-advance model: submitted -> hod_approved -> verified -> paid.
+# 'returned' and 'rejected' end a request without money moving.
+TOPUP_DONE_STATUSES = ("approved", "paid")
+TOPUP_OPEN_STATUSES = ("submitted", "hod_approved", "verified")
+
+
+def _is_replenishment(t: ErpExpenseFundTopupRequest) -> bool:
+    """A top-up of spent bills -- not an advance (which raises the employee's limit instead)."""
+    return (t.kind or "topup") != "advance" and t.is_active == 1
+
+
 def _approved_topups(fund: ErpExpensePettyCashFund) -> float:
     return round(
-        sum(t.amount for t in fund.topups if t.status == "approved" and t.is_active == 1),
+        sum(t.amount for t in fund.topups if _is_replenishment(t) and t.status in TOPUP_DONE_STATUSES),
         2,
     )
 
 
 def _pending_topups(fund: ErpExpensePettyCashFund) -> float:
     return round(
-        sum(t.amount for t in fund.topups if t.status in ("submitted", "verified") and t.is_active == 1),
+        sum(t.amount for t in fund.topups if _is_replenishment(t) and t.status in TOPUP_OPEN_STATUSES),
         2,
     )
 
@@ -149,6 +205,8 @@ def _fund_bills(
     )
     if exclude_transaction_id:
         q = q.filter(ErpExpenseTransaction.transaction_id != exclude_transaction_id)
+    if _department_pot_unused(fund):
+        return []
     individual_ids = _individual_employee_ids(db, fund.region_id)
     if fund.owner_type == "employee":
         q = q.filter(ErpExpenseTransaction.employee_id == fund.employee_id)
@@ -225,6 +283,16 @@ def fund_to_dict(
         unreplenished = max(0.0, round(spent - replenished, 2))
         remaining = round(limit + replenished - spent, 2)
     region = fund.region
+    uncommitted = round(remaining - pending_bills, 2)
+    # Employee-advance company with a hard limit (Professional Signs: 50%): bills not yet
+    # topped up -- approved or still in approval -- may use only that share of the PCA.
+    spend_limit = None
+    if fund.owner_type == "employee" and is_employee_model(region):
+        ratio = pca_spend_limit_ratio(region)
+        if ratio is not None:
+            spend_limit = round(limit * ratio, 2)
+            outstanding = max(0.0, spent - replenished) + pending_bills
+            uncommitted = min(uncommitted, round(spend_limit - outstanding, 2))
     return {
         "id": fund.fund_id,
         "region_id": fund.region_id,
@@ -236,6 +304,8 @@ def fund_to_dict(
         "department_name": fund.department.department_name if fund.department else None,
         "employee_id": fund.employee_id,
         "employee_name": fund.employee.display_name if fund.employee else None,
+        "op_number": fund.op_number,
+        "op_name": fund.op_name,
         "currency": fund.currency,
         "opening_balance": limit,
         "approved_limit": limit,
@@ -247,8 +317,10 @@ def fund_to_dict(
         "pending_bills": pending_bills,
         "remaining": remaining,
         "available": remaining,
-        # What a new bill can still use: available minus bills already awaiting approval.
-        "uncommitted": round(remaining - pending_bills, 2),
+        # What a new bill can still use: available minus bills already awaiting approval, and
+        # (employee advances with a hard limit) never past spend_limit before a top-up.
+        "uncommitted": uncommitted,
+        "spend_limit": spend_limit,
         "label": _fund_label(fund),
         "is_active": bool(fund.is_active),
     }
@@ -311,6 +383,13 @@ def _ensure_departments(db: Session, names: list[str]) -> list[ErpExpenseDepartm
             seen.add(row.department_id)
             out.append(row)
     return out
+
+
+def _require_department_model(fund: ErpExpensePettyCashFund) -> None:
+    """The department top-up chain doesn't run in an employee-advance company; those
+    requests go through services/employee_pca_service.py (/api/pca/...)."""
+    if is_employee_model(fund.region):
+        raise ValueError("This company uses employee petty cash advances: use the advance top-up steps")
 
 
 def _load_fund(db: Session, fund_id: int) -> ErpExpensePettyCashFund:
@@ -442,7 +521,7 @@ def check_low_fund(db: Session, fund_id: int) -> bool:
     available = fund_to_dict(db, fund)["available"]
     if available >= limit * LOW_FUND_RATIO:
         return False
-    cycle = sum(1 for t in fund.topups if t.status == "approved" and t.is_active == 1)
+    cycle = sum(1 for t in fund.topups if _is_replenishment(t) and t.status in TOPUP_DONE_STATUSES)
     dept = fund.department.department_name if fund.department else "Department"
     region = fund.region.region_code if fund.region else ""
     _notify_people(
@@ -454,10 +533,49 @@ def check_low_fund(db: Session, fund_id: int) -> bool:
     return True
 
 
+def check_advance_reminder(db: Session, fund_id: int) -> bool:
+    """Employee advance (Professional Signs): once the approved bills not yet paid reach the
+    company's reminder share of the PCA (PDF: about 50%), tell the employee, their HOD and the
+    Accounts Manager (who pays them from Payments, which refills the PCA). Once per cycle, like
+    the low-fund alert. Returns True if sent."""
+    fund = _load_fund(db, fund_id)
+    if fund.owner_type != "employee" or not fund.is_active or not is_employee_model(fund.region):
+        return False
+    limit = float(fund.opening_balance or 0)
+    if limit <= 0:
+        return False
+    figures = fund_to_dict(db, fund)
+    if figures["unreplenished_spend"] < limit * pca_reminder_ratio(fund.region):
+        return False
+    cycle = sum(1 for t in fund.topups if _is_replenishment(t) and t.status in TOPUP_DONE_STATUSES)
+    employee = fund.employee
+    hods = []
+    if employee is not None and employee.department_id:
+        from services.approval_service import _hods_for_department
+
+        hods = _hods_for_department(db, employee.department_id, fund.region_id)
+    spent = figures["unreplenished_spend"]
+    payers = _role_or_admin(db, "finance_manager", fund.region_id)
+    _notify_people(
+        db, [employee, *hods, *payers],
+        f"pca_reminder_{fund.fund_id}_{cycle}", "Petty cash: approved bills to pay",
+        f"{fund.employee.display_name if employee else 'An employee'} has {fund.currency} {spent:,.2f} of approved "
+        f"petty-cash bills not yet paid, against {fund.currency} {limit:,.2f} of petty cash "
+        f"({fund.region.region_code if fund.region else ''}). The Accounts Manager pays them from "
+        "Payments, which refills the petty cash.",
+    )
+    return True
+
+
 def check_low_funds_for_bill(db: Session, txn: ErpExpenseTransaction) -> None:
     """After a petty-cash bill's final approval: check every department fund it drew on
     (the employee's own department plus any cross-department lines). Never raises."""
     try:
+        if is_employee_model(txn.region):
+            pot = fund_service.employee_advance(db, txn.employee_id, txn.region_id)
+            if pot:
+                check_advance_reminder(db, pot.fund_id)
+            return
         own = txn.employee.department_id if txn.employee else None
         dept_ids = {own} | {d for d in department_shares(txn) if d}
         dept_ids.discard(None)
@@ -559,17 +677,38 @@ class FundService:
         exclude_transaction_id: Optional[int] = None,
     ) -> None:
         """Block a petty-cash submit that would take the employee's own pot (individual, else
-        their department's) below zero."""
+        their department's) below zero. In an employee-advance company the pot is the
+        employee's one advance, used for any of their projects."""
         amount = round(float(amount or 0), 2)
         if amount <= 0:
             return
-        fund = self._own_fund(db, user, region_id)
+        region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == region_id).first()
+        if is_employee_model(region):
+            fund = self.employee_advance(db, user.user_id, region_id)
+            if fund is None or float(fund.opening_balance or 0) <= 0:
+                raise ValueError(
+                    "You don't have a petty cash advance in this company. File this bill as a reimbursement."
+                )
+        else:
+            fund = self._own_fund(db, user, region_id)
         if fund is None:
             raise ValueError("No petty cash limit is set for this department in this company")
         # Bills already awaiting approval are reserved against the fund too, so two bills
         # can't each pass the check and together overdraw it at final approval.
-        available = float(fund_to_dict(db, fund, exclude_transaction_id)["uncommitted"] or 0)
+        figures = fund_to_dict(db, fund, exclude_transaction_id)
+        available = float(figures["uncommitted"] or 0)
         if amount > available + 0.004:
+            if fund.owner_type == "employee" and is_employee_model(fund.region) and figures["spend_limit"] is not None:
+                raise ValueError(
+                    f"You can use only {fund.currency} {figures['spend_limit']:,.2f} of your petty cash "
+                    f"until your approved bills are paid ({max(available, 0):,.2f} left now). "
+                    "Wait for the Accounts Manager to pay them, or submit this as a reimbursement."
+                )
+            if fund.owner_type == "employee" and is_employee_model(fund.region):
+                raise ValueError(
+                    f"This bill is more than what's left of your petty cash advance "
+                    f"({available:.2f} left). Submit the extra as a reimbursement, or wait for a top-up."
+                )
             raise ValueError(
                 f"This bill exceeds available petty cash ({available:.2f} left). "
                 "Submit a smaller amount or wait for a top-up."
@@ -582,7 +721,7 @@ class FundService:
         and each owning department's fund for its cross-department lines (e.g. IT items)."""
         shares = bill_shares(txn, fund_currency)
         self.require_petty_cash_within_limit(
-            db, user, txn.region_id, shares.pop(None, 0.0), exclude_transaction_id=txn.transaction_id
+            db, user, txn.region_id, shares.pop(None, 0.0), exclude_transaction_id=txn.transaction_id,
         )
         for department_id, part in shares.items():
             if part <= 0:
@@ -613,7 +752,26 @@ class FundService:
                     f"({available:.2f} left). Submit a smaller amount or wait for a top-up."
                 )
 
+    def employee_advance(
+        self, db: Session, employee_id: int, region_id: int
+    ) -> Optional[ErpExpensePettyCashFund]:
+        """Employee-advance company: the employee's one advance in this company, used for all
+        their projects (the oldest active one, should an older setup have left more)."""
+        return (
+            db.query(ErpExpensePettyCashFund)
+            .options(joinedload(ErpExpensePettyCashFund.topups), joinedload(ErpExpensePettyCashFund.region))
+            .filter(
+                ErpExpensePettyCashFund.region_id == region_id,
+                ErpExpensePettyCashFund.owner_type == "employee",
+                ErpExpensePettyCashFund.employee_id == employee_id,
+                ErpExpensePettyCashFund.is_active == 1,
+            )
+            .order_by(ErpExpensePettyCashFund.fund_id)
+            .first()
+        )
+
     def _own_fund(self, db: Session, user: ErpAuthExpenseUsers, region_id: int) -> Optional[ErpExpensePettyCashFund]:
+        """Department model: the employee's individual pot, else their department's."""
         funds = (
             db.query(ErpExpensePettyCashFund)
             .options(joinedload(ErpExpensePettyCashFund.topups))
@@ -808,6 +966,8 @@ class FundService:
             raise ValueError("Unknown region")
         if owner_type == "employee" and (region.region_code or "").upper() == "DUBAI":
             raise ValueError("Blue Rhine Industries uses department petty cash only")
+        if owner_type == "department" and is_employee_model(region):
+            raise ValueError(f"{region.company_name or region.region_name} gives petty cash advances to employees, not departments")
         wanted = region_base_currency(region)
         currency = (currency or "").strip().upper() or wanted
         if currency == "AED" and wanted != "AED":
@@ -847,7 +1007,7 @@ class FundService:
             .filter(
                 ErpExpenseFundTopupRequest.fund_id == fund_id,
                 ErpExpenseFundTopupRequest.is_active == 1,
-                ErpExpenseFundTopupRequest.status.in_(("submitted", "verified", "approved")),
+                ErpExpenseFundTopupRequest.status.in_(TOPUP_OPEN_STATUSES + TOPUP_DONE_STATUSES),
             )
         )
         return {row[0] for row in q.all()}
@@ -859,6 +1019,11 @@ class FundService:
             mine_ids = self._my_fund_ids(db, user)
             if fund_id not in mine_ids:
                 raise PermissionError("HOD can only see bills for their own department")
+        return self.list_replenishable_bills_unchecked(db, fund)
+
+    def list_replenishable_bills_unchecked(self, db: Session, fund: ErpExpensePettyCashFund) -> list[dict[str, Any]]:
+        """Approved bills on this fund not yet on a live top-up (caller checks permission)."""
+        fund_id = fund.fund_id
         taken = self._linked_transaction_ids(db, fund_id)
         # Only bills that actually came off the fund (final approval) can be replenished.
         bills = sorted(
@@ -890,6 +1055,7 @@ class FundService:
         transaction_ids: Optional[list[int]] = None,
     ) -> dict[str, Any]:
         fund = _load_fund(db, fund_id)
+        _require_department_model(fund)
         role = user.role.role_code if user.role else ""
         if role == "admin":
             # Admin raises on a department's behalf (HOD away, or no HOD), for any department pot.
@@ -960,7 +1126,14 @@ class FundService:
         """One query for every visible top-up, filtered in SQL. Each row carries its fund's
         name / company / currency only -- working out every fund's balance per row was
         several queries per top-up and made this list take ages on a remote DB."""
-        q = db.query(ErpExpenseFundTopupRequest).options(*_TOPUP_LOAD)
+        # Department pots only: employee advances (Professional Signs) are listed by
+        # employee_pca_service, with their own steps.
+        q = (
+            db.query(ErpExpenseFundTopupRequest)
+            .options(*_TOPUP_LOAD)
+            .join(ErpExpensePettyCashFund, ErpExpensePettyCashFund.fund_id == ErpExpenseFundTopupRequest.fund_id)
+            .filter(ErpExpensePettyCashFund.owner_type == "department")
+        )
         if status:
             q = q.filter(ErpExpenseFundTopupRequest.status == status)
         role = user.role.role_code if user and user.role else ""
@@ -969,13 +1142,15 @@ class FundService:
         elif role in ("accountant", "finance_manager"):
             region_ids = user_region_ids(db, user.user_id)
             if region_ids is not None:
-                q = q.join(ErpExpensePettyCashFund, ErpExpensePettyCashFund.fund_id == ErpExpenseFundTopupRequest.fund_id)
                 q = q.filter(ErpExpensePettyCashFund.region_id.in_(region_ids or {-1}))
         rows = q.order_by(ErpExpenseFundTopupRequest.created_on.desc()).all()
         return [_topup_dict(db, r, full_fund=False) for r in rows]
 
     def _require_region_role(self, db: Session, user: ErpAuthExpenseUsers, row: ErpExpenseFundTopupRequest) -> None:
-        """Accounts and Finance act only on top-ups of companies they cover; Admin on any."""
+        """Accounts and Finance act only on top-ups of companies they cover; Admin on any.
+        Department-model steps only: employee advances have their own chain."""
+        if row.fund is not None:
+            _require_department_model(row.fund)
         if user.role and user.role.role_code == "admin":
             return
         region_id = row.fund.region_id if row.fund else None
@@ -1088,6 +1263,8 @@ _TOPUP_LOAD = (
     joinedload(ErpExpenseFundTopupRequest.requester),
     joinedload(ErpExpenseFundTopupRequest.verifier),
     joinedload(ErpExpenseFundTopupRequest.decider),
+    joinedload(ErpExpenseFundTopupRequest.hod_approver),
+    joinedload(ErpExpenseFundTopupRequest.payer),
     selectinload(ErpExpenseFundTopupRequest.bills),
     selectinload(ErpExpenseFundTopupRequest.history).joinedload(ErpExpenseTopupHistory.actor),
     joinedload(ErpExpenseFundTopupRequest.fund).joinedload(ErpExpensePettyCashFund.region),
@@ -1110,6 +1287,8 @@ def _fund_identity(fund: ErpExpensePettyCashFund) -> dict[str, Any]:
         "department_name": fund.department.department_name if fund.department else None,
         "employee_id": fund.employee_id,
         "employee_name": fund.employee.display_name if fund.employee else None,
+        "op_number": fund.op_number,
+        "op_name": fund.op_name,
         "currency": fund.currency,
         "approved_limit": float(fund.opening_balance or 0),
         "label": _fund_label(fund),
@@ -1128,8 +1307,15 @@ def _topup_dict(db: Session, row: ErpExpenseFundTopupRequest, *, full_fund: bool
     return {
         "id": row.topup_id,
         "fund_id": row.fund_id,
+        "kind": row.kind or "topup",
         "amount": row.amount,
         "status": row.status,
+        "hod_approved_by_name": row.hod_approver.display_name if row.hod_approver else None,
+        "hod_approved_on": row.hod_approved_on.isoformat() if row.hod_approved_on else None,
+        "payment_source": row.payment_source,
+        "paid_by_name": row.payer.display_name if row.payer else None,
+        "employee_id": fund.employee_id if fund else None,
+        "employee_name": fund.employee.display_name if fund and fund.employee else None,
         "remarks": row.remarks,
         "requester_id": row.requester_id,
         "requester_name": row.requester.display_name if row.requester else None,

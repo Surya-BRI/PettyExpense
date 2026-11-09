@@ -105,7 +105,14 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
 
     return Scaffold(
       drawer: const AppNavDrawer(),
-      appBar: BrandAppBar(title: _stageLabels[widget.stage] ?? 'Approvals', showNotificationAction: false),
+      appBar: BrandAppBar(
+        // Professional Signs (KSA) calls the Finance Manager step "Accounts Manager".
+        title: widget.stage == 'finance_manager' &&
+                (ref.watch(authControllerProvider).user?.usesEmployeeAdvances ?? false)
+            ? 'Accounts Manager queue'
+            : _stageLabels[widget.stage] ?? 'Approvals',
+        showNotificationAction: false,
+      ),
       body: Column(
         children: [
           Padding(

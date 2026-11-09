@@ -144,6 +144,10 @@ def resolve_stage_labels(txn: ErpExpenseTransaction) -> dict[str, str]:
     }
     for dept_id, name in _department_names(txn).items():
         labels[stage_key(dept_id)] = f"{name} HOD"
+    # A company can rename its steps (Professional Signs: "Accounts (EJV)", "Accounts Manager").
+    from services.region_policy import stage_label_overrides
+
+    labels.update(stage_label_overrides(txn.region))
     return labels
 
 
@@ -153,6 +157,29 @@ def _legacy_department_stage(txn: ErpExpenseTransaction, seq: list[str]) -> Opti
     if dept_id and stage_key(dept_id) in seq:
         return stage_key(dept_id)
     return next((s for s in seq if stage_base(s) == DEPARTMENT_HOD), None)
+
+
+def realign_open_bills(db: Session, region_id: int) -> int:
+    """After a company's stage list changes (e.g. Professional Signs dropping the Accountant
+    step), move its bills waiting at a stage that no longer exists to the next one that hasn't
+    approved them, so they show in the right queue. Returns how many moved."""
+    moved = 0
+    rows = (
+        db.query(ErpExpenseTransaction)
+        .filter(
+            ErpExpenseTransaction.region_id == region_id,
+            ErpExpenseTransaction.status.in_(ACTIONABLE_STATUSES),
+            ErpExpenseTransaction.current_stage.isnot(None),
+        )
+        .all()
+    )
+    for txn in rows:
+        before = txn.current_stage
+        _realign_stage(db, txn)
+        if txn.current_stage != before:
+            _update_stage_due(db, txn)
+            moved += 1
+    return moved
 
 
 def _approved_stages(txn: ErpExpenseTransaction, seq: list[str]) -> set[str]:
@@ -435,7 +462,45 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
     return results
 
 
-def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, comment: Optional[str]) -> dict[str, Any]:
+def _review_stage(txn: ErpExpenseTransaction) -> str:
+    """The stage that reviews duplicates: the Accountant, or -- in a company without one
+    (Professional Signs: Employee -> HOD -> Accounts Manager) -- the stage booking the journal."""
+    from services.region_policy import journal_stage
+
+    return journal_stage(txn.region) or "accountant"
+
+
+def _record_journal(
+    txn: ErpExpenseTransaction, stage: str, journal_type: Optional[str], journal_reference: Optional[str]
+) -> Optional[str]:
+    """At the company's journal stage (Professional Signs: Accounts books the EJV/EJVB), the
+    approver must give the journal type and its ERP number. Returns a history note, or None
+    when this stage doesn't record a journal."""
+    from services.region_policy import JOURNAL_TYPES, journal_stage
+
+    if stage_base(stage) != journal_stage(txn.region):
+        return None
+    kind = (journal_type or "").strip().upper()
+    if kind not in JOURNAL_TYPES:
+        raise ValueError("Choose the journal booked for this bill: EJV, or EJVB for a multi-branch transaction")
+    reference = (journal_reference or "").strip()
+    if not reference:
+        raise ValueError(f"Enter the {kind} number from ERP")
+    txn.journal_type = kind
+    txn.journal_reference = reference[:64]
+    return f"{kind} {txn.journal_reference}"
+
+
+def advance(
+    db: Session,
+    user: CurrentUser,
+    transaction_id: int,
+    action: str,
+    comment: Optional[str],
+    *,
+    journal_type: Optional[str] = None,
+    journal_reference: Optional[str] = None,
+) -> dict[str, Any]:
     from services import notification_service
     from services.transaction_service import transaction_to_dict
 
@@ -462,12 +527,14 @@ def advance(db: Session, user: CurrentUser, transaction_id: int, action: str, co
     # one place this actually matters, since the flag has no dedicated resolve action of its
     # own (unlike vendor matching) and never blocks approve otherwise. Accountant stage only,
     # same as the vendor-resolve gate -- HOD/Finance Manager aren't required to justify it.
-    if action == "approve" and stage == "accountant" and txn.duplicate_flag and (not comment or not comment.strip()):
+    if action == "approve" and stage == _review_stage(txn) and txn.duplicate_flag and (not comment or not comment.strip()):
         raise ValueError("A comment is required to approve a duplicate-flagged claim")
 
     if action == "approve":
         idx = seq.index(stage)
-        _history(db, txn.transaction_id, user.id, stage, "approve", comment)
+        journal_note = _record_journal(txn, stage, journal_type, journal_reference)
+        history_comment = " · ".join(p for p in [journal_note, (comment or "").strip()] if p) or comment
+        _history(db, txn.transaction_id, user.id, stage, "approve", history_comment)
         if idx == len(seq) - 1:
             # Final approval is the point a petty-cash bill comes off the fund (fund_service
             # _SPEND_STATUSES); it was already reserved against the fund at submit.
@@ -662,8 +729,14 @@ def bulk_approve(db: Session, user: CurrentUser, transaction_ids: list[int]) -> 
             continue
         # Duplicate review is an Accountant-stage concern (per spec) -- an HOD or Finance
         # Manager's bulk-approve isn't blocked by it; only the Accountant's is.
-        if txn.current_stage == "accountant" and txn.duplicate_flag:
+        if txn.current_stage == _review_stage(txn) and txn.duplicate_flag:
             skipped.append({"id": transaction_id, "reason": "duplicate_flagged"})
+            continue
+        # The journal (EJV/EJVB + number) is entered per bill, so it can't be bulk-approved.
+        from services.region_policy import journal_stage
+
+        if stage_base(txn.current_stage) == journal_stage(txn.region):
+            skipped.append({"id": transaction_id, "reason": "journal_required"})
             continue
         region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == txn.region_id).first()
         threshold = _matrix(region).get("bulk_approve_threshold")

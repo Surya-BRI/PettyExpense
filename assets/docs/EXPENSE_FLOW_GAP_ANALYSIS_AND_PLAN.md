@@ -4,9 +4,15 @@ Date: 2026-10-30. Scope: currency conversion, region-scoped approvers, reimburse
 petty-cash top-up chain, and cross-department routing for multi-item bills.
 
 Every "today" statement below was checked against the code at the file/function named, not assumed.
-Note: [`PETTY_CASH_PHASED_PLAN.md`](PETTY_CASH_PHASED_PLAN.md) is stale — it still says Phase 3 (funds/top-ups)
-is "not started", but `ErpExpensePettyCashFund`, `ErpExpenseFundTopupRequest`, `ErpExpenseFundTopupBill`
-and `services/fund_service.py` are live. Update its status table after this plan lands.
+Note: the status table in [`PETTY_CASH_PHASED_PLAN.md`](PETTY_CASH_PHASED_PLAN.md) was updated on 2026-11-04 to match this plan.
+
+**Status summary (2026-11-04):** A ✅, B ✅, C ✅, E ✅ (without the stage-plan table). D is partly done. Every step now notifies (`fund_service._notify_topup`):
+- a request notifies the company's Accountants and Admin;
+- a verify notifies the FMs;
+- a return or a decision notifies the HOD.
+
+There is no Admin review step (`admin_reviewed`), which means Q1 is answered in practice as "notify only". F is mostly open.
+Since then, `GET /api/approvals/{id}/funds` and `GET /api/funds/department-funds` let the HOD and FM see a bill's paying pots and a company's department pots. They are backend only for now; see [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 

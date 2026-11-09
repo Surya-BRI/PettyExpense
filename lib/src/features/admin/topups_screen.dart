@@ -679,7 +679,9 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
         funds = [widget.fund!]; // came from the fund's card: nothing else to load
       } else if (role == UserRole.admin) {
         if (_regions.isEmpty) {
-          _regions = await api.listRegions();
+          // Department top-ups only: an employee-advance company (Professional Signs) has
+          // no department pots -- its top-ups are raised on the Advances screen.
+          _regions = [for (final r in await api.listRegions()) if (!r.usesEmployeeAdvances) r];
           final current = (ref.read(authControllerProvider).user?.regionCode ?? '').toUpperCase();
           _adminRegionId ??=
               widget.regionId ??

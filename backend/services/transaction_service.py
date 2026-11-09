@@ -214,6 +214,10 @@ def _resolve_region(db: Session, region_code: str) -> ErpExpenseRegionConfig:
 
 
 def _line_cross_department(txn: ErpExpenseTransaction, line: ErpExpenseLineItem) -> tuple[Optional[int], Optional[str]]:
+    from services.department_split import splits
+
+    if not splits(txn):
+        return None, None
     category = line.category or txn.category
     own = txn.employee.department_id if txn.employee else None
     if not category or not category.owning_department_id or category.owning_department_id == own:
@@ -222,10 +226,25 @@ def _line_cross_department(txn: ErpExpenseTransaction, line: ErpExpenseLineItem)
     return category.owning_department_id, dept.department_name if dept else None
 
 
+def _journal_stage(txn: ErpExpenseTransaction) -> Optional[str]:
+    from services.region_policy import journal_stage
+
+    return journal_stage(txn.region)
+
+
+def _pays_by_process(txn: ErpExpenseTransaction) -> bool:
+    """Professional Signs: payments are recorded as PDF section 7 Process 1 / 2, and approved
+    petty-cash bills are paid too (which refills the employee's PCA)."""
+    from services.region_policy import is_employee_model
+
+    return is_employee_model(txn.region)
+
+
 def payment_status(txn: ErpExpenseTransaction) -> Optional[str]:
-    """not_applicable (petty cash, settled from the fund) | unpaid (approved reimbursement
-    waiting for Finance) | paid. None while the claim is still in approval."""
-    if (txn.type or "").strip().lower() == "petty_cash":
+    """not_applicable (petty cash, settled from the fund) | unpaid (approved bill waiting for
+    Finance) | paid. None while the claim is still in approval. In an employee-advance company
+    petty cash is paid too, so it is unpaid/paid like a reimbursement."""
+    if (txn.type or "").strip().lower() == "petty_cash" and not _pays_by_process(txn):
         return "not_applicable"
     if txn.status == "paid":
         return "paid"
@@ -269,6 +288,13 @@ def transaction_to_dict(
         "total_amount_base": txn.total_amount_base,
         "op_number": txn.op_number,
         "bill_number": txn.bill_number,
+        "journal_type": txn.journal_type,
+        "journal_reference": txn.journal_reference,
+        # Which journal the company's journal stage asks for (None = no journal step), so the
+        # approval screen knows to show the EJV/EJVB fields at that stage.
+        "journal_stage": _journal_stage(txn),
+        # Payment asks for Process 1 (cash withdrawal from bank) / 2 (direct payment), not a method.
+        "pays_by_process": _pays_by_process(txn),
         "status": txn.status,
         "payment_status": payment_status(txn),
         # Base stage name (hod | department_hod | accountant | finance_manager) for role/queue
@@ -500,6 +526,19 @@ class TransactionService:
                 "You cannot submit the same invoice again."
             )
 
+    def _require_project_codes(self, db: Session, txn: ErpExpenseTransaction) -> None:
+        """Employee-advance company (Professional Signs): every bill -- petty cash or
+        reimbursement -- names its project OP code, for the project-wise report."""
+        from services.fund_service import require_bill_projects
+        from services.region_policy import is_employee_model
+
+        if txn.region_id is None:
+            return
+        region = txn.region or _resolve_region_by_id(db, txn.region_id)
+        if is_employee_model(region):
+            db.flush()
+            require_bill_projects(txn)
+
     def _require_petty_cash_limit(self, db: Session, user: CurrentUser, txn: ErpExpenseTransaction) -> None:
         """Checks the bill (converted to the fund's currency) fits what's left in every pot it
         draws on — the employee's own, plus each owning department's for cross-department
@@ -632,6 +671,8 @@ class TransactionService:
             amount = txn.amount  # duplicate check below compares the line-derived amount
         # The client-sent exchange_rate is ignored; the rate is stamped (and locked on submit) here.
         _stamp_exchange_rate(txn, required=submit)
+        if submit:
+            self._require_project_codes(db, txn)
         if submit and (txn.type or "").strip().lower() == "petty_cash":
             self._require_petty_cash_limit(db, user, txn)
 
@@ -752,6 +793,7 @@ class TransactionService:
         if missing:
             raise ValueError(f"Finish these fields before submitting: {', '.join(missing)}")
         _stamp_exchange_rate(txn, required=True)
+        self._require_project_codes(db, txn)
         if (txn.type or "").strip().lower() == "petty_cash":
             self._require_petty_cash_limit(db, user, txn)
         self._require_unique_submitted_bill_number(db, txn.bill_number, txn.transaction_id)

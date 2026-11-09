@@ -261,9 +261,12 @@ class ApiClient {
     return PaymentsPage.fromJson(_decodeMap(res));
   }
 
+  /// [method] for Dubai-style payments; [source] instead at Professional Signs: 'bank'
+  /// (Process 1, cash withdrawal from bank) or 'accounts_petty_cash' (Process 2, direct payment).
   Future<PaymentRecord> recordPayment({
     required int claimId,
-    required String method,
+    String? method,
+    String? source,
     required String reference,
     required String paymentDate,
     String? remarks,
@@ -273,13 +276,45 @@ class ApiClient {
           headers: _headers,
           body: jsonEncode({
             'transaction_id': claimId,
-            'payment_method': method,
+            'payment_method': ?method,
+            'payment_source': ?source,
             'payment_reference': reference,
             'payment_date': paymentDate,
             'remarks': remarks,
           }),
         ));
     return PaymentRecord.fromJson(_decodeMap(res));
+  }
+
+  /// One payment (same process/method, reference and date) for several approved bills.
+  Future<({int paid, List<String> skipped})> recordPaymentBatch({
+    required List<int> claimIds,
+    String? method,
+    String? source,
+    required String reference,
+    required String paymentDate,
+    String? remarks,
+  }) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/payments/batch'),
+          headers: _headers,
+          body: jsonEncode({
+            'transaction_ids': claimIds,
+            'payment_method': ?method,
+            'payment_source': ?source,
+            'payment_reference': reference,
+            'payment_date': paymentDate,
+            'remarks': remarks,
+          }),
+        ));
+    final body = _decodeMap(res);
+    return (
+      paid: (body['paid'] as List? ?? const []).length,
+      skipped: [
+        for (final s in (body['skipped'] as List? ?? const []))
+          if (s is Map) '#${s['id']}: ${s['reason']}',
+      ],
+    );
   }
 
   // -- Approvals (Phase 2 multi-stage workflow) --
@@ -300,11 +335,22 @@ class ApiClient {
     return ExpenseClaim.fromJson(_decodeMap(res));
   }
 
-  Future<ExpenseClaim> approveTransaction(int id, {String? comment}) async {
+  /// [journalType] (EJV | EJVB) and [journalReference] are required at a company's journal
+  /// stage (Professional Signs: Accounts).
+  Future<ExpenseClaim> approveTransaction(
+    int id, {
+    String? comment,
+    String? journalType,
+    String? journalReference,
+  }) async {
     final res = await _authorized(() => http.post(
           _uri('/api/approvals/$id/approve'),
           headers: _headers,
-          body: jsonEncode({'comment': comment}),
+          body: jsonEncode({
+            'comment': comment,
+            'journal_type': ?journalType,
+            'journal_reference': ?journalReference,
+          }),
         ));
     return ExpenseClaim.fromJson(_decodeMap(res));
   }
@@ -573,6 +619,129 @@ class ApiClient {
             'remarks': remarks,
             if (approve) 'payment_method': 'bank_transfer',
             if (paymentReference != null) 'payment_reference': paymentReference,
+          }),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  // -- Employee petty cash advances (Professional Signs): /api/pca --
+
+  List<TopupRequest> _requests(http.Response res) =>
+      [for (final row in _decodeList(res)) TopupRequest.fromJson(Map<String, dynamic>.from(row as Map))];
+
+  /// Advances with balances: an employee's own, an HOD's staff's, everyone's for Accounts,
+  /// the Accounts Manager and Admin.
+  Future<List<PettyCashFund>> pcaAdvances({int? regionId}) async {
+    final res = await _authorized(() => http.get(
+          _uri('/api/pca/advances', {if (regionId != null) 'region_id': '$regionId'}),
+          headers: _headers,
+        ));
+    return [for (final row in _decodeList(res)) PettyCashFund.fromJson(Map<String, dynamic>.from(row as Map))];
+  }
+
+  Future<PcaSummary> pcaSummary(int regionId) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/pca/summary', {'region_id': '$regionId'}), headers: _headers),
+    );
+    return PcaSummary.fromJson(_decodeMap(res));
+  }
+
+  /// Employees tab: departments with counts only (fast).
+  Future<PcaDepartments> pcaDepartments(int regionId) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/pca/departments', {'region_id': '$regionId'}), headers: _headers),
+    );
+    return PcaDepartments.fromJson(_decodeMap(res));
+  }
+
+  /// One department's employees with their petty cash figures (0 = no department).
+  Future<PcaDepartmentEmployees> pcaDepartmentEmployees(int regionId, int departmentId) async {
+    final res = await _authorized(
+      () => http.get(
+        _uri('/api/pca/departments/$departmentId/employees', {'region_id': '$regionId'}),
+        headers: _headers,
+      ),
+    );
+    return PcaDepartmentEmployees.fromJson(_decodeMap(res));
+  }
+
+  Future<List<PcaStaff>> pcaStaff(int regionId) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/pca/staff', {'region_id': '$regionId'}), headers: _headers),
+    );
+    return [for (final row in _decodeList(res)) PcaStaff.fromJson(Map<String, dynamic>.from(row as Map))];
+  }
+
+  Future<List<TopupRequest>> pcaRequests({String? status, String? kind}) async {
+    final res = await _authorized(() => http.get(
+          _uri('/api/pca/requests', {'status': ?status, 'kind': ?kind}),
+          headers: _headers,
+        ));
+    return _requests(res);
+  }
+
+  Future<TopupRequest> proposeAdvance({
+    required int regionId,
+    required int employeeId,
+    required double amount,
+    String? remarks,
+  }) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/pca/advances'),
+          headers: _headers,
+          body: jsonEncode({
+            'region_id': regionId,
+            'employee_id': employeeId,
+            'amount': amount,
+            'remarks': remarks,
+          }),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  Future<List<ReplenishableBill>> pcaReplenishableBills(int fundId) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/pca/advances/$fundId/replenishable-bills'), headers: _headers),
+    );
+    return [for (final row in _decodeList(res)) ReplenishableBill.fromJson(Map<String, dynamic>.from(row as Map))];
+  }
+
+  Future<TopupRequest> pcaRequestTopup(int fundId, {required List<int> transactionIds, String? remarks}) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/pca/advances/$fundId/topups'),
+          headers: _headers,
+          body: jsonEncode({'transaction_ids': transactionIds, 'remarks': remarks}),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  /// One step of an advance / top-up: `hod-approve`, `manager-approve` or `reject`.
+  Future<TopupRequest> pcaStep(int requestId, String step, {String? remarks}) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/pca/requests/$requestId/$step'),
+          headers: _headers,
+          body: jsonEncode({'remarks': remarks}),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  Future<TopupRequest> pcaPay(
+    int requestId, {
+    required String source,
+    required String method,
+    required String reference,
+    required String paymentDate,
+    String? remarks,
+  }) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/pca/requests/$requestId/pay'),
+          headers: _headers,
+          body: jsonEncode({
+            'payment_source': source,
+            'payment_method': method,
+            'payment_reference': reference,
+            'payment_date': paymentDate,
+            'remarks': remarks,
           }),
         ));
     return TopupRequest.fromJson(_decodeMap(res));

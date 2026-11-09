@@ -13,6 +13,9 @@ router = APIRouter(prefix="/api/approvals", tags=["approvals"])
 
 class DecisionRequest(BaseModel):
     comment: Optional[str] = None
+    # Required on approve at the company's journal stage (Professional Signs: Accounts).
+    journal_type: Optional[str] = None  # EJV | EJVB
+    journal_reference: Optional[str] = None
 
 
 class BulkApproveRequest(BaseModel):
@@ -61,7 +64,10 @@ def approve(
     db: Session = Depends(get_db),
 ):
     try:
-        return approval_service.advance(db, user, transaction_id, "approve", body.comment)
+        return approval_service.advance(
+            db, user, transaction_id, "approve", body.comment,
+            journal_type=body.journal_type, journal_reference=body.journal_reference,
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:

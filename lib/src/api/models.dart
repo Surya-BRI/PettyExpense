@@ -1,6 +1,25 @@
 import '../utils/currency.dart';
 import 'enums.dart';
 
+/// Display name of a role. In an employee-advance company (Professional Signs / KSA) the
+/// finance_manager role is the "Accounts Manager".
+String roleLabelFor(String? role, {bool employeeAdvances = false}) {
+  switch ((role ?? '').toLowerCase()) {
+    case 'finance_manager':
+      return employeeAdvances ? 'Accounts Manager' : 'Finance Manager';
+    case 'accountant':
+      return 'Accountant';
+    case 'hod':
+      return 'Head of Department';
+    case 'admin':
+      return 'Admin';
+    case 'employee':
+      return 'Employee';
+    default:
+      return role ?? '';
+  }
+}
+
 class AuthUser {
   const AuthUser({
     required this.id,
@@ -12,6 +31,7 @@ class AuthUser {
     this.departmentName,
     this.regionCode,
     this.allowedRegions = const [],
+    this.pcaModel = 'department',
   });
 
   final int id;
@@ -24,8 +44,17 @@ class AuthUser {
   final String? regionCode;
   final List<String> allowedRegions;
 
+  /// Petty cash model of the company signed in under: 'employee' = advances per employee
+  /// and project (Professional Signs / KSA), 'department' = department pots (Dubai).
+  final String pcaModel;
+
   UserRole get userRole => UserRoleX.fromJson(role);
   bool get isApprover => userRole.isApprover;
+  bool get usesEmployeeAdvances => pcaModel == 'employee';
+
+  /// Role name as this company calls it: Professional Signs (KSA) calls the Finance Manager
+  /// the "Accounts Manager".
+  String get roleLabel => roleLabelFor(role, employeeAdvances: usesEmployeeAdvances);
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
@@ -41,6 +70,7 @@ class AuthUser {
         for (final c in (json['allowed_regions'] as List? ?? const []))
           if (c is String && c.isNotEmpty) c,
       ],
+      pcaModel: json['pca_model'] as String? ?? 'department',
     );
   }
 
@@ -54,6 +84,7 @@ class AuthUser {
         'department_name': departmentName,
         'region_code': regionCode,
         'allowed_regions': allowedRegions,
+        'pca_model': pcaModel,
       };
 }
 
@@ -366,7 +397,23 @@ class ExpenseClaim {
     this.payment,
     this.payableAmount,
     this.payableCurrency,
+    this.journalType,
+    this.journalReference,
+    this.journalStage,
+    this.paysByProcess = false,
   });
+
+  /// Professional Signs: payment is recorded as PDF section 7 Process 1 (cash withdrawal from
+  /// bank) or Process 2 (direct payment by Accounts), and approved petty cash is paid too.
+  final bool paysByProcess;
+
+  /// Expense journal Accounts booked for this bill (Professional Signs: EJV or EJVB) and
+  /// its ERP number.
+  final String? journalType;
+  final String? journalReference;
+
+  /// The approval stage that must record the journal for this company (null = none).
+  final String? journalStage;
 
   /// Company's base currency the bill was converted into at submit.
   final String? baseCurrency;
@@ -530,6 +577,10 @@ class ExpenseClaim {
           : null,
       payableAmount: (json['payable_amount'] as num?)?.toDouble(),
       payableCurrency: json['payable_currency'] as String?,
+      journalType: json['journal_type'] as String?,
+      journalReference: json['journal_reference'] as String?,
+      journalStage: json['journal_stage'] as String?,
+      paysByProcess: json['pays_by_process'] == true,
     );
   }
 }
@@ -687,6 +738,7 @@ class RegionConfig {
     this.companyName,
     this.logoUrl,
     this.baseCurrency,
+    this.pcaModel = 'department',
   });
 
   final int id;
@@ -698,6 +750,10 @@ class RegionConfig {
   /// Currency this company keeps its books (and petty cash funds) in.
   final String? baseCurrency;
 
+  /// 'employee' = advances per employee and project (Professional Signs), else 'department'.
+  final String pcaModel;
+  bool get usesEmployeeAdvances => pcaModel == 'employee';
+
   factory RegionConfig.fromJson(Map<String, dynamic> json) {
     final region = RegionConfig(
       id: (json['id'] as num).toInt(),
@@ -706,6 +762,7 @@ class RegionConfig {
       companyName: json['company_name'] as String?,
       logoUrl: json['logo_url'] as String?,
       baseCurrency: json['base_currency'] as String?,
+      pcaModel: json['pca_model'] as String? ?? 'department',
     );
     rememberRegionBaseCurrency(region.regionCode, region.baseCurrency);
     return region;
@@ -875,8 +932,27 @@ class PettyCashFund {
     this.pendingTopup = 0,
     this.unreplenishedSpend = 0,
     this.pendingBills = 0,
+    this.opNumber,
+    this.opName,
+    this.spendLimit,
     double? uncommitted,
   }) : _uncommitted = uncommitted;
+
+  /// Employee advance with a hard limit (Professional Signs: 50% of the PCA): the most that
+  /// bills not yet topped up may use. Null = no cap beyond the PCA.
+  final double? spendLimit;
+
+  /// Employee advance (Professional Signs): the project it is for. Null on department pots.
+  final String? opNumber;
+  final String? opName;
+
+  /// "OP-2201 Riyadh Mall", or null when this isn't a project advance.
+  String? get projectLabel {
+    final op = (opNumber ?? '').trim();
+    if (op.isEmpty) return null;
+    final name = (opName ?? '').trim();
+    return name.isEmpty ? op : '$op $name';
+  }
 
   final int id;
   final String ownerType;
@@ -927,6 +1003,9 @@ class PettyCashFund {
       unreplenishedSpend: (json['unreplenished_spend'] as num?)?.toDouble() ?? 0,
       pendingBills: (json['pending_bills'] as num?)?.toDouble() ?? 0,
       uncommitted: (json['uncommitted'] as num?)?.toDouble(),
+      spendLimit: (json['spend_limit'] as num?)?.toDouble(),
+      opNumber: json['op_number'] as String?,
+      opName: json['op_name'] as String?,
     );
   }
 }
@@ -995,7 +1074,29 @@ class TopupRequest {
     this.transactionIds = const [],
     this.departmentName,
     this.history = const [],
+    this.kind = 'topup',
+    this.employeeId,
+    this.employeeName,
+    this.paymentSource,
+    this.paymentMethod,
+    this.paymentDate,
+    this.paidByName,
+    this.regionCode,
   });
+
+  /// 'advance' (giving / raising an employee's advance) or 'topup' (replenishing bills).
+  final String kind;
+  final int? employeeId;
+  final String? employeeName;
+
+  /// Where the money came from: 'bank' or 'accounts_petty_cash' (employee advances).
+  final String? paymentSource;
+  final String? paymentMethod;
+  final String? paymentDate;
+  final String? paidByName;
+  final String? regionCode;
+
+  bool get isAdvance => kind == 'advance';
 
   final int id;
   final double amount;
@@ -1037,8 +1138,258 @@ class TopupRequest {
         for (final row in (json['history'] as List? ?? const []))
           if (row is Map) TopupHistoryEntry.fromJson(Map<String, dynamic>.from(row)),
       ],
+      kind: json['kind'] as String? ?? 'topup',
+      employeeId: (json['employee_id'] as num?)?.toInt(),
+      employeeName: json['employee_name'] as String?,
+      paymentSource: json['payment_source'] as String?,
+      paymentMethod: json['payment_method'] as String?,
+      paymentDate: json['payment_date'] as String?,
+      paidByName: json['paid_by_name'] as String?,
+      regionCode: json['region_code'] as String?,
     );
   }
+}
+
+/// Money figures shared by every row of the advances report (`GET /api/pca/summary`).
+class PcaFigures {
+  const PcaFigures({
+    this.advance = 0,
+    this.advanceWaiting = 0,
+    this.spent = 0,
+    this.unreplenishedSpend = 0,
+    this.pendingBills = 0,
+    this.pendingTopup = 0,
+    this.available = 0,
+  });
+
+  /// Advance paid out so far.
+  final double advance;
+
+  /// Proposed or approved, not yet paid.
+  final double advanceWaiting;
+  final double spent;
+
+  /// Approved bills not yet topped up.
+  final double unreplenishedSpend;
+
+  /// Bills still in approval (reserved).
+  final double pendingBills;
+  final double pendingTopup;
+  final double available;
+
+  factory PcaFigures.fromJson(Map<String, dynamic> json) {
+    double n(String key) => (json[key] as num?)?.toDouble() ?? 0;
+    return PcaFigures(
+      advance: n('advance'),
+      advanceWaiting: n('advance_waiting'),
+      spent: n('spent'),
+      unreplenishedSpend: n('unreplenished_spend'),
+      pendingBills: n('pending_bills'),
+      pendingTopup: n('pending_topup'),
+      available: n('available'),
+    );
+  }
+}
+
+/// One employee's advance for one project, inside a report group.
+class PcaMember {
+  const PcaMember({
+    required this.figures,
+    this.fundId,
+    this.employeeId,
+    this.employeeName,
+    this.departmentName,
+    this.opNumber,
+    this.opName,
+    this.advances = const [],
+  });
+
+  final PcaFigures figures;
+  final int? fundId;
+  final int? employeeId;
+  final String? employeeName;
+  final String? departmentName;
+  final String? opNumber;
+  final String? opName;
+
+  /// Department view only: this employee's advances, one per project.
+  final List<PcaMember> advances;
+
+  factory PcaMember.fromJson(Map<String, dynamic> json) {
+    return PcaMember(
+      figures: PcaFigures.fromJson(json),
+      fundId: (json['fund_id'] as num?)?.toInt(),
+      employeeId: (json['employee_id'] as num?)?.toInt(),
+      employeeName: json['employee_name'] as String?,
+      departmentName: json['department_name'] as String?,
+      opNumber: json['op_number'] as String?,
+      opName: json['op_name'] as String?,
+      advances: [
+        for (final row in (json['advances'] as List? ?? const []))
+          if (row is Map) PcaMember.fromJson(Map<String, dynamic>.from(row)),
+      ],
+    );
+  }
+}
+
+/// A department or a project in the advances report, with the employees in it.
+class PcaGroup {
+  const PcaGroup({
+    required this.title,
+    required this.figures,
+    required this.employeeCount,
+    required this.advanceCount,
+    required this.employees,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final PcaFigures figures;
+  final int employeeCount;
+  final int advanceCount;
+  final List<PcaMember> employees;
+
+  factory PcaGroup.fromJson(Map<String, dynamic> json, {required bool project}) {
+    return PcaGroup(
+      title: project
+          ? (json['op_number'] as String? ?? 'No project')
+          : (json['department_name'] as String? ?? 'No department'),
+      subtitle: project ? json['op_name'] as String? : null,
+      figures: PcaFigures.fromJson(json),
+      employeeCount: (json['employee_count'] as num?)?.toInt() ?? 0,
+      advanceCount: (json['advance_count'] as num?)?.toInt() ?? 0,
+      employees: [
+        for (final row in (json['employees'] as List? ?? const []))
+          if (row is Map) PcaMember.fromJson(Map<String, dynamic>.from(row)),
+      ],
+    );
+  }
+}
+
+/// `GET /api/pca/summary`: one company's employee advances by department and by project.
+class PcaSummary {
+  const PcaSummary({
+    required this.currency,
+    required this.totals,
+    required this.employeeCount,
+    required this.advanceCount,
+    required this.projectCount,
+    required this.byDepartment,
+    required this.byProject,
+    this.companyName,
+  });
+
+  final String currency;
+  final String? companyName;
+  final PcaFigures totals;
+  final int employeeCount;
+  final int advanceCount;
+  final int projectCount;
+  final List<PcaGroup> byDepartment;
+  final List<PcaGroup> byProject;
+
+  factory PcaSummary.fromJson(Map<String, dynamic> json) {
+    final totals = Map<String, dynamic>.from(json['totals'] as Map? ?? const {});
+    return PcaSummary(
+      currency: json['currency'] as String? ?? '',
+      companyName: json['company_name'] as String?,
+      totals: PcaFigures.fromJson(totals),
+      employeeCount: (totals['employee_count'] as num?)?.toInt() ?? 0,
+      advanceCount: (totals['advance_count'] as num?)?.toInt() ?? 0,
+      projectCount: (totals['project_count'] as num?)?.toInt() ?? 0,
+      byDepartment: [
+        for (final row in (json['by_department'] as List? ?? const []))
+          if (row is Map) PcaGroup.fromJson(Map<String, dynamic>.from(row), project: false),
+      ],
+      byProject: [
+        for (final row in (json['by_project'] as List? ?? const []))
+          if (row is Map) PcaGroup.fromJson(Map<String, dynamic>.from(row), project: true),
+      ],
+    );
+  }
+}
+
+/// A department on the Employees tab (`GET /api/pca/departments`): counts only, loads fast.
+class PcaDepartment {
+  const PcaDepartment({
+    required this.departmentId,
+    required this.name,
+    required this.employeeCount,
+    required this.withPettyCash,
+    required this.notSet,
+    required this.totalLimit,
+  });
+
+  /// 0 = people with no department.
+  final int departmentId;
+  final String name;
+  final int employeeCount;
+  final int withPettyCash;
+  final int notSet;
+  final double totalLimit;
+
+  factory PcaDepartment.fromJson(Map<String, dynamic> json) => PcaDepartment(
+        departmentId: (json['department_id'] as num?)?.toInt() ?? 0,
+        name: json['department_name'] as String? ?? 'No department',
+        employeeCount: (json['employee_count'] as num?)?.toInt() ?? 0,
+        withPettyCash: (json['with_petty_cash'] as num?)?.toInt() ?? 0,
+        notSet: (json['not_set'] as num?)?.toInt() ?? 0,
+        totalLimit: (json['total_limit'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+class PcaDepartments {
+  const PcaDepartments({required this.currency, required this.departments});
+
+  final String currency;
+  final List<PcaDepartment> departments;
+
+  factory PcaDepartments.fromJson(Map<String, dynamic> json) => PcaDepartments(
+        currency: json['currency'] as String? ?? '',
+        departments: [
+          for (final row in (json['departments'] as List? ?? const []))
+            if (row is Map) PcaDepartment.fromJson(Map<String, dynamic>.from(row)),
+        ],
+      );
+}
+
+/// One department's employees with their petty cash figures
+/// (`GET /api/pca/departments/{id}/employees`).
+class PcaDepartmentEmployees {
+  const PcaDepartmentEmployees({required this.currency, required this.name, required this.employees});
+
+  final String currency;
+  final String name;
+  final List<PcaMember> employees;
+
+  factory PcaDepartmentEmployees.fromJson(Map<String, dynamic> json) => PcaDepartmentEmployees(
+        currency: json['currency'] as String? ?? '',
+        name: json['department_name'] as String? ?? 'No department',
+        employees: [
+          for (final row in (json['employees'] as List? ?? const []))
+            if (row is Map) PcaMember.fromJson(Map<String, dynamic>.from(row)),
+        ],
+      );
+}
+
+/// Someone an HOD (or Admin) may propose an advance for (`GET /api/pca/staff`).
+class PcaStaff {
+  const PcaStaff({required this.id, required this.displayName, this.departmentName, this.advance = 0});
+
+  final int id;
+  final String displayName;
+  final String? departmentName;
+
+  /// Current petty cash amount; 0 = not set yet.
+  final double advance;
+
+  factory PcaStaff.fromJson(Map<String, dynamic> json) => PcaStaff(
+        id: (json['id'] as num).toInt(),
+        displayName: json['display_name'] as String? ?? '',
+        departmentName: json['department_name'] as String?,
+        advance: (json['advance'] as num?)?.toDouble() ?? 0,
+      );
 }
 
 class TopupHistoryEntry {

@@ -50,7 +50,8 @@ class AdminHubScreen extends ConsumerWidget {
                 return const Padding(
                   padding: EdgeInsets.only(bottom: 4),
                   child: Text(
-                    'Open a company to set department limits, request top-ups, and change the name or logo.',
+                    'Open a company to set department limits, request top-ups, and change the name or logo. '
+                    'Professional Signs gives each employee one advance instead: see Advances in the menu.',
                     style: TextStyle(color: AppColors.textSecondary, height: 1.35),
                   ),
                 );
@@ -130,8 +131,10 @@ class _CompanyCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            const Text(
-                              'Open for departments and limits',
+                            Text(
+                              region.usesEmployeeAdvances
+                                  ? 'Employee advances, spend by project'
+                                  : 'Open for departments and limits',
                               style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 13,

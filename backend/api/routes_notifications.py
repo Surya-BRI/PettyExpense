@@ -15,10 +15,70 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 _APPROVER_FACING_TYPES = {"submission", "approval_pending", "resubmit"}
 
 
-def _to_dict(row, txn: Optional[ErpExpenseTransaction], actionable: bool) -> dict:
+def _type_ids(type_: Optional[str]) -> tuple[Optional[int], Optional[int]]:
+    """(topup_id, fund_id) carried in a petty-cash notification type, else (None, None):
+    'topup_<step>_<topupId>', 'pca_<advance|topup>_<step>_<topupId>' -> topup id;
+    'fund_low_<fundId>_<cycle>', 'pca_reminder_<fundId>_<cycle>' -> fund id."""
+    parts = (type_ or "").split("_")
+    try:
+        if type_ and (type_.startswith("fund_low_") or type_.startswith("pca_reminder_")):
+            return None, int(parts[-2])
+        if type_ and (type_.startswith("topup_") or type_.startswith("pca_")):
+            return int(parts[-1]), None
+    except (ValueError, IndexError):
+        pass
+    return None, None
+
+
+def _regions_for(db: Session, rows, txns: dict) -> dict[int, Optional[str]]:
+    """notification id -> company code it is about (the claim's, or the top-up's / fund's),
+    so the app can switch to that company before opening it. Two queries for the whole page."""
+    from database.models import ErpExpenseFundTopupRequest, ErpExpensePettyCashFund, ErpExpenseRegionConfig
+
+    topup_ids, fund_ids = set(), set()
+    for r in rows:
+        t, f = _type_ids(r.type)
+        if t:
+            topup_ids.add(t)
+        if f:
+            fund_ids.add(f)
+    topup_fund = (
+        dict(
+            db.query(ErpExpenseFundTopupRequest.topup_id, ErpExpenseFundTopupRequest.fund_id)
+            .filter(ErpExpenseFundTopupRequest.topup_id.in_(topup_ids))
+            .all()
+        )
+        if topup_ids
+        else {}
+    )
+    all_funds = fund_ids | set(topup_fund.values())
+    fund_region = (
+        dict(
+            db.query(ErpExpensePettyCashFund.fund_id, ErpExpenseRegionConfig.region_code)
+            .join(ErpExpenseRegionConfig, ErpExpenseRegionConfig.region_id == ErpExpensePettyCashFund.region_id)
+            .filter(ErpExpensePettyCashFund.fund_id.in_(all_funds))
+            .all()
+        )
+        if all_funds
+        else {}
+    )
+    out: dict[int, Optional[str]] = {}
+    for r in rows:
+        txn = txns.get(r.transaction_id)
+        if txn is not None:
+            out[r.notification_id] = txn.region.region_code if txn.region else None
+            continue
+        t, f = _type_ids(r.type)
+        out[r.notification_id] = fund_region.get(f if f else topup_fund.get(t))
+    return out
+
+
+def _to_dict(row, txn: Optional[ErpExpenseTransaction], actionable: bool, region_code: Optional[str] = None) -> dict:
     return {
         "id": row.notification_id,
         "transaction_id": row.transaction_id,
+        # Company the notification is about; the app switches to it before opening it.
+        "region_code": region_code,
         "type": row.type,
         "status": row.status,
         "message": row.message,
@@ -58,11 +118,12 @@ def list_notifications(
             actionable_by_txn[txn.transaction_id] = user.id in {a.user_id for a in approvers}
         return actionable_by_txn[txn.transaction_id]
 
+    regions = _regions_for(db, rows, txns)
     result = []
     for r in rows:
         txn = txns.get(r.transaction_id)
         actionable = r.type in _APPROVER_FACING_TYPES and _is_actionable(txn)
-        result.append(_to_dict(r, txn, actionable))
+        result.append(_to_dict(r, txn, actionable, regions.get(r.notification_id)))
     return result
 
 

@@ -41,6 +41,11 @@ COMPANY_BY_REGION = {
     "KSA": "Professional Signs",
 }
 
+# Companies on the employee-advance (PCA) model -- see services/region_policy.py and
+# assets/docs/PS_EMPLOYEE_PCA_COMPARISON.md. Settings are overwritten once per settings
+# version (region_policy.EMPLOYEE_PCA_SETTINGS_VERSION), then only missing keys are added.
+EMPLOYEE_PCA_REGIONS = ("KSA",)
+
 ROLE_NAMES = {
     "employee": "Employee",
     "hod": "Head of Department",
@@ -105,6 +110,12 @@ def seed_reference_data() -> None:
         ensure_columns()
     except Exception:
         pass
+    try:
+        from scripts.add_employee_pca_columns import ensure_employee_pca_columns
+
+        ensure_employee_pca_columns()
+    except Exception:
+        pass
     db = SessionLocal()
     try:
         # Roles
@@ -149,7 +160,17 @@ def seed_reference_data() -> None:
                 row.region_name = region_name
                 if company:
                     row.company_name = company
-        india = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == "IN").first()
+        db.flush()
+        from services.approval_service import realign_open_bills
+        from services.region_policy import apply_employee_settings
+
+        for row in db.query(ErpExpenseRegionConfig).filter(
+            ErpExpenseRegionConfig.region_code.in_(EMPLOYEE_PCA_REGIONS)
+        ):
+            if apply_employee_settings(row):
+                db.flush()
+                realign_open_bills(db, row.region_id)
+        india =db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == "IN").first()
         if india:
             india.is_active = 0
         db.commit()

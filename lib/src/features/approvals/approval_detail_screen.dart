@@ -59,12 +59,16 @@ class ApprovalDetailScreen extends ConsumerStatefulWidget {
 
 class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
   final _comment = TextEditingController();
+  // Journal Accounts books for this bill (Professional Signs): EJV, or EJVB for multi-branch.
+  final _journalRef = TextEditingController();
+  String? _journalType;
   bool _busy = false;
   bool _showFullBill = false;
 
   @override
   void dispose() {
     _comment.dispose();
+    _journalRef.dispose();
     _commentFocus.dispose();
     super.dispose();
   }
@@ -225,6 +229,12 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                     label: 'Current stage',
                     value: claim.currentStageLabel,
                   ),
+                  if ((claim.journalReference ?? '').isNotEmpty)
+                    ClaimDetailRow(
+                      label: 'Journal',
+                      value: '${claim.journalType ?? ''} ${claim.journalReference}'.trim(),
+                    ),
+                  if ((claim.opNumber ?? '').isNotEmpty) ClaimDetailRow(label: 'Project (OP)', value: claim.opNumber!),
                   ClaimDetailRow(
                     label: 'Remarks',
                     value: (claim.remarks ?? '').trim().isEmpty ? '—' : claim.remarks!.trim(),
@@ -273,6 +283,34 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                 ),
               ],
               const SizedBox(height: 16),
+              if (awaitingThisStage && claim.journalStage == widget.stage) ...[
+                // This company books an expense journal at this step (Professional Signs: the
+                // Accounts Manager records the EJV / EJVB number from ERP before approving).
+                const Text('Expense journal', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final (code, label) in const [('EJV', 'EJV'), ('EJVB', 'EJVB (multi-branch)')])
+                      ChoiceChip(
+                        label: Text(label),
+                        selected: _journalType == code,
+                        onSelected: _busy ? null : (_) => setState(() => _journalType = code),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _journalRef,
+                  enabled: !_busy,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    labelText: 'Journal number *',
+                    hintText: 'As booked in ERP',
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               if (awaitingThisStage) ...[
                 TextField(
                   controller: _comment,
@@ -282,7 +320,7 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                   decoration: InputDecoration(
                     labelText: 'Comment',
                     hintText: 'Add a note…',
-                    helperText: widget.stage == 'accountant' && claim.duplicateWarning != null
+                    helperText: widget.stage == (claim.journalStage ?? 'accountant') && claim.duplicateWarning != null
                         ? '* Required to approve, dispute or reject a duplicate-flagged claim'
                         : '* Required to dispute or reject',
                     helperStyle: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
@@ -290,15 +328,26 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                 ),
                 const SizedBox(height: 16),
                 // "Warn, allow-with-justification" for a duplicate-flagged claim, but only where
-                // that judgment call actually belongs -- Accountant stage (backend enforces this
-                // too, see approval_service.advance). HOD/Finance Manager approve unblocked.
+                // that judgment call actually belongs -- the Accountant stage, or the journal stage
+                // in a company without one (Professional Signs: Accounts Manager). Backend enforces
+                // this too (approval_service._review_stage).
                 Builder(builder: (context) {
-                  final requiresJustification = widget.stage == 'accountant' && claim.duplicateWarning != null;
-                  final blocked = _busy || (requiresJustification && _comment.text.trim().isEmpty);
+                  final requiresJustification =
+                      widget.stage == (claim.journalStage ?? 'accountant') && claim.duplicateWarning != null;
+                  final needsJournal = claim.journalStage == widget.stage;
+                  final journalMissing =
+                      needsJournal && (_journalType == null || _journalRef.text.trim().isEmpty);
+                  final blocked =
+                      _busy || journalMissing || (requiresJustification && _comment.text.trim().isEmpty);
                   return FilledButton.icon(
                     onPressed: blocked
                         ? null
-                        : () => _act(() => api.approveTransaction(claim.id, comment: _comment.text.trim())),
+                        : () => _act(() => api.approveTransaction(
+                              claim.id,
+                              comment: _comment.text.trim(),
+                              journalType: needsJournal ? _journalType : null,
+                              journalReference: needsJournal ? _journalRef.text.trim() : null,
+                            )),
                     style: FilledButton.styleFrom(
                       backgroundColor: AppColors.darkBlue,
                       foregroundColor: Colors.white,
@@ -307,7 +356,9 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
                     ),
                     icon: Icon(PhosphorIcons.checkCircle(), size: 20),
                     label: Text(
-                      requiresJustification
+                      journalMissing
+                          ? 'Approve (enter the journal above)'
+                          : requiresJustification
                           ? 'Approve (justify duplicate above)'
                           : deptPart != null
                               ? 'Approve ${deptLines.first.owningDepartmentName ?? 'your'} items'

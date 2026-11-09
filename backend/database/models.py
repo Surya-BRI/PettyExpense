@@ -153,6 +153,12 @@ class ErpExpensePettyCashFund(Base, AuditColumns):
     )
     currency: Mapped[str] = mapped_column("currency", String(8), default="AED")
     opening_balance: Mapped[float] = mapped_column("openingBalance", Float, default=0.0)
+    # Employee-advance companies (Professional Signs): one advance per employee per project.
+    # The project's OP code (ErpMasterOpportunity.salesForceCode) and its name, copied from ERP
+    # when the HOD proposes the advance. Null on department pots.
+    # New columns: see scripts/add_employee_pca_columns.py.
+    op_number: Mapped[Optional[str]] = mapped_column("opNumber", String(128), nullable=True)
+    op_name: Mapped[Optional[str]] = mapped_column("opName", Unicode(256), nullable=True)
 
     region: Mapped[ErpExpenseRegionConfig] = relationship()
     department: Mapped[Optional[ErpExpenseDepartment]] = relationship()
@@ -184,11 +190,26 @@ class ErpExpenseFundTopupRequest(Base, AuditColumns):
     payment_method: Mapped[Optional[str]] = mapped_column("paymentMethod", String(32), nullable=True)
     payment_reference: Mapped[Optional[str]] = mapped_column("paymentReference", String(128), nullable=True)
     payment_date: Mapped[Optional[datetime]] = mapped_column("paymentDate", DateTime, nullable=True)
+    # Employee-advance companies (Professional Signs), see services/employee_pca_service.py:
+    # kind 'advance' = giving / raising an employee's PCA (HOD proposes -> Accounts Manager
+    # approves -> Accounts Department pays); kind 'topup' = replenishing spent bills.
+    # New columns: see scripts/add_employee_pca_columns.py.
+    kind: Mapped[str] = mapped_column("kind", String(16), default="topup")
+    hod_approved_by: Mapped[Optional[int]] = mapped_column(
+        "hodApprovedBy", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), nullable=True
+    )
+    hod_approved_on: Mapped[Optional[datetime]] = mapped_column("hodApprovedOn", DateTime, nullable=True)
+    payment_source: Mapped[Optional[str]] = mapped_column("paymentSource", String(32), nullable=True)
+    paid_by: Mapped[Optional[int]] = mapped_column(
+        "paidBy", Integer, ForeignKey("ErpAuthExpenseUsers.userId"), nullable=True
+    )
 
     fund: Mapped[ErpExpensePettyCashFund] = relationship(back_populates="topups")
     requester: Mapped[ErpAuthExpenseUsers] = relationship(foreign_keys=[requester_id])
     verifier: Mapped[Optional[ErpAuthExpenseUsers]] = relationship(foreign_keys=[verified_by])
     decider: Mapped[Optional[ErpAuthExpenseUsers]] = relationship(foreign_keys=[decided_by])
+    hod_approver: Mapped[Optional[ErpAuthExpenseUsers]] = relationship(foreign_keys=[hod_approved_by])
+    payer: Mapped[Optional[ErpAuthExpenseUsers]] = relationship(foreign_keys=[paid_by])
     bills: Mapped[list["ErpExpenseFundTopupBill"]] = relationship(back_populates="topup")
     history: Mapped[list["ErpExpenseTopupHistory"]] = relationship(
         back_populates="topup", order_by="ErpExpenseTopupHistory.history_id"
@@ -309,6 +330,11 @@ class ErpExpenseTransaction(Base):
     amount_base: Mapped[Optional[float]] = mapped_column("amountBase", Float, nullable=True)
     vat_amount_base: Mapped[Optional[float]] = mapped_column("vatAmountBase", Float, nullable=True)
     total_amount_base: Mapped[Optional[float]] = mapped_column("totalAmountBase", Float, nullable=True)
+    # Expense journal booked by Accounts for this bill (Professional Signs: EJV, or EJVB for a
+    # multi-branch transaction) and its number in ERP. Required at the stage named by the
+    # company's `journal_required_at`. New columns: see scripts/add_employee_pca_columns.py.
+    journal_type: Mapped[Optional[str]] = mapped_column("journalType", String(8), nullable=True)
+    journal_reference: Mapped[Optional[str]] = mapped_column("journalReference", Unicode(64), nullable=True)
     created_on: Mapped[datetime] = mapped_column("createdOn", DateTime, default=datetime.utcnow)
     modified_on: Mapped[datetime] = mapped_column(
         "modifiedOn", DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -353,6 +379,10 @@ class ErpExpensePaymentRecord(Base, AuditColumns):
     payment_date: Mapped[datetime] = mapped_column("paymentDate", DateTime)
     paid_by: Mapped[int] = mapped_column("paidBy", Integer, ForeignKey("ErpAuthExpenseUsers.userId"))
     remarks: Mapped[Optional[str]] = mapped_column("remarks", UnicodeText, nullable=True)
+    # Professional Signs (PDF section 7): 'bank' = Process 1, cash withdrawal from bank;
+    # 'accounts_petty_cash' = Process 2, direct payment by the Accounts Department. Null elsewhere.
+    # New column -- see scripts/add_employee_pca_columns.py.
+    payment_source: Mapped[Optional[str]] = mapped_column("paymentSource", String(32), nullable=True)
 
     transaction: Mapped["ErpExpenseTransaction"] = relationship(back_populates="payment")
     payer: Mapped[ErpAuthExpenseUsers] = relationship(foreign_keys=[paid_by])

@@ -45,8 +45,28 @@ class TokenResponse(BaseModel):
     user: dict
 
 
-def _user_dict(user, region_code: Optional[str] = None, allowed_regions: Optional[list] = None) -> dict:
+def _pca_model(db: Session, region_code: Optional[str]) -> str:
+    """'employee' when the signed-in company gives petty cash advances per employee and
+    project (Professional Signs), else 'department' -- the app picks its petty-cash screens
+    from this."""
+    from database.models import ErpExpenseRegionConfig
+    from services.region_policy import pca_model
+
+    if not region_code:
+        return "department"
+    region = (
+        db.query(ErpExpenseRegionConfig)
+        .filter(ErpExpenseRegionConfig.region_code == region_code.strip().upper())
+        .first()
+    )
+    return pca_model(region)
+
+
+def _user_dict(
+    user, region_code: Optional[str] = None, allowed_regions: Optional[list] = None, db: Optional[Session] = None
+) -> dict:
     return {
+        "pca_model": _pca_model(db, region_code) if db is not None else "department",
         "id": user.user_id,
         "username": user.user_name,
         "display_name": user.display_name,
@@ -85,7 +105,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=create_access_token(user, region_code),
         refresh_token=create_refresh_token(user, region_code),
-        user=_user_dict(user, region_code, _sorted_allowed(allowed, home) or [region_code]),
+        user=_user_dict(user, region_code, _sorted_allowed(allowed, home) or [region_code], db),
     )
 
 
@@ -111,7 +131,7 @@ def switch_region(
     return TokenResponse(
         access_token=create_access_token(user, wanted),
         refresh_token=create_refresh_token(user, wanted),
-        user=_user_dict(user, wanted, _sorted_allowed(allowed, home)),
+        user=_user_dict(user, wanted, _sorted_allowed(allowed, home), db),
     )
 
 
@@ -134,7 +154,7 @@ def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=create_access_token(user, region_code),
         refresh_token=create_refresh_token(user, region_code),
-        user=_user_dict(user, region_code, allowed),
+        user=_user_dict(user, region_code, allowed, db),
     )
 
 
@@ -159,6 +179,7 @@ def me(user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_
         "email": user.email,
         "region_code": user.region_code,
         "allowed_regions": allowed,
+        "pca_model": _pca_model(db, user.region_code),
     }
 
 

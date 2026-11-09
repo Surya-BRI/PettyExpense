@@ -10,6 +10,7 @@ import '../features/admin/my_funds_screen.dart' show myFundsProvider;
 import '../features/authentication/auth_controller.dart';
 import '../features/claims/confirm_claim_screen.dart' show navigateGuarded;
 import '../features/notifications/notifications_screen.dart';
+import '../features/pca/advances_screen.dart' show myPcaAdvancesProvider;
 import '../routing/role_routes.dart';
 import '../theme/app_theme.dart';
 import '../utils/money.dart';
@@ -30,6 +31,11 @@ class AppNavDrawer extends ConsumerWidget {
     final isAdmin = role == UserRole.admin;
     final isHod = role == UserRole.hod;
     final isAccountant = role == UserRole.accountant;
+    // Professional Signs: petty cash is one advance per employee, not per department.
+    final employeeAdvances = user?.usesEmployeeAdvances ?? false;
+    // An employee who also belongs to KSA sees "My advances" while signed in under Dubai too.
+    final hasOwnAdvance = role == UserRole.employee &&
+        (ref.watch(myPcaAdvancesProvider).valueOrNull ?? const <PettyCashFund>[]).isNotEmpty;
     final location = GoRouterState.of(context).uri.path;
     final unreadCount = ref.watch(unreadNotificationCountProvider).maybeWhen(data: (n) => n, orElse: () => 0);
 
@@ -71,6 +77,15 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/payments',
           onTap: () => go('/payments'),
         ),
+      if (employeeAdvances || isAdmin || hasOwnAdvance)
+        _DrawerItem(
+          icon: PhosphorIcons.handCoins(),
+          selectedIcon: PhosphorIcons.handCoins(PhosphorIconsStyle.fill),
+          accent: AppColors.orange,
+          label: role == UserRole.employee ? 'My advances' : 'Advances',
+          selected: location == '/advances',
+          onTap: () => go('/advances'),
+        ),
       if (!kIsWeb && isAdmin)
         _DrawerItem(
           icon: PhosphorIcons.buildings(),
@@ -91,7 +106,7 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/admin/people' || location.startsWith('/admin/people/'),
           onTap: () => go('/admin/people'),
         ),
-      if (!kIsWeb && isHod)
+      if (!kIsWeb && isHod && !employeeAdvances)
         _DrawerItem(
           icon: PhosphorIcons.money(),
           selectedIcon: PhosphorIcons.money(PhosphorIconsStyle.fill),
@@ -100,7 +115,7 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/topups' || location == '/funds',
           onTap: () => go('/topups'),
         ),
-      if (!kIsWeb && (isAccountant || isFinanceManager || isAdmin))
+      if (!kIsWeb && (((isAccountant || isFinanceManager) && !employeeAdvances) || isAdmin))
         _DrawerItem(
           icon: PhosphorIcons.handCoins(),
           selectedIcon: PhosphorIcons.handCoins(PhosphorIconsStyle.fill),
@@ -444,29 +459,73 @@ class _RegionOption extends StatelessWidget {
   }
 }
 
-/// Petty cash left for the company the user is signed in under: their own pot if they
-/// have one, otherwise their department's. Hidden when no pot is set up.
+/// Petty cash for the company the user is signed in under (their own pot, else their
+/// department's), plus -- for someone in Dubai and KSA -- their KSA petty cash too, so both
+/// show without switching company. Hidden when nothing is set up.
 class _PettyCashLeft extends ConsumerWidget {
   const _PettyCashLeft();
 
+  /// "SAR 2,000.00 can use now" for an employee advance with a hard limit, else "… left".
+  static String _amount(PettyCashFund f) => f.spendLimit != null
+      ? '${formatMoney(f.currency, f.uncommitted < 0 ? 0 : f.uncommitted)} can use now'
+      : '${formatMoney(f.currency, f.available)} left';
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final region = (ref.watch(authControllerProvider).user?.regionCode ?? '').toUpperCase();
+    final user = ref.watch(authControllerProvider).user;
+    final region = (user?.regionCode ?? '').toUpperCase();
     final funds = ref.watch(myFundsProvider).valueOrNull ?? const <PettyCashFund>[];
-    PettyCashFund? fund;
-    for (final f in funds) {
-      if ((f.regionCode ?? '').toUpperCase() != region) continue;
-      if (f.ownerType == 'employee') {
-        fund = f;
-        break;
-      }
-      fund ??= f;
-    }
-    if (fund == null) return const SizedBox.shrink();
+    final ownAdvances = ref.watch(myPcaAdvancesProvider).valueOrNull ?? const <PettyCashFund>[];
 
-    final owner = fund.ownerType == 'employee'
-        ? 'Your petty cash'
-        : '${(fund.departmentName ?? 'Department').trim()} petty cash';
+    final cards = <(String, String)>[];
+    if (user?.usesEmployeeAdvances ?? false) {
+      // One advance per employee, for all their projects.
+      final advance = ownAdvances.where((f) => (f.regionCode ?? '').toUpperCase() == region).firstOrNull;
+      if (advance != null) cards.add(('Your petty cash', _amount(advance)));
+    } else {
+      PettyCashFund? fund;
+      for (final f in funds) {
+        if ((f.regionCode ?? '').toUpperCase() != region) continue;
+        if (f.ownerType == 'employee') {
+          fund = f;
+          break;
+        }
+        fund ??= f;
+      }
+      if (fund != null) {
+        final owner = fund.ownerType == 'employee'
+            ? 'Your petty cash'
+            : '${(fund.departmentName ?? 'Department').trim()} petty cash';
+        cards.add((owner, '${formatMoney(fund.currency, fund.available)} left'));
+      }
+    }
+    // Petty cash in the other companies they belong to (e.g. KSA while signed in under Dubai).
+    final others = [
+      for (final f in ownAdvances)
+        if ((f.regionCode ?? '').toUpperCase() != region) f,
+    ];
+    if (others.isNotEmpty && cards.isNotEmpty) {
+      cards[0] = ('${cards[0].$1} (${companyLabel(region)})', cards[0].$2);
+    }
+    for (final f in others) {
+      cards.add(('Your petty cash (${companyLabel(f.regionCode ?? '')})', _amount(f)));
+    }
+    if (cards.isEmpty) return const SizedBox.shrink();
+    return Column(
+      children: [for (final (title, amount) in cards) _PettyCashCard(title: title, amount: amount)],
+    );
+  }
+}
+
+class _PettyCashCard extends StatelessWidget {
+  const _PettyCashCard({required this.title, required this.amount});
+
+  final String title;
+  final String amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final owner = title;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       decoration: const BoxDecoration(
@@ -496,7 +555,7 @@ class _PettyCashLeft extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              '${formatMoney(fund.currency, fund.available)} left',
+              amount,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.darkBlue),
             ),
           ],

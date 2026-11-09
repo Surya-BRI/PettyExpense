@@ -117,7 +117,12 @@ class LineItemsEditor extends StatefulWidget {
     this.showProblems = false,
     this.ownDepartmentId,
     this.pettyCash = false,
+    this.splitsByDepartment = true,
   });
+
+  /// False for an employee-advance company (Professional Signs): the employee's own HOD
+  /// approves every line, so no line is flagged as another department's.
+  final bool splitsByDepartment;
 
   final List<LineItemDraft> lines;
   final List<CategoryRef> categories;
@@ -188,6 +193,7 @@ class _LineItemsEditorState extends State<LineItemsEditor> {
           currency: widget.currency,
           ownDepartmentId: widget.ownDepartmentId,
           pettyCash: widget.pettyCash,
+          splitsByDepartment: widget.splitsByDepartment,
           canRemove: lines.length > 1,
           showProblem: widget.showProblems,
           onChanged: widget.onChanged,
@@ -228,8 +234,10 @@ class _LineCard extends StatelessWidget {
     required this.onRemove,
     this.ownDepartmentId,
     this.pettyCash = false,
+    this.splitsByDepartment = true,
   });
 
+  final bool splitsByDepartment;
   final int index;
   final LineItemDraft line;
   final List<CategoryRef> categories;
@@ -242,6 +250,7 @@ class _LineCard extends StatelessWidget {
   final VoidCallback onRemove;
 
   String? get _otherDepartment {
+    if (!splitsByDepartment) return null;
     for (final c in categories) {
       if (c.id == line.categoryId) return c.otherDepartmentFor(ownDepartmentId);
     }

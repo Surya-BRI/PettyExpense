@@ -1,15 +1,23 @@
-"""Reimbursement payment step (Spec 5.5, payment_records).
+"""Payment step (Spec 5.5, payment_records).
 
 After the Finance Manager's final approval a reimbursement is "Approved – Unpaid"
 (status='approved'). Finance records how it was paid — method, reference and the actual
-payment date — which moves it to 'paid' and notifies the employee. Petty cash is settled from
-the fund at approval and never comes here. The region's Finance Manager (the companies they
-cover, see region_scope) or Admin may record payments.
+payment date — which moves it to 'paid' and notifies the employee. The region's Finance
+Manager (the companies they cover, see region_scope) or Admin may record payments.
+
+Department model (Dubai): petty cash is settled from the fund at approval and never comes here.
+
+Employee-advance model (Professional Signs, PCA PDF section 7): approved petty-cash bills come
+here too. The Accounts Manager records each payment as Process 1 (cash withdrawal from bank)
+or Process 2 (direct payment by the Accounts Department) -- `payment_source` -- with its
+reference and date. Paying a petty-cash bill tops the employee's PCA back up: it is logged as a
+paid top-up of that bill (ErpExpenseFundTopupRequest kind='topup'), which is what the fund
+figures count as replenished.
 """
 from datetime import date, datetime
 from typing import Any, Optional, Union
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from auth.security import CurrentUser
@@ -34,13 +42,19 @@ PAYMENT_METHOD_LABELS = {
 
 
 def payment_to_dict(p: ErpExpensePaymentRecord) -> dict[str, Any]:
+    from services.region_policy import PAYMENT_SOURCE_LABELS
+
+    source = getattr(p, "payment_source", None)
     return {
         "id": p.payment_id,
         "transaction_id": p.transaction_id,
         "amount": p.amount,
         "currency": p.currency,
         "payment_method": p.payment_method,
-        "payment_method_label": PAYMENT_METHOD_LABELS.get(p.payment_method, p.payment_method),
+        # Professional Signs shows the PDF process (cash withdrawal / direct payment) instead.
+        "payment_method_label": PAYMENT_SOURCE_LABELS.get(source)
+        or PAYMENT_METHOD_LABELS.get(p.payment_method, p.payment_method),
+        "payment_source": source,
         "payment_reference": p.payment_reference,
         "payment_date": p.payment_date.date().isoformat() if p.payment_date else None,
         "paid_by": p.paid_by,
@@ -94,10 +108,12 @@ def _payable_sql():
 
 class PaymentService:
     def _require_payer(self, db: Session, user: CurrentUser, txn: ErpExpenseTransaction) -> None:
+        from services.region_policy import payer_roles
+
         if user.is_admin:
             return
-        if user.role != "finance_manager":
-            raise PermissionError("Only the Finance Manager or Admin can record a payment")
+        if user.role not in payer_roles(txn.region):
+            raise PermissionError("You don't record payments for this company")
         if not user_covers(db, user.id, txn.region_id):
             raise PermissionError("This claim belongs to a company you don't handle")
 
@@ -107,12 +123,15 @@ class PaymentService:
         user: CurrentUser,
         transaction_id: int,
         *,
-        payment_method: str,
+        payment_method: Optional[str] = None,
         payment_reference: str,
         payment_date: Union[str, date, datetime, None],
         remarks: Optional[str] = None,
+        payment_source: Optional[str] = None,
         notify: bool = True,
     ) -> dict[str, Any]:
+        from services.region_policy import PAYMENT_SOURCE_LABELS, PAYMENT_SOURCES, is_employee_model
+
         txn = (
             db.query(ErpExpenseTransaction)
             .options(joinedload(ErpExpenseTransaction.region), joinedload(ErpExpenseTransaction.payment))
@@ -122,13 +141,26 @@ class PaymentService:
         if not txn:
             raise LookupError("Claim not found")
         self._require_payer(db, user, txn)
-        if (txn.type or "").strip().lower() == "petty_cash":
+        employee_model = is_employee_model(txn.region)
+        petty_cash = (txn.type or "").strip().lower() == "petty_cash"
+        if petty_cash and not employee_model:
             raise ValueError("Petty cash claims are settled from the fund at final approval; there is no payment step")
         if txn.payment is not None or txn.status == "paid":
             raise ValueError("This claim has already been paid")
         if txn.status != "approved":
             raise ValueError("Only approved claims can be marked paid")
-        method = (payment_method or "").strip().lower()
+        source = (payment_source or "").strip().lower() or None
+        if employee_model:
+            # PDF section 7: Process 1 (cash withdrawal from bank) or Process 2 (direct payment).
+            if source not in PAYMENT_SOURCES:
+                raise ValueError(
+                    "Choose how it was paid: Process 1 (cash withdrawal from bank) or "
+                    "Process 2 (direct payment by the Accounts Department)"
+                )
+            method = (payment_method or "").strip().lower() or "cash"
+        else:
+            source = None
+            method = (payment_method or "").strip().lower()
         if method not in PAYMENT_METHODS:
             raise ValueError(f"Payment method must be one of: {', '.join(PAYMENT_METHODS)}")
         reference = (payment_reference or "").strip()
@@ -145,13 +177,17 @@ class PaymentService:
             payment_date=paid_on,
             paid_by=user.id,
             remarks=(remarks or "").strip() or None,
+            payment_source=source,
             created_by=user.id,
             is_active=1,
         )
         db.add(record)
+        if petty_cash:
+            # Paying the bill tops the employee's PCA back up by what the bill took from it.
+            self._top_up_pca(db, user, txn, source, method, reference, paid_on, record.remarks)
         txn.status = "paid"
         txn.paid_on = paid_on
-        label = PAYMENT_METHOD_LABELS[method]
+        label = PAYMENT_SOURCE_LABELS[source] if source else PAYMENT_METHOD_LABELS[method]
         db.add(
             ErpExpenseApprovalHistory(
                 transaction_id=txn.transaction_id,
@@ -170,18 +206,68 @@ class PaymentService:
             transaction_service._notify_employee(db, txn, "paid", record.remarks)
         return payment_to_dict(record)
 
+    def _top_up_pca(
+        self,
+        db: Session,
+        user: CurrentUser,
+        txn: ErpExpenseTransaction,
+        source: Optional[str],
+        method: str,
+        reference: str,
+        paid_on: datetime,
+        remarks: Optional[str],
+    ) -> None:
+        """Employee-advance company: log the payment of an approved petty-cash bill as a paid
+        top-up of that bill, so the employee's PCA counts it as replenished."""
+        from database.models import ErpExpenseFundTopupBill, ErpExpenseFundTopupRequest
+        from services.fund_service import _topup_history, bill_shares, fund_service
+
+        fund = fund_service.employee_advance(db, txn.employee_id, txn.region_id)
+        if fund is None:
+            return  # no PCA (e.g. removed since): nothing to refill
+        taken = fund_service._linked_transaction_ids(db, fund.fund_id)
+        if txn.transaction_id in taken:
+            raise ValueError("This bill is already on a top-up request; finish or reject that request first")
+        part = round(bill_shares(txn, fund.currency).get(None, 0.0), 2)
+        if part <= 0:
+            return
+        row = ErpExpenseFundTopupRequest(
+            fund_id=fund.fund_id,
+            kind="topup",
+            amount=part,
+            requester_id=user.id,
+            status="paid",
+            remarks=remarks,
+            verified_by=user.id,
+            verified_on=datetime.utcnow(),
+            decided_by=user.id,
+            decided_on=datetime.utcnow(),
+            paid_by=user.id,
+            payment_source=source,
+            payment_method=method,
+            payment_reference=reference[:128],
+            payment_date=paid_on,
+            is_active=1,
+        )
+        db.add(row)
+        db.flush()
+        db.add(ErpExpenseFundTopupBill(topup_id=row.topup_id, transaction_id=txn.transaction_id, amount=part))
+        _topup_history(db, row, user.id, "paid", f"Bill #{txn.transaction_id} paid · ref {reference}")
+
     def record_batch(
         self,
         db: Session,
         user: CurrentUser,
         transaction_ids: list[int],
         *,
-        payment_method: str,
+        payment_method: Optional[str] = None,
         payment_reference: str,
         payment_date: Union[str, date, datetime, None],
         remarks: Optional[str] = None,
+        payment_source: Optional[str] = None,
     ) -> dict[str, Any]:
-        """One transfer covering several claims: same method, reference and date on each."""
+        """One transfer covering several claims: same method (or, at Professional Signs, the
+        same process), reference and date on each."""
         paid: list[dict[str, Any]] = []
         skipped: list[dict[str, Any]] = []
         for transaction_id in dict.fromkeys(transaction_ids):
@@ -193,6 +279,7 @@ class PaymentService:
                         payment_reference=payment_reference,
                         payment_date=payment_date,
                         remarks=remarks,
+                        payment_source=payment_source,
                     )
                 )
             except (LookupError, PermissionError, ValueError) as exc:
@@ -215,21 +302,41 @@ class PaymentService:
         per base currency."""
         from services.transaction_service import transaction_to_dict
 
-        if not user.is_admin and user.role != "finance_manager":
+        from services.region_policy import payer_roles
+
+        if not user.is_admin and user.role not in ("finance_manager", "accountant"):
             raise PermissionError("Only the Finance Manager or Admin can see payments")
+        # Companies where this person's role records payments (e.g. an Accountant only sees
+        # Professional Signs, where the Accounts Department pays).
+        paying_region_ids: Optional[set[int]] = None
+        if not user.is_admin:
+            paying_region_ids = {
+                r.region_id for r in db.query(ErpExpenseRegionConfig).all() if user.role in payer_roles(r)
+            }
+            if not paying_region_ids:
+                raise PermissionError("You don't record payments for any company")
+        from services.region_policy import is_employee_model
+
         wanted = "paid" if status == "paid" else "approved"
+        # Petty cash is paid here only in employee-advance companies (Professional Signs:
+        # paying an approved bill tops up the employee's PCA). Elsewhere it's settled from the
+        # department fund at approval.
+        employee_region_ids = {
+            r.region_id for r in db.query(ErpExpenseRegionConfig).all() if is_employee_model(r)
+        }
+        type_filter = ErpExpenseTransaction.type != "petty_cash"
+        if employee_region_ids:
+            type_filter = or_(type_filter, ErpExpenseTransaction.region_id.in_(employee_region_ids))
         q = (
             db.query(ErpExpenseTransaction)
             .outerjoin(ErpExpenseRegionConfig, ErpExpenseRegionConfig.region_id == ErpExpenseTransaction.region_id)
-            .filter(
-                ErpExpenseTransaction.status == wanted,
-                ErpExpenseTransaction.type != "petty_cash",
-            )
+            .filter(ErpExpenseTransaction.status == wanted, type_filter)
         )
         if not user.is_admin:
             region_ids = user_region_ids(db, user.id)
             if region_ids is not None:
                 q = q.filter(ErpExpenseTransaction.region_id.in_(region_ids or {-1}))
+            q = q.filter(ErpExpenseTransaction.region_id.in_(paying_region_ids or {-1}))
         if region_code and region_code.strip():
             q = q.filter(ErpExpenseRegionConfig.region_code == region_code.strip().upper())
         # Grouped by the two plain currency columns, then combined here: SQL Server rejects a
