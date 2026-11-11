@@ -115,8 +115,10 @@ def selectable_regions_for(db: Session, user: ErpAuthExpenseUsers, home: Optiona
 # ErpMasterSubsidiary.subsidiaryCode (the ERP entity an employee's ErpMasterRegion belongs
 # to, via subsidiaryId) -> this app's region_code. Two KSA legal entities both map to KSA.
 ERP_SUBSIDIARY_TO_REGION_CODE = {
-    # BRI UAE = Blue Rhine Industries (Dubai). Contracting (UAE) is an app region for bills.
+    # BRI UAE = Blue Rhine Industries (Dubai).
     "BRI UAE": "DUBAI",
+    # BRC = Blue Rhine Contracting LLC (ERP subsidiary 10, region "BRC UAE") -> app's UAE company.
+    "BRC": "UAE",
     "Prosigns KSA": "KSA",
     "BRI PS Saudi": "KSA",
     "Prosigns Oman": "OMAN",
@@ -125,8 +127,8 @@ ERP_SUBSIDIARY_TO_REGION_CODE = {
 
 
 # Company for someone ERP gives no company at all (no region on their employee record, or an
-# unmapped subsidiary). Dubai = Blue Rhine Industries, where most staff are -- not UAE, which
-# is Blue Rhine Contracting and has no ERP subsidiary of its own.
+# unmapped subsidiary). Dubai = Blue Rhine Industries, where most staff are -- not UAE
+# (Blue Rhine Contracting), which only BRC-subsidiary employees get.
 FALLBACK_REGION_CODE = "DUBAI"
 
 

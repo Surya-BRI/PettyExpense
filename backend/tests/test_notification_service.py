@@ -1,5 +1,5 @@
 import json
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine
@@ -180,8 +180,10 @@ def test_resubmit_notifies_the_same_approver_that_disputed_it(db, scenario, fake
 
 
 def test_delegation_redirects_to_backup(db, scenario, fake_email):
-    today = date.today().isoformat()
-    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    # UTC, like approval_service: a local date is a day ahead just after local midnight.
+    utc_today = datetime.utcnow().date()
+    today = utc_today.isoformat()
+    tomorrow = (utc_today + timedelta(days=1)).isoformat()
     backup = _user(db, scenario["hod"].role, "backup@example.com")
     db.add(
         ErpExpenseApproverDelegation(
