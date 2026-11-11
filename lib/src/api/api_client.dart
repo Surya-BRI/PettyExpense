@@ -747,6 +747,47 @@ class ApiClient {
     return TopupRequest.fromJson(_decodeMap(res));
   }
 
+  // -- Accounts Department petty cash (Professional Signs, PCA PDF section 6) --
+
+  Future<AccountsCash> accountsCash(int regionId) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/pca/accounts-cash', {'region_id': '$regionId'}), headers: _headers),
+    );
+    return AccountsCash.fromJson(_decodeMap(res));
+  }
+
+  /// Admin only: the account's amount from now on.
+  Future<AccountsCash> setAccountsCash(int regionId, double amount, {String? remarks}) async {
+    final res = await _authorized(() => http.put(
+          _uri('/api/pca/accounts-cash'),
+          headers: _headers,
+          body: jsonEncode({'region_id': regionId, 'amount': amount, 'remarks': remarks}),
+        ));
+    return AccountsCash.fromJson(_decodeMap(res));
+  }
+
+  /// Accounts Manager / Admin: money put back from the bank ([amount] null = all paid out).
+  Future<AccountsCash> refillAccountsCash(
+    int regionId, {
+    double? amount,
+    required String reference,
+    required String refillDate,
+    String? remarks,
+  }) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/pca/accounts-cash/refills'),
+          headers: _headers,
+          body: jsonEncode({
+            'region_id': regionId,
+            'amount': amount,
+            'reference': reference,
+            'refill_date': refillDate,
+            'remarks': remarks,
+          }),
+        ));
+    return AccountsCash.fromJson(_decodeMap(res));
+  }
+
   String imageUrl(String? path) {
     if (path == null || path.isEmpty) return '';
     if (path.startsWith('http')) return path;

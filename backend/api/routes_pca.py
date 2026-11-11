@@ -43,6 +43,20 @@ class PayRequest(BaseModel):
     remarks: Optional[str] = None
 
 
+class AccountsCashLimitRequest(BaseModel):
+    region_id: int
+    amount: float  # the account's amount from now on (not an increase)
+    remarks: Optional[str] = None
+
+
+class AccountsCashRefillRequest(BaseModel):
+    region_id: int
+    amount: Optional[float] = None  # defaults to everything paid out and not refilled
+    reference: str
+    refill_date: Optional[str] = None  # YYYY-MM-DD, defaults to today
+    remarks: Optional[str] = None
+
+
 def _orm_user(db: Session, user: CurrentUser):
     row = get_user_by_id(db, user.id)
     if not row:
@@ -188,6 +202,46 @@ def pay(request_id: int, body: PayRequest, user: CurrentUser = Depends(get_curre
             payment_reference=body.payment_reference,
             payment_date=body.payment_date,
             remarks=body.remarks,
+        )
+    )
+
+
+# ---- Accounts Department petty cash (PDF section 6) ------------------------------------
+
+
+@router.get("/accounts-cash")
+def accounts_cash(region_id: int = Query(...), user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The Accounts Department's petty cash: amount, paid out (Process 2), refilled, available
+    and recent movements. Accounts Manager, Accounts and Admin."""
+    from services.accounts_cash_service import accounts_cash_service
+
+    return _run(lambda: accounts_cash_service.view(db, _orm_user(db, user), region_id))
+
+
+@router.put("/accounts-cash")
+def set_accounts_cash(
+    body: AccountsCashLimitRequest, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Admin sets the account's amount."""
+    from services.accounts_cash_service import accounts_cash_service
+
+    return _run(
+        lambda: accounts_cash_service.set_limit(db, _orm_user(db, user), body.region_id, body.amount, body.remarks)
+    )
+
+
+@router.post("/accounts-cash/refills")
+def refill_accounts_cash(
+    body: AccountsCashRefillRequest, user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Accounts Manager (or Admin) records money put back from the bank."""
+    from services.accounts_cash_service import accounts_cash_service
+
+    return _run(
+        lambda: accounts_cash_service.refill(
+            db, _orm_user(db, user), body.region_id,
+            amount=body.amount, reference=body.reference,
+            refill_date=body.refill_date, remarks=body.remarks,
         )
     )
 

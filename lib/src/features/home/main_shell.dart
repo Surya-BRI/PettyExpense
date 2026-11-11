@@ -58,6 +58,10 @@ class MainShell extends ConsumerWidget {
     final historySelected = location == '/approvals/history';
     final profileSelected = location == '/profile';
     final alertsSelected = location == '/notifications';
+    // Professional Signs (KSA): the Accounts Manager pays bills, so Payments takes the Alerts
+    // slot in the bottom nav (alerts stay reachable from the bell in every top bar).
+    final paymentsInNav = employeeAdvances && role == UserRole.financeManager;
+    final paymentsSelected = location == '/payments';
     final unreadCount = ref
         .watch(unreadNotificationCountProvider)
         .maybeWhen(data: (n) => n, orElse: () => 0);
@@ -169,14 +173,22 @@ class MainShell extends ConsumerWidget {
                       ),
                     ),
                   Expanded(
-                    child: _NavItem(
-                      icon: PhosphorIcons.bell(),
-                      selectedIcon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
-                      label: 'Alerts',
-                      selected: alertsSelected,
-                      badgeCount: unreadCount,
-                      onTap: () => context.push('/notifications'),
-                    ),
+                    child: paymentsInNav
+                        ? _NavItem(
+                            icon: PhosphorIcons.money(),
+                            selectedIcon: PhosphorIcons.money(PhosphorIconsStyle.fill),
+                            label: 'Payments',
+                            selected: paymentsSelected,
+                            onTap: () => context.go('/payments'),
+                          )
+                        : _NavItem(
+                            icon: PhosphorIcons.bell(),
+                            selectedIcon: PhosphorIcons.bell(PhosphorIconsStyle.fill),
+                            label: 'Alerts',
+                            selected: alertsSelected,
+                            badgeCount: unreadCount,
+                            onTap: () => context.push('/notifications'),
+                          ),
                   ),
                   Expanded(
                     child: _NavItem(

@@ -319,6 +319,10 @@ def test_approved_petty_cash_bill_is_paid_from_payments_and_refills_the_pca(db, 
     with pytest.raises(ValueError, match="Process 1"):
         payment_service.record_payment(db, _fm(w), tx.transaction_id, payment_reference="X",
                                        payment_date="2026-11-01", notify=False)
+    # Process 2 comes out of the Accounts Department's petty cash, which Admin sets up first.
+    from services.accounts_cash_service import accounts_cash_service
+
+    accounts_cash_service.set_limit(db, w["admin"], w["ksa"].region_id, 5000)
     out = _pay_bill(db, w, tx, source="accounts_petty_cash")  # Process 2
     assert (out["payment_source"], out["payment_method_label"], out["amount"]) == (
         "accounts_petty_cash", "Direct payment by Accounts Department", 3000)

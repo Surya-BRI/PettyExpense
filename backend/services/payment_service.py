@@ -168,6 +168,19 @@ class PaymentService:
             raise ValueError("Enter the payment reference (transfer number, cheque number, payroll batch…)")
         paid_on = _parse_date(payment_date)
         amount, currency = _payable_amount(txn)
+        from services.accounts_cash_service import ACCOUNTS_PETTY_CASH, after_payout, take_payout
+
+        from_accounts_cash = employee_model and source == ACCOUNTS_PETTY_CASH
+        if from_accounts_cash:
+            # PDF section 6: Process 2 comes out of the Accounts Department's own petty cash.
+            take_payout(
+                db, txn.region, amount, user.id,
+                currency=currency,
+                transaction_id=txn.transaction_id,
+                reference=reference,
+                paid_on=paid_on,
+                remarks=(remarks or "").strip() or None,
+            )
         record = ErpExpensePaymentRecord(
             transaction_id=txn.transaction_id,
             amount=amount,
@@ -199,6 +212,8 @@ class PaymentService:
             )
         )
         db.commit()
+        if from_accounts_cash:
+            after_payout(db, txn.region_id)
         if notify:
             from services.transaction_service import transaction_service
 

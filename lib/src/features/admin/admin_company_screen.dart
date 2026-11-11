@@ -11,6 +11,7 @@ import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/pca_fund_figures.dart';
 import '../../widgets/region_branding.dart';
+import '../pca/accounts_cash_view.dart' show AccountsCashView;
 import '../pca/advances_screen.dart' show PcaDepartmentsView, PcaRequestsView;
 import 'admin_providers.dart';
 import 'admin_regions_screen.dart';
@@ -68,7 +69,8 @@ class _CompanyWorkspaceState extends ConsumerState<_CompanyWorkspace> with Singl
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    // Employee-advance company: a 4th tab for the Accounts Department's petty cash.
+    _tabs = TabController(length: widget.region.usesEmployeeAdvances ? 4 : 3, vsync: this);
   }
 
   @override
@@ -174,10 +176,19 @@ class _CompanyWorkspaceState extends ConsumerState<_CompanyWorkspace> with Singl
               labelColor: AppColors.darkBlue,
               unselectedLabelColor: AppColors.textSecondary,
               indicatorColor: AppColors.orange,
+              // Four tabs don't fit a phone's width evenly, so they scroll.
+              isScrollable: region.usesEmployeeAdvances,
+              tabAlignment: region.usesEmployeeAdvances ? TabAlignment.start : null,
               // Employee-advance company (Professional Signs): no department funding, so the
-              // first two tabs are each employee's petty cash and the top-up requests instead.
+              // first two tabs are each employee's petty cash and the top-up requests instead,
+              // plus the Accounts Department's own petty cash (PDF section 6).
               tabs: region.usesEmployeeAdvances
-                  ? const [Tab(text: 'Employees'), Tab(text: 'Requests'), Tab(text: 'Approvers')]
+                  ? const [
+                      Tab(text: 'Employees'),
+                      Tab(text: 'Requests'),
+                      Tab(text: 'Accounts cash'),
+                      Tab(text: 'Approvers'),
+                    ]
                   : const [Tab(text: 'Departments'), Tab(text: 'Top-ups'), Tab(text: 'Approvers')],
             ),
           ),
@@ -188,6 +199,7 @@ class _CompanyWorkspaceState extends ConsumerState<_CompanyWorkspace> with Singl
                   ? [
                       PcaDepartmentsView(regionId: region.id),
                       const PcaRequestsView(),
+                      AccountsCashView(regionId: region.id),
                       _ApproversTab(region: region),
                     ]
                   : [
@@ -292,13 +304,8 @@ class _ApproversTab extends ConsumerWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             children: [
-              _ApproversIntro(company: company),
-              const SizedBox(height: 16),
               _ApproverSection(
                 title: '1. Department HOD',
-                subtitle: ps
-                    ? 'Sets each employee\'s petty cash amount, and approves their staff\'s bills and top-ups.'
-                    : 'Approves bills from their own department. IT items on a Sales bill go to the IT HOD after Sales.',
                 emptyText: 'No HOD for $company — those bills go to Admin.',
                 people: people('hod'),
                 company: company,
@@ -313,7 +320,6 @@ class _ApproversTab extends ConsumerWidget {
                 const SizedBox(height: 16),
                 _ApproverSection(
                   title: '2. Accountant',
-                  subtitle: 'Checks every bill for this company after the HODs.',
                   emptyText: 'No Accountant for $company — those bills go to Admin.',
                   people: people('accountant'),
                   company: company,
@@ -323,10 +329,6 @@ class _ApproversTab extends ConsumerWidget {
               const SizedBox(height: 16),
               _ApproverSection(
                 title: ps ? '2. Accounts Manager (Finance Manager role)' : '3. Finance Manager',
-                subtitle: ps
-                    ? 'Final approval of bills (records the EJV / EJVB), verifies and pays top-ups, '
-                        'and pays reimbursements.'
-                    : 'Final approval. Petty cash is deducted here. Reimbursements then wait for payment.',
                 emptyText: ps
                     ? 'No Accounts Manager for $company — those bills go to Admin.'
                     : 'No Finance Manager for $company — those bills go to Admin.',
@@ -342,43 +344,9 @@ class _ApproversTab extends ConsumerWidget {
   }
 }
 
-class _ApproversIntro extends StatelessWidget {
-  const _ApproversIntro({required this.company});
-
-  final String company;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.lightBlue,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Who approves $company bills',
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Home = this is their own company (from ERP).\n'
-              'Added by Admin = you ticked this company for them under People.\n'
-              'To add or remove someone, open People → that person → Companies.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5, height: 1.4),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ApproverSection extends StatelessWidget {
   const _ApproverSection({
     required this.title,
-    required this.subtitle,
     required this.emptyText,
     required this.people,
     required this.company,
@@ -387,7 +355,6 @@ class _ApproverSection extends StatelessWidget {
   });
 
   final String title;
-  final String subtitle;
   final String emptyText;
   final List<Map<String, dynamic>> people;
   final String company;
@@ -416,8 +383,6 @@ class _ApproverSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-        const SizedBox(height: 4),
-        Text(subtitle, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5, height: 1.35)),
         const SizedBox(height: 10),
         if (people.isEmpty)
           Material(

@@ -161,7 +161,6 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
       drawer: const AppNavDrawer(),
       appBar: const BrandAppBar(
         title: 'My claims',
-        showNotificationAction: false,
       ),
       body: Column(
         children: [

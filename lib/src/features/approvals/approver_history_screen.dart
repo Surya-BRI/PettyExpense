@@ -45,7 +45,7 @@ class _ApproverHistoryScreenState extends ConsumerState<ApproverHistoryScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: BrandAppBar(title: 'My Actions', showNotificationAction: false),
+      appBar: BrandAppBar(title: 'My Actions'),
       body: async.when(
         loading: () => const _HistorySkeleton(),
         error: (e, _) => Center(

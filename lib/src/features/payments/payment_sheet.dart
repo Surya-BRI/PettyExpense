@@ -8,6 +8,8 @@ import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/money.dart';
 import '../../widgets/claim_ui_helpers.dart';
+import '../pca/accounts_cash_view.dart' show accountsCashProvider;
+import '../pca/advances_screen.dart' show pcaRegionsProvider;
 
 const kPaymentMethods = <String, String>{
   'bank_transfer': 'Bank transfer',
@@ -125,6 +127,7 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
           );
         }
       }
+      if (source == 'accounts_petty_cash') ref.invalidate(accountsCashProvider);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -171,7 +174,9 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
                       enabled: !_busy,
                       contentPadding: EdgeInsets.zero,
                       title: Text(e.value.$1, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text(e.value.$2),
+                      subtitle: e.key == 'accounts_petty_cash'
+                          ? _AccountsCashLeft(regionCode: first.regionCode, amount: amount)
+                          : Text(e.value.$2),
                     ),
                 ],
               ),
@@ -230,6 +235,36 @@ class _RecordPaymentSheetState extends ConsumerState<_RecordPaymentSheet> {
         ],
         ),
       ),
+    );
+  }
+}
+
+/// Process 2 subtitle: what's left in the Accounts Department's petty cash (PDF section 6),
+/// warning when it can't cover this payment.
+class _AccountsCashLeft extends ConsumerWidget {
+  const _AccountsCashLeft({required this.regionCode, required this.amount});
+
+  final String? regionCode;
+  final double amount;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    const fallback = Text('Paid directly by the Accounts Department');
+    final code = (regionCode ?? '').toUpperCase();
+    final regions = ref.watch(pcaRegionsProvider).valueOrNull ?? const <RegionConfig>[];
+    final region = regions.where((r) => r.regionCode.toUpperCase() == code).firstOrNull;
+    if (region == null) return fallback;
+    final cash = ref.watch(accountsCashProvider(region.id)).valueOrNull;
+    if (cash == null) return fallback;
+    if (!cash.configured) {
+      return const Text('Accounts petty cash not set up yet (Advances → Accounts cash)',
+          style: TextStyle(color: AppColors.danger));
+    }
+    final short = amount > cash.available + 0.005;
+    return Text(
+      'From Accounts petty cash · ${formatMoney(cash.currency, cash.available)} left'
+      '${short ? ' — not enough, refill first' : ''}',
+      style: TextStyle(color: short ? AppColors.danger : null),
     );
   }
 }

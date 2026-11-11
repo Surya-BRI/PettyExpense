@@ -4,6 +4,47 @@ Newest first. Each entry says what changed for users, what changed in the code, 
 
 ---
 
+## 2026-11-09 — Blue Rhine Contracting (UAE): follows the department flow
+
+Docs only. BRC's *PCA – Replenishment Process* (limit → bills → prepare PCA → Verifier → Financial Manager → bank withdrawal → top-up) is mapped in [`BRC_DEPARTMENT_PETTY_CASH.md`](BRC_DEPARTMENT_PETTY_CASH.md). Decision: BRC keeps the same department flow as Blue Rhine Industries, with no code or settings change. Known differences accepted for now: each bill is still approved HOD → Accountant → Finance Manager before it can go on a top-up, and the Finance Manager approves and records the bank payment in one step.
+
+### Before go-live
+
+- Tick Blue Rhine Contracting for each BRC person in Admin → People (no ERP subsidiary maps to UAE).
+- Set the "Site-wise statement" department limit (5,000) for Blue Rhine Contracting, make Roshan Stanly its HOD, and set an Accountant and Finance Manager for the company.
+
+---
+
+## 2026-11-09 — Professional Signs (KSA): Accounts Department petty cash is tracked
+
+Branch: `indra` (not yet committed). PCA PDF section 6. This changes Q4 in [`PS_EMPLOYEE_PCA_COMPARISON.md`](PS_EMPLOYEE_PCA_COMPARISON.md) from "just record it" to tracking a balance.
+
+### What changed for users
+
+- **The Accounts Department's own petty cash now has a balance.** Admin or the KSA Accounts Manager sets its amount; every **Process 2 · Direct payment by Accounts** (a bill on Payments, or an older advance request) takes from it.
+- **Process 2 is refused** when the account isn't set up yet, or has less left than the payment ("Refill it from the bank first, or pay by Process 1"). In "Pay N together" each bill is checked in turn; the ones that don't fit are skipped with that reason.
+- **Refill from bank:** the Accounts Manager (or Admin) records money put back, with a bank reference and date, up to what has been paid out and not refilled.
+- **Low alert:** below 20% left, the Accounts Manager and Admin are notified once per refill cycle.
+- **Admin is notified** whenever the Accounts Manager changes the amount ("… changed the Accounts Department petty cash (KSA) from SAR 5,000.00 to 20,000.00", with the reason). Not when Admin changes it.
+- **Advances → Accounts cash** (new third tab for the Accounts Manager, Accounts and Admin) shows what's left, paid out, refilled, to refill, a bar, and recent movements. Admin and the Accounts Manager get **Set / Change amount**; the Accounts Manager also gets **Refill from bank**. Admin also sees it as the **Accounts cash** tab on Companies → Professional Signs.
+- The payment sheet's Process 2 option shows "From Accounts petty cash · SAR … left", in red when it can't cover the payment.
+- Process 1 (bank) and Dubai are unchanged.
+
+### Code
+
+- New tables `ErpExpenseAccountsCash` (one per company: `cashLimit`, `currency`) and `ErpExpenseAccountsCashEntry` (`kind` payout / refill / set), created by `create_all()` on startup. Kept apart from `ErpExpensePettyCashFund` so no fund list or balance picks it up.
+- New `services/accounts_cash_service.py`: `take_payout` (no commit; called by `payment_service.record_payment` and `employee_pca_service.pay` before they commit), `after_payout` (low alert), `view`, `set_limit` (Admin; not below what's out), `refill`.
+- Routes: `GET /api/pca/accounts-cash?region_id=`, `PUT /api/pca/accounts-cash`, `POST /api/pca/accounts-cash/refills`.
+- `routes_notifications._type_ids` ignores `pca_accounts_cash_low_*` (no top-up or fund id in it).
+- App: `features/pca/accounts_cash_view.dart`, `AccountsCash` model, three API calls.
+- Tests: new `backend/tests/test_accounts_cash.py` (6 tests); `test_employee_pca.py` sets the account up before its Process 2 payment. Backend 373 passed, 5 skipped, 2 xfailed; Flutter 80 passed, "App boots to home" failing as before.
+
+### Before go-live
+
+- Admin or the KSA Accounts Manager must set the Accounts Department amount, or every Process 2 payment is refused.
+
+---
+
 ## 2026-11-05 — Professional Signs (KSA): simpler flow after the team's answers
 
 Branch: `indra` (not yet committed). This replaces parts of the 2026-11-04 entry below. Decisions are in [`PS_EMPLOYEE_PCA_COMPARISON.md`](PS_EMPLOYEE_PCA_COMPARISON.md) (Q2, Q7, Q10).

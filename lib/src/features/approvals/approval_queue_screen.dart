@@ -111,7 +111,6 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                 (ref.watch(authControllerProvider).user?.usesEmployeeAdvances ?? false)
             ? 'Accounts Manager queue'
             : _stageLabels[widget.stage] ?? 'Approvals',
-        showNotificationAction: false,
       ),
       body: Column(
         children: [

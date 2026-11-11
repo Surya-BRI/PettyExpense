@@ -21,6 +21,8 @@ def _type_ids(type_: Optional[str]) -> tuple[Optional[int], Optional[int]]:
     'fund_low_<fundId>_<cycle>', 'pca_reminder_<fundId>_<cycle>' -> fund id."""
     parts = (type_ or "").split("_")
     try:
+        if type_ and type_.startswith("pca_accounts_cash_"):
+            return None, None  # 'pca_accounts_cash_low_<accountId>_<cycle>': no top-up or fund
         if type_ and (type_.startswith("fund_low_") or type_.startswith("pca_reminder_")):
             return None, int(parts[-2])
         if type_ and (type_.startswith("topup_") or type_.startswith("pca_")):

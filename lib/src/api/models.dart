@@ -1392,6 +1392,104 @@ class PcaStaff {
       );
 }
 
+/// One movement on the Accounts Department's petty cash.
+class AccountsCashEntry {
+  const AccountsCashEntry({
+    required this.id,
+    required this.kind,
+    required this.amount,
+    this.transactionId,
+    this.topupId,
+    this.employeeName,
+    this.reference,
+    this.date,
+    this.remarks,
+    this.actorName,
+  });
+
+  final int id;
+
+  /// payout (Process 2 payment) | refill (from the bank) | set (Admin changed the amount).
+  final String kind;
+  final double amount;
+  final int? transactionId;
+  final int? topupId;
+  final String? employeeName;
+  final String? reference;
+  final DateTime? date;
+  final String? remarks;
+  final String? actorName;
+
+  factory AccountsCashEntry.fromJson(Map<String, dynamic> json) {
+    final date = json['date'] as String?;
+    return AccountsCashEntry(
+      id: (json['id'] as num).toInt(),
+      kind: json['kind'] as String? ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      transactionId: (json['transaction_id'] as num?)?.toInt(),
+      topupId: (json['topup_id'] as num?)?.toInt(),
+      employeeName: json['employee_name'] as String?,
+      reference: json['reference'] as String?,
+      date: date == null ? null : DateTime.tryParse(date),
+      remarks: json['remarks'] as String?,
+      actorName: json['actor_name'] as String?,
+    );
+  }
+}
+
+/// `GET /api/pca/accounts-cash`: the Accounts Department's own petty cash (Professional Signs,
+/// PCA PDF section 6). Process 2 payments take from it; the Accounts Manager refills it.
+class AccountsCash {
+  const AccountsCash({
+    required this.regionId,
+    required this.currency,
+    required this.configured,
+    required this.limit,
+    required this.paidOut,
+    required this.refilled,
+    required this.toRefill,
+    required this.available,
+    required this.low,
+    required this.canSet,
+    required this.canRefill,
+    required this.entries,
+  });
+
+  final int regionId;
+  final String currency;
+  final bool configured;
+  final double limit;
+  final double paidOut;
+  final double refilled;
+  final double toRefill;
+  final double available;
+  final bool low;
+  final bool canSet;
+  final bool canRefill;
+  final List<AccountsCashEntry> entries;
+
+  factory AccountsCash.fromJson(Map<String, dynamic> json) {
+    double n(String key) => (json[key] as num?)?.toDouble() ?? 0;
+    return AccountsCash(
+      regionId: (json['region_id'] as num?)?.toInt() ?? 0,
+      currency: json['currency'] as String? ?? '',
+      configured: json['configured'] as bool? ?? false,
+      limit: n('limit'),
+      paidOut: n('paid_out'),
+      refilled: n('refilled'),
+      toRefill: n('to_refill'),
+      available: n('available'),
+      low: json['low'] as bool? ?? false,
+      canSet: json['can_set'] as bool? ?? false,
+      canRefill: json['can_refill'] as bool? ?? false,
+      entries: [
+        for (final row in (json['entries'] as List? ?? const []))
+          if (row is Map) AccountsCashEntry.fromJson(Map<String, dynamic>.from(row)),
+      ],
+    );
+  }
+}
+
 class TopupHistoryEntry {
   const TopupHistoryEntry({required this.action, this.actorName, this.comment, this.at});
 

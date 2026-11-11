@@ -24,6 +24,7 @@ import '../admin/admin_providers.dart';
 import '../admin/my_funds_screen.dart' show myFundsProvider;
 import '../authentication/auth_controller.dart';
 import '../payments/payment_sheet.dart' show kPaymentMethods;
+import 'accounts_cash_view.dart';
 
 final pcaRequestsProvider = FutureProvider.autoDispose<List<TopupRequest>>((ref) {
   return ref.watch(apiClientProvider).pcaRequests();
@@ -73,6 +74,7 @@ void invalidatePcaProviders(WidgetRef ref) {
   ref.invalidate(myPcaAdvancesProvider);
   ref.invalidate(pcaSummaryProvider);
   ref.invalidate(myFundsProvider);
+  ref.invalidate(accountsCashProvider);
 }
 
 const kPaymentSources = <String, String>{
@@ -159,22 +161,29 @@ class AdvancesScreen extends ConsumerWidget {
         body: const _MyAdvancesView(),
       );
     }
+    // The Accounts Department's own petty cash (PDF section 6): Accounts Manager, Accounts, Admin.
+    final accountsCash =
+        role == UserRole.financeManager || role == UserRole.accountant || role == UserRole.admin;
     // Petty cash is set from Employees -> department -> an employee (no separate button).
     return DefaultTabController(
-      length: 2,
+      length: accountsCash ? 3 : 2,
       child: Scaffold(
         backgroundColor: AppColors.background,
         drawer: const AppNavDrawer(),
         appBar: const BrandAppBar(title: 'Advances', automaticallyImplyLeading: true),
         body: Column(
           children: [
-            const Material(
+            Material(
               color: AppColors.card,
               child: TabBar(
                 labelColor: AppColors.darkBlue,
                 unselectedLabelColor: AppColors.textSecondary,
                 indicatorColor: AppColors.orange,
-                tabs: [Tab(text: 'Employees'), Tab(text: 'Requests')],
+                tabs: [
+                  const Tab(text: 'Employees'),
+                  const Tab(text: 'Requests'),
+                  if (accountsCash) const Tab(text: 'Accounts cash'),
+                ],
               ),
             ),
             Expanded(
@@ -183,6 +192,7 @@ class AdvancesScreen extends ConsumerWidget {
                   // Every employee (by department) with their petty cash limit, spent and left.
                   _CompanyPicker(builder: (id) => PcaDepartmentsView(regionId: id)),
                   const PcaRequestsView(),
+                  if (accountsCash) _CompanyPicker(builder: (id) => AccountsCashView(regionId: id)),
                 ],
               ),
             ),

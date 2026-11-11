@@ -43,20 +43,10 @@ class AdminHubScreen extends ConsumerWidget {
           }
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-            itemCount: regions.length + 1,
+            itemCount: regions.length,
             separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, i) {
-              if (i == 0) {
-                return const Padding(
-                  padding: EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    'Open a company to set department limits, request top-ups, and change the name or logo. '
-                    'Professional Signs gives each employee one advance instead: see Advances in the menu.',
-                    style: TextStyle(color: AppColors.textSecondary, height: 1.35),
-                  ),
-                );
-              }
-              final r = regions[i - 1];
+              final r = regions[i];
               return _CompanyCard(
                 region: r,
                 onTap: () => context.push('/admin/companies/${r.id}'),

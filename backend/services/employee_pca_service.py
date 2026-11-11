@@ -807,6 +807,18 @@ class EmployeePcaService:
         paid_on = _parse_date(payment_date)
         if paid_on.date() > datetime.utcnow().date():
             raise ValueError("The payment date can't be in the future")
+        from services.accounts_cash_service import ACCOUNTS_PETTY_CASH, after_payout, take_payout
+
+        if source == ACCOUNTS_PETTY_CASH:
+            # PDF section 6: comes out of the Accounts Department's own petty cash.
+            take_payout(
+                db, region, row.amount, user.user_id,
+                currency=fund.currency,
+                topup_id=row.topup_id,
+                reference=reference,
+                paid_on=paid_on,
+                remarks=(remarks or "").strip() or None,
+            )
         row.status = "paid"
         row.payment_source = source
         row.payment_method = method
@@ -820,6 +832,8 @@ class EmployeePcaService:
         note = f"Paid from {PAYMENT_SOURCE_LABELS[source]} ({method}, ref {reference})"
         _topup_history(db, row, user.user_id, "paid", " · ".join(p for p in [note, (remarks or "").strip()] if p))
         db.commit()
+        if source == ACCOUNTS_PETTY_CASH:
+            after_payout(db, region.region_id)
         _notify(db, row, "paid", user.user_id, remarks)
         return self.request_to_dict(db, request_id)
 

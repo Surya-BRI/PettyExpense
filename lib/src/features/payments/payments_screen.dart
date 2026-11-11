@@ -91,7 +91,7 @@ class _PaymentsScreenState extends ConsumerState<PaymentsScreen> {
 
     return Scaffold(
       drawer: const AppNavDrawer(),
-      appBar: const BrandAppBar(title: 'Payments', showNotificationAction: false),
+      appBar: const BrandAppBar(title: 'Payments'),
       floatingActionButton: _status == 'unpaid' && _selected.length > 1
           ? FloatingActionButton.extended(
               onPressed: _paySelected,

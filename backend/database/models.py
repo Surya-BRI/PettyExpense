@@ -388,6 +388,58 @@ class ErpExpensePaymentRecord(Base, AuditColumns):
     payer: Mapped[ErpAuthExpenseUsers] = relationship(foreign_keys=[paid_by])
 
 
+class ErpExpenseAccountsCash(Base, AuditColumns):
+    """Professional Signs (PCA PDF section 6): the Accounts Department's own petty cash account,
+    one per employee-model company. Some PCA needs are paid straight from it (Process 2,
+    payment_source 'accounts_petty_cash'). It works as a float: cashLimit is the amount Admin
+    sets; every Process 2 payment takes from it and a refill from the bank puts it back.
+    Available = cashLimit - (paid out - refilled). See services/accounts_cash_service.py.
+    New table -- create_all() creates it on startup."""
+
+    __tablename__ = "ErpExpenseAccountsCash"
+
+    accounts_cash_id: Mapped[int] = mapped_column("accountsCashId", Integer, primary_key=True, autoincrement=True)
+    region_id: Mapped[int] = mapped_column(
+        "regionId", Integer, ForeignKey("ErpExpenseRegionConfig.regionId"), unique=True, index=True
+    )
+    currency: Mapped[str] = mapped_column("currency", String(8))
+    cash_limit: Mapped[float] = mapped_column("cashLimit", Float, default=0.0)
+
+    region: Mapped[ErpExpenseRegionConfig] = relationship()
+    entries: Mapped[list["ErpExpenseAccountsCashEntry"]] = relationship(
+        back_populates="account", order_by="ErpExpenseAccountsCashEntry.entry_id"
+    )
+
+
+class ErpExpenseAccountsCashEntry(Base, AuditColumns):
+    """One movement on the Accounts Department's petty cash: 'payout' (a Process 2 payment of a
+    bill or an advance request), 'refill' (money put back from the bank) or 'set' (Admin changed
+    the limit; amount = the change, not counted in the balance). New table -- create_all()."""
+
+    __tablename__ = "ErpExpenseAccountsCashEntry"
+
+    entry_id: Mapped[int] = mapped_column("entryId", Integer, primary_key=True, autoincrement=True)
+    accounts_cash_id: Mapped[int] = mapped_column(
+        "accountsCashId", Integer, ForeignKey("ErpExpenseAccountsCash.accountsCashId"), index=True
+    )
+    kind: Mapped[str] = mapped_column("kind", String(16))  # payout | refill | set
+    amount: Mapped[float] = mapped_column("amount", Float)
+    transaction_id: Mapped[Optional[int]] = mapped_column(
+        "transactionId", Integer, ForeignKey("ErpExpenseTransaction.transactionId"), nullable=True, index=True
+    )
+    topup_id: Mapped[Optional[int]] = mapped_column(
+        "topupId", Integer, ForeignKey("ErpExpenseFundTopupRequest.topupId"), nullable=True
+    )
+    reference: Mapped[Optional[str]] = mapped_column("reference", Unicode(128), nullable=True)
+    entry_date: Mapped[datetime] = mapped_column("entryDate", DateTime, default=datetime.utcnow)
+    remarks: Mapped[Optional[str]] = mapped_column("remarks", UnicodeText, nullable=True)
+    actor_id: Mapped[int] = mapped_column("actorId", Integer, ForeignKey("ErpAuthExpenseUsers.userId"))
+
+    account: Mapped[ErpExpenseAccountsCash] = relationship(back_populates="entries")
+    actor: Mapped[ErpAuthExpenseUsers] = relationship(foreign_keys=[actor_id])
+    transaction: Mapped[Optional["ErpExpenseTransaction"]] = relationship(foreign_keys=[transaction_id])
+
+
 class ErpExpenseDocument(Base):
     __tablename__ = "ErpExpenseDocument"
 
