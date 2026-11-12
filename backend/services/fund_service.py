@@ -28,7 +28,13 @@ from services.currency import default_base_currency, region_base_currency
 from services.department_split import department_shares
 from services.notification_service import send
 from services.opportunity_lookup import normalize_op
-from services.region_policy import is_employee_model, is_site_model, pca_reminder_ratio, pca_spend_limit_ratio
+from services.region_policy import (
+    company_label,
+    is_employee_model,
+    is_site_model,
+    pca_reminder_ratio,
+    pca_spend_limit_ratio,
+)
 from services.region_scope import user_covers, user_region_ids
 
 # A petty-cash bill comes off the fund at final Finance Manager approval (spec 5.3).
@@ -481,7 +487,7 @@ def _notify_people(
 
 def _topup_summary(row: ErpExpenseFundTopupRequest, fund: ErpExpensePettyCashFund) -> str:
     dept = fund.department.department_name if fund.department else "Department"
-    region = fund.region.region_code if fund.region else ""
+    region = company_label(fund.region) if fund.region else ""
     return f"{fund.currency} {row.amount:,.2f} for {dept} petty cash ({region})"
 
 
@@ -540,7 +546,7 @@ def check_low_fund(db: Session, fund_id: int) -> bool:
     if site_pot:
         # Blue Rhine Contracting: the Accountant prepares the top-up; tell them and the employee.
         who = fund.employee.display_name if fund.employee else "An employee"
-        company = fund.region.region_code if fund.region else ""
+        company = company_label(fund.region) if fund.region else ""
         _notify_people(
             db, [fund.employee, *_role_or_admin(db, "accountant", fund.region_id)],
             f"fund_low_{fund.fund_id}_{cycle}", f"{who}'s petty cash is running low",
@@ -549,7 +555,7 @@ def check_low_fund(db: Session, fund_id: int) -> bool:
         )
         return True
     dept = fund.department.department_name if fund.department else "Department"
-    region = fund.region.region_code if fund.region else ""
+    region = company_label(fund.region) if fund.region else ""
     _notify_people(
         db, [*_department_hods(db, fund), *_people_with_role(db, "admin")],
         f"fund_low_{fund.fund_id}_{cycle}", f"{dept} petty cash is running low",
@@ -587,7 +593,7 @@ def check_advance_reminder(db: Session, fund_id: int) -> bool:
         f"pca_reminder_{fund.fund_id}_{cycle}", "Petty cash: approved bills to pay",
         f"{fund.employee.display_name if employee else 'An employee'} has {fund.currency} {spent:,.2f} of approved "
         f"petty-cash bills not yet paid, against {fund.currency} {limit:,.2f} of petty cash "
-        f"({fund.region.region_code if fund.region else ''}). The Accounts Manager pays them from "
+        f"({company_label(fund.region) if fund.region else ''}). The Accounts Manager pays them from "
         "Payments, which refills the petty cash.",
     )
     return True

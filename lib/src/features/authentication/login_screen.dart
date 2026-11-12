@@ -8,6 +8,7 @@ import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
 import '../../theme/app_theme.dart';
 import 'auth_controller.dart';
+import '../../utils/company_names.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,7 +17,6 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-const _regionLabels = {'DUBAI': 'Dubai', 'UAE': 'UAE', 'KSA': 'KSA', 'OMAN': 'Oman'};
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _userCtrl = TextEditingController();
@@ -140,7 +140,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           children: [
                             for (final region in _regionOptions!) ...[
                               Expanded(child: _RegionPill(
-                                label: _regionLabels[region] ?? region,
+                                label: erpCompanyLabel(region),
                                 selected: _selectedRegion == region,
                                 onTap: () => setState(() => _selectedRegion = region),
                               )),

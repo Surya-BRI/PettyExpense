@@ -73,6 +73,25 @@ SITE_PCA_SETTINGS: dict[str, Any] = {
 }
 
 
+# How users see each company: ERP's company code and name (internal codes stay DUBAI / UAE /
+# KSA / OMAN). Professional Signs is two ERP companies (BRI PS Saudi, Prosigns KSA), so it shows
+# its name only. Same table as the app's lib/src/utils/company_names.dart.
+ERP_COMPANY_LABELS = {
+    "DUBAI": "BRI UAE · Blue Rhine Industries",
+    "UAE": "BRC · Blue Rhine Contracting",
+    "KSA": "Professional Signs",
+    "OMAN": "Prosigns Oman",
+}
+
+
+def company_label(region: Any) -> str:
+    """ERP's name for a company (an ErpExpenseRegionConfig or its code), e.g.
+    "BRC · Blue Rhine Contracting"; the code itself for a company ERP doesn't know."""
+    code = region if isinstance(region, str) else getattr(region, "region_code", None)
+    code = (code or "").strip().upper()
+    return ERP_COMPANY_LABELS.get(code, code)
+
+
 def matrix(region: Optional[ErpExpenseRegionConfig]) -> dict[str, Any]:
     if region is None or not region.approval_matrix_json:
         return {}

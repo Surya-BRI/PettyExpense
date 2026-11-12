@@ -15,6 +15,7 @@ import '../routing/role_routes.dart';
 import '../theme/app_theme.dart';
 import '../utils/money.dart';
 import 'region_branding.dart';
+import '../utils/company_names.dart';
 
 /// Left-hand drawer mirroring the bottom nav bar (see MainShell) -- same destinations,
 /// role-aware, for screens that want a menu entry point instead of (or alongside) the
@@ -284,9 +285,8 @@ class _WorkInfoCard extends ConsumerWidget {
   }
 }
 
-const _companyLabels = {'DUBAI': 'Dubai', 'UAE': 'UAE', 'KSA': 'KSA', 'OMAN': 'Oman'};
-
-String companyLabel(String code) => _companyLabels[code.toUpperCase()] ?? code;
+/// ERP's company code and name, e.g. "BRC · Blue Rhine Contracting" (see utils/company_names.dart).
+String companyLabel(String code) => erpCompanyLabel(code);
 
 /// Shown only for users assigned to more than one company. Switching re-issues the
 /// session, so every screen reloads its data for the new company.

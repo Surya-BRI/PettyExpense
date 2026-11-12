@@ -54,7 +54,7 @@ from services.fund_service import (
     project_shares,
 )
 from services.payment_service import PAYMENT_METHODS
-from services.region_policy import PAYMENT_SOURCE_LABELS, PAYMENT_SOURCES, is_employee_model, payer_roles
+from services.region_policy import PAYMENT_SOURCE_LABELS, PAYMENT_SOURCES, company_label, is_employee_model, payer_roles
 from services.region_scope import covers_region, user_covers, user_region_ids
 
 ADVANCE = "advance"
@@ -150,7 +150,7 @@ def _summary(row: ErpExpenseFundTopupRequest) -> str:
     fund = row.fund
     who = fund.employee.display_name if fund and fund.employee else "an employee"
     what = "advance" if (row.kind or TOPUP) == ADVANCE else "advance top-up"
-    company = fund.region.region_code if fund and fund.region else ""
+    company = company_label(fund.region) if fund and fund.region else ""
     return f"{fund.currency if fund else ''} {row.amount:,.2f} {what} for {who} ({company})"
 
 
@@ -650,7 +650,7 @@ class EmployeePcaService:
         _notify_people(
             db, [employee, *_employee_hods(db, fund)],
             f"pca_advance_set_{row.topup_id}", "Petty cash amount set",
-            f"{employee.display_name}'s petty cash ({region.region_code}) is now {fund.currency} {new:,.2f}. "
+            f"{employee.display_name}'s petty cash ({company_label(region)}) is now {fund.currency} {new:,.2f}. "
             "Petty-cash bills come off it; top up with the approved bills when it runs low.",
             skip_user_id=user.user_id,
         )

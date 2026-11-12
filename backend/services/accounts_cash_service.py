@@ -29,7 +29,7 @@ from database.models import (
     ErpExpenseRegionConfig,
 )
 from services.currency import region_base_currency
-from services.region_policy import is_employee_model, payer_roles
+from services.region_policy import company_label, is_employee_model, payer_roles
 from services.region_scope import user_covers
 
 ACCOUNTS_PETTY_CASH = "accounts_petty_cash"
@@ -150,7 +150,7 @@ def _notify_low(db: Session, account: ErpExpenseAccountsCash, figs: dict[str, fl
         [*_payers(db, region), *_people_with_role(db, "admin")],
         f"pca_accounts_cash_low_{account.accounts_cash_id}_{figs['refill_count']}",
         "Accounts Department petty cash is low",
-        f"The Accounts Department petty cash ({region.region_code}) has {account.currency} "
+        f"The Accounts Department petty cash ({company_label(region)}) has {account.currency} "
         f"{figs['available']:,.2f} left of {figs['limit']:,.2f}. Refill it from the bank: "
         f"{account.currency} {figs['to_refill']:,.2f} has been paid out.",
     )
@@ -328,7 +328,7 @@ class AccountsCashService:
                 _people_with_role(db, "admin"),
                 f"pca_accounts_cash_set_{account.accounts_cash_id}_{entry_id}",
                 "Accounts Department petty cash amount changed",
-                f"{user.display_name} changed the Accounts Department petty cash ({region.region_code}) "
+                f"{user.display_name} changed the Accounts Department petty cash ({company_label(region)}) "
                 f"from {account.currency} {old:,.2f} to {new:,.2f}.{reason}",
                 skip_user_id=user.user_id,
             )

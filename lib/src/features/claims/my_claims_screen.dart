@@ -13,6 +13,7 @@ import '../../widgets/claim_stage_tracker.dart';
 import '../../widgets/shimmer_box.dart';
 import '../authentication/auth_controller.dart';
 import '../shared/status_chip.dart';
+import '../../utils/company_names.dart';
 
 const _pageSize = 6;
 
@@ -417,7 +418,7 @@ class _RegionFilter extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 10, 8, 2),
         children: [
           chip('All', null),
-          for (final code in options) chip(companyLabel(code), code),
+          for (final code in options) chip(erpCompanyShort(code), code),
         ],
       ),
     );

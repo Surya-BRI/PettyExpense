@@ -2,10 +2,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
+import '../../utils/company_names.dart';
 
 const kAdminRegionOrder = ['DUBAI', 'UAE', 'KSA', 'OMAN'];
 
+/// ERP's company code and name ("BRC · Blue Rhine Contracting"); a company ERP doesn't know
+/// keeps the name Admin gave it.
 String companyTitle(RegionConfig region) {
+  if (kErpCompanies.containsKey(region.regionCode.toUpperCase())) return erpCompanyLabel(region.regionCode);
   final name = region.companyName?.trim();
   if (name != null && name.isNotEmpty) return name;
   return region.regionName;
@@ -14,6 +18,7 @@ String companyTitle(RegionConfig region) {
 String peopleCountLabel(int n) => n == 1 ? '1 person' : '$n people';
 
 String fundCompanyName(PettyCashFund fund) {
+  if (kErpCompanies.containsKey((fund.regionCode ?? '').toUpperCase())) return erpCompanyLabel(fund.regionCode);
   final company = (fund.companyName ?? '').trim();
   if (company.isNotEmpty) return company;
   final code = (fund.regionCode ?? '').trim();

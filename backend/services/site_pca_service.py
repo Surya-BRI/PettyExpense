@@ -41,7 +41,7 @@ from services.fund_service import (
     fund_to_dict,
 )
 from services.payment_service import PAYMENT_METHODS
-from services.region_policy import is_site_model
+from services.region_policy import company_label, is_site_model
 from services.region_scope import covers_region, user_covers, user_region_ids
 
 ADVANCE = "advance"
@@ -102,7 +102,7 @@ def _load_request(db: Session, request_id: int) -> ErpExpenseFundTopupRequest:
 def _summary(row: ErpExpenseFundTopupRequest) -> str:
     fund = row.fund
     who = fund.employee.display_name if fund and fund.employee else "an employee"
-    company = fund.region.region_code if fund and fund.region else ""
+    company = company_label(fund.region) if fund and fund.region else ""
     return f"{fund.currency} {row.amount:,.2f} top-up of {who}'s petty cash ({company})"
 
 
@@ -326,7 +326,7 @@ class SitePcaService:
         db.commit()
         _notify_people(
             db, [employee], f"pca_site_set_{row.topup_id}", "Your petty cash",
-            f"Your petty cash ({region.region_code}) is now {fund.currency} {amount:,.2f}.",
+            f"Your petty cash ({company_label(region)}) is now {fund.currency} {amount:,.2f}.",
             skip_user_id=user.user_id,
         )
         return self.request_to_dict(db, row.topup_id)

@@ -13,6 +13,7 @@ import '../../widgets/brand_app_bar.dart';
 import '../authentication/auth_controller.dart';
 import '../shared/status_chip.dart';
 import 'dashboard_data.dart';
+import '../../utils/company_names.dart';
 
 /// Web table of every visible claim (whole company for approvers, own claims for
 /// employees) with search, filters, and sortable columns. Rows open the same
@@ -309,7 +310,7 @@ class _AllClaimsScreenState extends ConsumerState<AllClaimsScreen> {
         )),
         DataCell(Text((c.billNumber ?? '').trim().isEmpty ? '-' : c.billNumber!.trim())),
         DataCell(Text(c.category.isEmpty ? '-' : c.category)),
-        DataCell(Text(c.regionCode ?? '-')),
+        DataCell(Text(c.regionCode == null ? '-' : erpCompanyShort(c.regionCode))),
         DataCell(Text(formatMoney(c.currency, claimTotal(c)), style: const TextStyle(fontWeight: FontWeight.w600))),
         DataCell(StatusChip.forClaim(c)),
         DataCell(Text(stage)),
