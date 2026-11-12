@@ -18,6 +18,8 @@ String defaultStageFor(UserRole role) {
       return 'hod';
     case UserRole.accountant:
       return 'accountant';
+    case UserRole.headAccountant:
+      return 'head_accountant';
     case UserRole.financeManager:
       return 'finance_manager';
     case UserRole.admin:

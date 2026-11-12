@@ -15,7 +15,7 @@ Entity in this app: **DUBAI / Blue Rhine Industries**. Petty cash is **departmen
 | When money comes back | **Top-up / PCA replenishment** after bills are verified |
 | How much is topped up | Equal to **submitted bills** (spend 1,000 → top up 1,000 → back to 5,000) |
 | Bank | **One common petty cash bank account** for all BRI departments |
-| Multi-region | **Not used for BRI.** Project/region tagging is for BRC (Contracting), not Industries |
+| Multi-region | **Not used for BRI.** Blue Rhine Contracting (UAE) has its own flow (no HODs, one petty cash per employee); see [`BRC_DEPARTMENT_PETTY_CASH.md`](BRC_DEPARTMENT_PETTY_CASH.md) |
 | Reimbursement | Separate path: employee paid personally, company pays them back, still checked against the **department limit** |
 
 ---

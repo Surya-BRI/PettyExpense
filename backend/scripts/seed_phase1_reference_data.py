@@ -45,11 +45,15 @@ COMPANY_BY_REGION = {
 # assets/docs/PS_EMPLOYEE_PCA_COMPARISON.md. Settings are overwritten once per settings
 # version (region_policy.EMPLOYEE_PCA_SETTINGS_VERSION), then only missing keys are added.
 EMPLOYEE_PCA_REGIONS = ("KSA",)
+# Companies on the site-pot model (Blue Rhine Contracting): pots per employee per site (OP
+# code), bills Accountant -> Head of Accountant -> Finance Manager -- services/site_pca_service.py.
+SITE_PCA_REGIONS = ("UAE",)
 
 ROLE_NAMES = {
     "employee": "Employee",
     "hod": "Head of Department",
     "accountant": "Accountant",
+    "head_accountant": "Head of Accountant",
     "finance_manager": "Finance Manager",
     "admin": "Admin",
 }
@@ -162,12 +166,18 @@ def seed_reference_data() -> None:
                     row.company_name = company
         db.flush()
         from services.approval_service import realign_open_bills
-        from services.region_policy import apply_employee_settings
+        from services.region_policy import apply_employee_settings, apply_site_settings
 
         for row in db.query(ErpExpenseRegionConfig).filter(
             ErpExpenseRegionConfig.region_code.in_(EMPLOYEE_PCA_REGIONS)
         ):
             if apply_employee_settings(row):
+                db.flush()
+                realign_open_bills(db, row.region_id)
+        for row in db.query(ErpExpenseRegionConfig).filter(
+            ErpExpenseRegionConfig.region_code.in_(SITE_PCA_REGIONS)
+        ):
+            if apply_site_settings(row):
                 db.flush()
                 realign_open_bills(db, row.region_id)
         india =db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_code == "IN").first()

@@ -747,6 +747,127 @@ class ApiClient {
     return TopupRequest.fromJson(_decodeMap(res));
   }
 
+  // -- Site petty cash (Blue Rhine Contracting): /api/site-pca --
+
+  /// Employee petty cash with balances: an employee's own; everyone's for Accounts, the Head
+  /// of Accountant, the Finance Manager and Admin.
+  Future<List<PettyCashFund>> sitePots({int? regionId, int? employeeId}) async {
+    final res = await _authorized(() => http.get(
+          _uri('/api/site-pca/pots', {
+            if (regionId != null) 'region_id': '$regionId',
+            if (employeeId != null) 'employee_id': '$employeeId',
+          }),
+          headers: _headers,
+        ));
+    return [for (final row in _decodeList(res)) PettyCashFund.fromJson(Map<String, dynamic>.from(row as Map))];
+  }
+
+  /// Everyone in the company, for the Accountant's "Set petty cash" picker.
+  Future<List<PcaStaff>> sitePeople(int regionId) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/site-pca/people', {'region_id': '$regionId'}), headers: _headers),
+    );
+    return [for (final row in _decodeList(res)) PcaStaff.fromJson(Map<String, dynamic>.from(row as Map))];
+  }
+
+  /// Accountant / Admin: an employee's petty cash from now on (not an increase).
+  Future<TopupRequest> setSitePot({
+    required int regionId,
+    required int employeeId,
+    required double amount,
+    String? remarks,
+  }) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/site-pca/pots'),
+          headers: _headers,
+          body: jsonEncode({
+            'region_id': regionId,
+            'employee_id': employeeId,
+            'amount': amount,
+            'remarks': remarks,
+          }),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  Future<List<ReplenishableBill>> siteReplenishableBills(int fundId) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/site-pca/pots/$fundId/replenishable-bills'), headers: _headers),
+    );
+    return [for (final row in _decodeList(res)) ReplenishableBill.fromJson(Map<String, dynamic>.from(row as Map))];
+  }
+
+  /// Accountant / Admin: prepare a top-up from the pot's approved bills.
+  Future<TopupRequest> siteRequestTopup(int fundId, {required List<int> transactionIds, String? remarks}) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/site-pca/pots/$fundId/topups'),
+          headers: _headers,
+          body: jsonEncode({'transaction_ids': transactionIds, 'remarks': remarks}),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  Future<List<TopupRequest>> siteRequests({int? regionId, String? status, String? kind}) async {
+    final res = await _authorized(() => http.get(
+          _uri('/api/site-pca/requests', {
+            if (regionId != null) 'region_id': '$regionId',
+            'status': ?status,
+            'kind': ?kind,
+          }),
+          headers: _headers,
+        ));
+    return _requests(res);
+  }
+
+  /// Head of Accountant / Admin: approve a top-up.
+  Future<TopupRequest> siteApprove(int requestId, {String? remarks}) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/site-pca/requests/$requestId/approve'),
+          headers: _headers,
+          body: jsonEncode({'remarks': remarks}),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  /// Finance Manager / Admin: approve and record the cash withdrawal from the bank.
+  Future<TopupRequest> sitePay(
+    int requestId, {
+    required String method,
+    required String reference,
+    required String paymentDate,
+    String? remarks,
+  }) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/site-pca/requests/$requestId/pay'),
+          headers: _headers,
+          body: jsonEncode({
+            'payment_method': method,
+            'payment_reference': reference,
+            'payment_date': paymentDate,
+            'remarks': remarks,
+          }),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  Future<TopupRequest> siteReject(int requestId, {required String comment}) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/site-pca/requests/$requestId/reject'),
+          headers: _headers,
+          body: jsonEncode({'comment': comment}),
+        ));
+    return TopupRequest.fromJson(_decodeMap(res));
+  }
+
+  /// Admin: a person's app role (e.g. head_accountant, finance_manager).
+  Future<void> setUserRole(int userId, String role) async {
+    await _authorized(() => http.put(
+          _uri('/api/admin/users/$userId/role'),
+          headers: _headers,
+          body: jsonEncode({'role': role}),
+        ));
+  }
+
   // -- Accounts Department petty cash (Professional Signs, PCA PDF section 6) --
 
   Future<AccountsCash> accountsCash(int regionId) async {

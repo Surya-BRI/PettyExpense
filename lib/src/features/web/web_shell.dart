@@ -143,6 +143,7 @@ class _Sidebar extends ConsumerWidget {
         UserRole.employee => 'Employee',
         UserRole.hod => 'Head of Department',
         UserRole.accountant => 'Accountant',
+        UserRole.headAccountant => 'Head of Accountant',
         UserRole.financeManager => 'Finance Manager',
         UserRole.admin => 'Admin',
       };

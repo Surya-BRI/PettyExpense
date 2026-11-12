@@ -28,7 +28,7 @@ from services.currency import default_base_currency, region_base_currency
 from services.department_split import department_shares
 from services.notification_service import send
 from services.opportunity_lookup import normalize_op
-from services.region_policy import is_employee_model, pca_reminder_ratio, pca_spend_limit_ratio
+from services.region_policy import is_employee_model, is_site_model, pca_reminder_ratio, pca_spend_limit_ratio
 from services.region_scope import user_covers, user_region_ids
 
 # A petty-cash bill comes off the fund at final Finance Manager approval (spec 5.3).
@@ -48,6 +48,8 @@ def _fund_label(fund: ErpExpensePettyCashFund) -> str:
         name = fund.employee.display_name if fund.employee else f"employee #{fund.employee_id}"
         if is_employee_model(fund.region):
             return f"{name} · advance"
+        if is_site_model(fund.region):
+            return f"{name} · petty cash"
         return f"{name} · individual"
     name = fund.department.department_name if fund.department else f"department #{fund.department_id}"
     return f"{name} · department"
@@ -128,15 +130,25 @@ def require_bill_projects(row: ErpExpenseTransaction) -> None:
 
 def _department_pot_unused(fund: ErpExpensePettyCashFund) -> bool:
     """In an employee-advance company (Professional Signs) bills only ever come off the
-    employee's own advance, so a department pot there (e.g. left from before the switch)
-    pays for nothing."""
-    return fund.owner_type == "department" and is_employee_model(fund.region)
+    employee's own advance, and in a site-pot company (Blue Rhine Contracting) off the
+    employee's pot for the bill's site, so a department pot there (e.g. left from before the
+    switch) pays for nothing."""
+    return fund.owner_type == "department" and (is_employee_model(fund.region) or is_site_model(fund.region))
+
+
+def is_site_pot(fund: ErpExpensePettyCashFund) -> bool:
+    """An employee's petty cash in a Blue Rhine Contracting-style company (one per employee, for
+    all their sites)."""
+    return fund.owner_type == "employee" and is_site_model(fund.region)
 
 
 def _fund_portion(
     fund: ErpExpensePettyCashFund, row: ErpExpenseTransaction, individual_ids: set[int]
 ) -> float:
     """How much of this bill comes out of this fund."""
+    if fund.owner_type == "employee" and is_site_model(fund.region):
+        # Blue Rhine Contracting: the whole bill, whatever its sites (no department split).
+        return _tx_amount(row, fund.currency) if row.employee_id == fund.employee_id else 0.0
     shares = bill_shares(row, fund.currency)
     if fund.owner_type == "employee":
         if row.employee_id != fund.employee_id:
@@ -390,6 +402,8 @@ def _require_department_model(fund: ErpExpensePettyCashFund) -> None:
     requests go through services/employee_pca_service.py (/api/pca/...)."""
     if is_employee_model(fund.region):
         raise ValueError("This company uses employee petty cash advances: use the advance top-up steps")
+    if is_site_model(fund.region):
+        raise ValueError("This company uses site petty cash: use the site top-up steps")
 
 
 def _load_fund(db: Session, fund_id: int) -> ErpExpensePettyCashFund:
@@ -513,7 +527,8 @@ def check_low_fund(db: Session, fund_id: int) -> bool:
     LOW_FUND_RATIO of its limit. Fires once per cycle: the type carries the number of approved
     top-ups, so the next alert only comes after a replenishment. Returns True if it alerted."""
     fund = _load_fund(db, fund_id)
-    if fund.owner_type != "department" or not fund.is_active:
+    site_pot = is_site_pot(fund)
+    if (fund.owner_type != "department" and not site_pot) or not fund.is_active:
         return False
     limit = float(fund.opening_balance or 0)
     if limit <= 0:
@@ -522,6 +537,17 @@ def check_low_fund(db: Session, fund_id: int) -> bool:
     if available >= limit * LOW_FUND_RATIO:
         return False
     cycle = sum(1 for t in fund.topups if _is_replenishment(t) and t.status in TOPUP_DONE_STATUSES)
+    if site_pot:
+        # Blue Rhine Contracting: the Accountant prepares the top-up; tell them and the employee.
+        who = fund.employee.display_name if fund.employee else "An employee"
+        company = fund.region.region_code if fund.region else ""
+        _notify_people(
+            db, [fund.employee, *_role_or_admin(db, "accountant", fund.region_id)],
+            f"fund_low_{fund.fund_id}_{cycle}", f"{who}'s petty cash is running low",
+            f"{who}'s petty cash ({company}) has {fund.currency} {available:,.2f} left of "
+            f"{fund.currency} {limit:,.2f}. Prepare a top-up with the approved bills.",
+        )
+        return True
     dept = fund.department.department_name if fund.department else "Department"
     region = fund.region.region_code if fund.region else ""
     _notify_people(
@@ -575,6 +601,11 @@ def check_low_funds_for_bill(db: Session, txn: ErpExpenseTransaction) -> None:
             pot = fund_service.employee_advance(db, txn.employee_id, txn.region_id)
             if pot:
                 check_advance_reminder(db, pot.fund_id)
+            return
+        if is_site_model(txn.region):
+            pot = fund_service.employee_advance(db, txn.employee_id, txn.region_id)
+            if pot:
+                check_low_fund(db, pot.fund_id)
             return
         own = txn.employee.department_id if txn.employee else None
         dept_ids = {own} | {d for d in department_shares(txn) if d}
@@ -719,6 +750,9 @@ class FundService:
     ) -> None:
         """Checks every fund a petty-cash bill draws on: the employee's own pot for their part,
         and each owning department's fund for its cross-department lines (e.g. IT items)."""
+        if is_site_model(txn.region):
+            self._require_site_pots(db, txn, fund_currency)
+            return
         shares = bill_shares(txn, fund_currency)
         self.require_petty_cash_within_limit(
             db, user, txn.region_id, shares.pop(None, 0.0), exclude_transaction_id=txn.transaction_id,
@@ -752,11 +786,31 @@ class FundService:
                     f"({available:.2f} left). Submit a smaller amount or wait for a top-up."
                 )
 
+    def _require_site_pots(self, db: Session, txn: ErpExpenseTransaction, fund_currency: str) -> None:
+        """Blue Rhine Contracting: the bill must fit what's left of the employee's petty cash (one
+        per employee, for all their sites; each bill still names its site's OP code)."""
+        part = _tx_amount(txn, fund_currency)
+        if part <= 0:
+            return
+        pot = self.employee_advance(db, txn.employee_id, txn.region_id)
+        if pot is None or float(pot.opening_balance or 0) <= 0:
+            raise ValueError(
+                "You don't have petty cash in this company. Ask the Accountant to set it, "
+                "or submit this bill as a reimbursement."
+            )
+        available = float(fund_to_dict(db, pot, txn.transaction_id)["uncommitted"] or 0)
+        if part > available + 0.004:
+            raise ValueError(
+                f"This bill ({pot.currency} {part:,.2f}) is more than what's left of your petty cash "
+                f"({max(available, 0):,.2f} left). Submit the extra as a reimbursement, or wait for a top-up."
+            )
+
     def employee_advance(
         self, db: Session, employee_id: int, region_id: int
     ) -> Optional[ErpExpensePettyCashFund]:
-        """Employee-advance company: the employee's one advance in this company, used for all
-        their projects (the oldest active one, should an older setup have left more)."""
+        """The employee's one petty cash in this company, used for all their projects / sites
+        (Professional Signs' advance, Blue Rhine Contracting's petty cash). The oldest active one,
+        should an older setup have left more."""
         return (
             db.query(ErpExpensePettyCashFund)
             .options(joinedload(ErpExpensePettyCashFund.topups), joinedload(ErpExpensePettyCashFund.region))
@@ -966,6 +1020,8 @@ class FundService:
             raise ValueError("Unknown region")
         if owner_type == "employee" and (region.region_code or "").upper() == "DUBAI":
             raise ValueError("Blue Rhine Industries uses department petty cash only")
+        if owner_type == "department" and is_site_model(region):
+            raise ValueError(f"{region.company_name or region.region_name} gives petty cash per employee per site, not departments")
         if owner_type == "department" and is_employee_model(region):
             raise ValueError(f"{region.company_name or region.region_name} gives petty cash advances to employees, not departments")
         wanted = region_base_currency(region)

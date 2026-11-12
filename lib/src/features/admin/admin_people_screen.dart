@@ -591,6 +591,38 @@ class _AdminPersonScreenState extends ConsumerState<AdminPersonScreen> {
     }
   }
 
+  /// Roles Admin can give (Admin itself comes from ERP). Head of Accountant is Blue Rhine
+  /// Contracting's second accounts level; Finance Manager has no ERP role either.
+  static const _assignableRoles = {
+    'employee': 'Employee',
+    'hod': 'Head of Department',
+    'accountant': 'Accountant',
+    'head_accountant': 'Head of Accountant',
+    'finance_manager': 'Finance Manager',
+  };
+
+  Future<void> _setRole(String role) async {
+    final user = _user;
+    if (user == null || role == user.role) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(apiClientProvider).setUserRole(user.id, role);
+      await _refresh();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Role changed to ${_assignableRoles[role] ?? role}. It applies at their next sign-in.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _save() async {
     final user = _user;
     if (user == null) return;
@@ -679,6 +711,21 @@ class _AdminPersonScreenState extends ConsumerState<AdminPersonScreen> {
                           ),
                         ],
                       ),
+                      if (user.hasAppLogin && user.role != 'admin') ...[
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _assignableRoles.containsKey(user.role) ? user.role : null,
+                          decoration: const InputDecoration(
+                            labelText: 'App role',
+                            helperText: 'E.g. Head of Accountant or Finance Manager, which ERP has no role for.',
+                          ),
+                          items: [
+                            for (final e in _assignableRoles.entries)
+                              DropdownMenuItem(value: e.key, child: Text(e.value)),
+                          ],
+                          onChanged: _busy ? null : (v) => v == null ? null : _setRole(v),
+                        ),
+                      ],
                       const SizedBox(height: 18),
                       const Text(
                         'Companies',

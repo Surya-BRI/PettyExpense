@@ -157,6 +157,25 @@ def set_user_regions(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+class UserRoleRequest(BaseModel):
+    role: str  # employee | hod | accountant | head_accountant | finance_manager
+
+
+@router.put("/api/admin/users/{user_id}/role")
+def set_user_role(
+    user_id: int,
+    body: UserRoleRequest,
+    user: CurrentUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    try:
+        return config_service.set_user_role(db, user_id, body.role, set_by=user.id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.get("/api/admin/funds")
 def admin_list_funds(user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
     return fund_service.list_all(db)

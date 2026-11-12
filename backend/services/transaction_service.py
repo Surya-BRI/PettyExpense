@@ -530,12 +530,13 @@ class TransactionService:
         """Employee-advance company (Professional Signs): every bill -- petty cash or
         reimbursement -- names its project OP code, for the project-wise report."""
         from services.fund_service import require_bill_projects
-        from services.region_policy import is_employee_model
+        from services.region_policy import is_employee_model, is_site_model
 
         if txn.region_id is None:
             return
         region = txn.region or _resolve_region_by_id(db, txn.region_id)
-        if is_employee_model(region):
+        # Blue Rhine Contracting too: the OP code is the site whose petty cash the bill uses.
+        if is_employee_model(region) or is_site_model(region):
             db.flush()
             require_bill_projects(txn)
 

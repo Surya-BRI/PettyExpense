@@ -171,6 +171,7 @@ expense_app/
 | [`assets/docs/CHANGELOG.md`](assets/docs/CHANGELOG.md) | What changed recently, for users and in code. Start here |
 | [`assets/docs/EXPENSE_FLOW_GAP_ANALYSIS_AND_PLAN.md`](assets/docs/EXPENSE_FLOW_GAP_ANALYSIS_AND_PLAN.md) | Plan and status for currency, region approvers, payments, top-ups and cross-department routing |
 | [`assets/docs/BRI_DEPARTMENT_PETTY_CASH.md`](assets/docs/BRI_DEPARTMENT_PETTY_CASH.md) | BRI department petty cash rules (limit, top-up, reimbursement) mapped to this app |
+| [`assets/docs/BRC_DEPARTMENT_PETTY_CASH.md`](assets/docs/BRC_DEPARTMENT_PETTY_CASH.md) | Blue Rhine Contracting (UAE) petty cash: no HODs, one petty cash per employee, Accountant → Head of Accountant → Finance Manager |
 | [`assets/docs/PS_EMPLOYEE_PCA_COMPARISON.md`](assets/docs/PS_EMPLOYEE_PCA_COMPARISON.md) | Professional Signs (KSA) employee advances compared with the app: gaps, build order and open questions |
 | [`assets/docs/PETTY_CASH_PHASED_PLAN.md`](assets/docs/PETTY_CASH_PHASED_PLAN.md) | Phase-by-phase status against the v1.2 spec |
 | [`assets/docs/APPROVAL_WORKFLOW_FINDINGS.md`](assets/docs/APPROVAL_WORKFLOW_FINDINGS.md) | Approval workflow findings and ERP-Dev query timing |

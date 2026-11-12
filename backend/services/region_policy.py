@@ -10,6 +10,11 @@ Two models run side by side:
   approves and pays it. Bills (each with a project OP code) go Employee -> own HOD ->
   Accounts Manager and petty-cash ones come off the employee's advance. Top-ups go HOD
   approve -> Accounts Manager verify -> Accounts Manager pays (bank withdrawal or direct).
+* ``site`` (Blue Rhine Contracting / UAE, "PCA – Replenishment Process"): no HODs. Each
+  employee can hold several pots, one per site (project OP code), set by the Accountant. Bills
+  (each with an OP code) go Employee -> Accountant -> Head of Accountant -> Finance Manager and
+  petty-cash ones come off the employee's pot for that site. Top-ups go Accountant prepares ->
+  Head of Accountant approves -> Finance Manager approves and records the bank withdrawal.
 
 Every key has a default that keeps the department model unchanged, so a company without
 these keys behaves exactly as before.
@@ -21,6 +26,7 @@ from database.models import ErpExpenseRegionConfig
 
 DEPARTMENT_MODEL = "department"
 EMPLOYEE_MODEL = "employee"
+SITE_MODEL = "site"
 
 JOURNAL_TYPES = ("EJV", "EJVB")
 JOURNAL_TYPE_LABELS = {"EJV": "Expense Journal (EJV)", "EJVB": "Expense Journal – Branch (EJVB)"}
@@ -54,6 +60,19 @@ EMPLOYEE_PCA_SETTINGS: dict[str, Any] = {
 }
 
 
+# Settings the startup seed applies to Blue Rhine Contracting's (UAE) matrix. Same versioning
+# rules as EMPLOYEE_PCA_SETTINGS (see apply_site_settings).
+SITE_PCA_SETTINGS_VERSION = 1
+SITE_PCA_SETTINGS: dict[str, Any] = {
+    "pca_model": SITE_MODEL,
+    "pca_settings_version": SITE_PCA_SETTINGS_VERSION,
+    "stages": ["accountant", "head_accountant", "finance_manager"],
+    "cross_department_split": False,
+    "stage_labels": {"head_accountant": "Head of Accountant"},
+    "payer_roles": ["finance_manager"],
+}
+
+
 def matrix(region: Optional[ErpExpenseRegionConfig]) -> dict[str, Any]:
     if region is None or not region.approval_matrix_json:
         return {}
@@ -65,11 +84,23 @@ def matrix(region: Optional[ErpExpenseRegionConfig]) -> dict[str, Any]:
 
 
 def pca_model(region: Optional[ErpExpenseRegionConfig]) -> str:
-    return EMPLOYEE_MODEL if matrix(region).get("pca_model") == EMPLOYEE_MODEL else DEPARTMENT_MODEL
+    value = matrix(region).get("pca_model")
+    return value if value in (EMPLOYEE_MODEL, SITE_MODEL) else DEPARTMENT_MODEL
 
 
 def is_employee_model(region: Optional[ErpExpenseRegionConfig]) -> bool:
     return pca_model(region) == EMPLOYEE_MODEL
+
+
+def matrix_stages(region: Optional[ErpExpenseRegionConfig]) -> list[str]:
+    """The company's bill approval steps (default: HOD -> Accountant -> Finance Manager)."""
+    stages = matrix(region).get("stages")
+    return [str(s) for s in stages] if isinstance(stages, list) and stages else ["hod", "accountant", "finance_manager"]
+
+
+def is_site_model(region: Optional[ErpExpenseRegionConfig]) -> bool:
+    """Blue Rhine Contracting: pots per employee per site (OP code), no HODs."""
+    return pca_model(region) == SITE_MODEL
 
 
 def splits_by_department(region: Optional[ErpExpenseRegionConfig]) -> bool:
@@ -131,17 +162,26 @@ def merge_missing(region: ErpExpenseRegionConfig, settings: dict[str, Any]) -> b
     return changed
 
 
-def apply_employee_settings(region: ErpExpenseRegionConfig) -> bool:
-    """Startup seed for an employee-advance company: on a settings version older than
-    EMPLOYEE_PCA_SETTINGS_VERSION overwrite every key in EMPLOYEE_PCA_SETTINGS once; otherwise
-    only add missing keys. Returns True if the row changed."""
+def _apply_versioned(region: ErpExpenseRegionConfig, settings: dict[str, Any], model: str) -> bool:
+    """Overwrite every key in `settings` once when the company is on another model or an older
+    settings version; otherwise only add missing keys. Returns True if the row changed."""
     current = matrix(region)
     try:
         version = int(current.get("pca_settings_version") or 0)
     except (TypeError, ValueError):
         version = 0
-    if version >= EMPLOYEE_PCA_SETTINGS_VERSION:
-        return merge_missing(region, EMPLOYEE_PCA_SETTINGS)
-    current.update(EMPLOYEE_PCA_SETTINGS)
+    if current.get("pca_model") == model and version >= int(settings["pca_settings_version"]):
+        return merge_missing(region, settings)
+    current.update(settings)
     region.approval_matrix_json = json.dumps(current)
     return True
+
+
+def apply_employee_settings(region: ErpExpenseRegionConfig) -> bool:
+    """Startup seed for an employee-advance company (Professional Signs)."""
+    return _apply_versioned(region, EMPLOYEE_PCA_SETTINGS, EMPLOYEE_MODEL)
+
+
+def apply_site_settings(region: ErpExpenseRegionConfig) -> bool:
+    """Startup seed for a site-pot company (Blue Rhine Contracting)."""
+    return _apply_versioned(region, SITE_PCA_SETTINGS, SITE_MODEL)

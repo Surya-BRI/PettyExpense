@@ -44,11 +44,16 @@ class MainShell extends ConsumerWidget {
     final homeSelected = location == '/dashboard';
     final adminSelected = location == '/admin' || location.startsWith('/admin/companies');
     final peopleSelected = location == '/admin/people' || location.startsWith('/admin/people/');
-    final showApproverTopups =
-        role == UserRole.hod || role == UserRole.financeManager || role == UserRole.accountant;
+    final showApproverTopups = role == UserRole.hod ||
+        role == UserRole.financeManager ||
+        role == UserRole.accountant ||
+        role == UserRole.headAccountant;
     // Professional Signs: the money tab is employee advances, not department top-ups.
     final employeeAdvances = user?.usesEmployeeAdvances ?? false;
-    final topupsSelected = location == '/topups' || location == '/funds' || location == '/advances';
+    // Blue Rhine Contracting: the money tab is site petty cash (per employee per site).
+    final sitePots = user?.usesSitePots ?? false;
+    final topupsSelected =
+        location == '/topups' || location == '/funds' || location == '/advances' || location == '/site-pca';
     final claimsSelected =
         location == '/claims' ||
         location == '/all-claims' ||
@@ -163,13 +168,17 @@ class MainShell extends ConsumerWidget {
                         selectedIcon: role == UserRole.hod
                             ? PhosphorIcons.money(PhosphorIconsStyle.fill)
                             : PhosphorIcons.handCoins(PhosphorIconsStyle.fill),
-                        label: employeeAdvances
-                            ? 'Advances'
-                            : role == UserRole.hod
-                                ? 'Funds'
-                                : 'Top-ups',
+                        label: sitePots
+                            ? 'Petty cash'
+                            : employeeAdvances
+                                ? 'Advances'
+                                : role == UserRole.hod
+                                    ? 'Funds'
+                                    : 'Top-ups',
                         selected: topupsSelected,
-                        onTap: () => context.go(employeeAdvances ? '/advances' : '/topups'),
+                        onTap: () => context.go(
+                          sitePots ? '/site-pca' : (employeeAdvances ? '/advances' : '/topups'),
+                        ),
                       ),
                     ),
                   Expanded(

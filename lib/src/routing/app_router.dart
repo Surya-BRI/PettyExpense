@@ -23,6 +23,7 @@ import '../features/admin/my_funds_screen.dart';
 import '../features/admin/topups_screen.dart';
 import '../features/payments/payments_screen.dart';
 import '../features/pca/advances_screen.dart';
+import '../features/pca/site_pca_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/web/all_claims_screen.dart';
 import '../features/web/dashboard_screen.dart';
@@ -93,6 +94,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Employee-advance company: no department pots or department top-ups, only advances.
       if (employeeAdvances && role != UserRole.admin && (loc == '/funds' || loc == '/topups')) {
         return '/advances';
+      }
+      // Site-pot company (Blue Rhine Contracting): only site petty cash.
+      if ((auth.user?.usesSitePots ?? false) &&
+          role != UserRole.admin &&
+          (loc == '/funds' || loc == '/topups' || loc == '/advances')) {
+        return '/site-pca';
       }
 
       // Dashboard and all-claims are web-only screens; redirect mobile employees away.
@@ -205,6 +212,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/advances',
             builder: (context, state) => const AdvancesScreen(),
+          ),
+          GoRoute(
+            path: '/site-pca',
+            builder: (context, state) => const SitePcaScreen(),
           ),
           GoRoute(
             path: '/notifications',

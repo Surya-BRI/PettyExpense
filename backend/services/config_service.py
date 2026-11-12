@@ -15,7 +15,8 @@ from database.models import (
     ErpMasterExpenseRole,
 )
 from services.currency import default_base_currency, region_base_currency
-from services.region_policy import pca_model
+from auth.security import APPROVER_ROLES
+from services.region_policy import matrix_stages, pca_model
 from services.region_scope import covers_region
 
 
@@ -267,7 +268,7 @@ class ConfigService:
             .join(ErpMasterExpenseRole)
             .options(joinedload(ErpAuthExpenseUsers.role), joinedload(ErpAuthExpenseUsers.department))
             .filter(
-                ErpMasterExpenseRole.role_code.in_(("hod", "accountant", "finance_manager")),
+                ErpMasterExpenseRole.role_code.in_(APPROVER_ROLES),
                 ErpAuthExpenseUsers.is_active == 1,
                 ErpAuthExpenseUsers.is_deleted == 0,
                 covers_region(region_id),
@@ -275,7 +276,7 @@ class ConfigService:
             .order_by(ErpAuthExpenseUsers.display_name)
             .all()
         )
-        out: dict[str, list[dict[str, Any]]] = {"hod": [], "accountant": [], "finance_manager": []}
+        out: dict[str, list[dict[str, Any]]] = {role: [] for role in APPROVER_ROLES}
         for u in rows:
             out[u.role.role_code].append(
                 {
@@ -289,7 +290,7 @@ class ConfigService:
             "region_id": region.region_id,
             "region_code": region.region_code,
             "roles": out,
-            "missing": [role for role in ("accountant", "finance_manager") if not out[role]],
+            "missing": [role for role in matrix_stages(region) if role in out and role != "hod" and not out[role]],
         }
 
     # -- Categories --
@@ -673,6 +674,32 @@ class ConfigService:
             "erp_role": None,
             "has_app_login": True,
         }
+
+    # Roles Admin can give in People. Admin itself comes from ERP (Admin / Sub Admin).
+    ASSIGNABLE_ROLES = ("employee", "hod", "accountant", "head_accountant", "finance_manager")
+
+    def set_user_role(self, db: Session, user_id: int, role_code: str, set_by: int) -> dict[str, Any]:
+        """Admin sets a person's app role (e.g. Head of Accountant, Finance Manager, which ERP
+        has no role for). Login never overwrites a local role, so it sticks."""
+        code = (role_code or "").strip().lower()
+        if code not in self.ASSIGNABLE_ROLES:
+            raise ValueError(f"Role must be one of: {', '.join(self.ASSIGNABLE_ROLES)}")
+        if user_id == set_by:
+            raise ValueError("You can't change your own role")
+        user = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == user_id).first()
+        if not user:
+            raise ValueError(
+                "This person has not signed into the expense app yet. Their role can be set after first login."
+            )
+        role = db.query(ErpMasterExpenseRole).filter(ErpMasterExpenseRole.role_code == code).first()
+        if role is None:
+            raise ValueError(f"Role {code} isn't set up yet. Restart the backend to create it.")
+        user.role_id = role.role_id
+        db.commit()
+        db.refresh(user)
+        user.department  # load
+        user.role
+        return self.user_to_dict(db, user)
 
     def set_user_regions(self, db: Session, user_id: int, region_codes: list[str], assigned_by: int) -> dict[str, Any]:
         user = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == user_id).first()

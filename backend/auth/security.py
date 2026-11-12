@@ -16,11 +16,15 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
 settings = get_settings()
 
-# Role vocabulary: employee | hod | accountant | finance_manager | admin.
+# Role vocabulary: employee | hod | accountant | head_accountant | finance_manager | admin.
+# head_accountant is Blue Rhine Contracting's second accounts level (Accountant -> Head of
+# Accountant -> Finance Manager); Admin sets it in People, or ERP_HEAD_ACCOUNTANT_ROLE_NAMES maps it.
 # "department_hod" is a workflow *stage* name (Phase 2), not a role row here — whether an
 # hod-role user acts on the base "hod" stage or the "department_hod" stage for a given
 # transaction is resolved via ErpExpenseHodAssignment, not a distinct role.
-ROLE_CODES = ["employee", "hod", "accountant", "finance_manager", "admin"]
+ROLE_CODES = ["employee", "hod", "accountant", "head_accountant", "finance_manager", "admin"]
+# Roles that approve bills at some stage.
+APPROVER_ROLES = ("hod", "accountant", "head_accountant", "finance_manager")
 
 # ERP ErpMasterRole.roleName -> this app's role. ERP has ~50 granular operational roles
 # (SalesRep, Estimator, Driver, ...) with no generic "employee" role, so anything not
@@ -38,11 +42,17 @@ ERP_ROLE_ID_TO_APP_ROLE = {
 # "...HOD" name suffix instead of being listed one roleId at a time in the map above.
 ERP_HOD_ROLE_NAME_SUFFIX = "HOD"
 
+# ERP role names (any case) that mean Head of Accountant. ERP has no such role yet; add its
+# name here when it does. Until then Admin sets the role in People.
+ERP_HEAD_ACCOUNTANT_ROLE_NAMES = {"HEAD OF ACCOUNTANT", "HEAD OF ACCOUNTS", "HEAD ACCOUNTANT", "CHIEF ACCOUNTANT"}
+
 
 def mapped_app_role(role_id: Optional[int], role_name: Optional[str]) -> Optional[str]:
     """ERP roleId / roleName → this app's role. Same rules as first-login mirroring."""
     if role_id in ERP_ROLE_ID_TO_APP_ROLE:
         return ERP_ROLE_ID_TO_APP_ROLE[role_id]
+    if (role_name or "").strip().upper() in ERP_HEAD_ACCOUNTANT_ROLE_NAMES:
+        return "head_accountant"
     if (role_name or "").strip().upper().endswith(ERP_HOD_ROLE_NAME_SUFFIX):
         return "hod"
     if role_name:
@@ -277,7 +287,7 @@ class CurrentUser:
 
     @property
     def is_approver(self) -> bool:
-        return self.role in ("hod", "accountant", "finance_manager") or self.is_admin
+        return self.role in APPROVER_ROLES or self.is_admin
 
 
 def _to_current_user(user: ErpAuthExpenseUsers, region_code: Optional[str] = None) -> CurrentUser:
@@ -319,5 +329,5 @@ def require_role(*role_codes: str):
     return _dep
 
 
-require_approver = require_role("hod", "accountant", "finance_manager")
+require_approver = require_role(*APPROVER_ROLES)
 require_admin = require_role("admin")

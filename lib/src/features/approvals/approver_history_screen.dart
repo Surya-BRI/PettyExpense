@@ -327,6 +327,7 @@ class _ActionBadge extends StatelessWidget {
       'hod' => 'HOD',
       'department_hod' => 'Dept HOD',
       'accountant' => 'Accountant',
+      'head_accountant' => 'Head Accts',
       'finance_manager' => 'Finance Mgr',
       _ => stage,
     };

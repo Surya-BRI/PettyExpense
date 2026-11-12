@@ -33,6 +33,8 @@ class AppNavDrawer extends ConsumerWidget {
     final isAccountant = role == UserRole.accountant;
     // Professional Signs: petty cash is one advance per employee, not per department.
     final employeeAdvances = user?.usesEmployeeAdvances ?? false;
+    // Blue Rhine Contracting: petty cash per employee per site, no department pots.
+    final sitePots = user?.usesSitePots ?? false;
     // An employee who also belongs to KSA sees "My advances" while signed in under Dubai too.
     final hasOwnAdvance = role == UserRole.employee &&
         (ref.watch(myPcaAdvancesProvider).valueOrNull ?? const <PettyCashFund>[]).isNotEmpty;
@@ -77,7 +79,16 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/payments',
           onTap: () => go('/payments'),
         ),
-      if (employeeAdvances || isAdmin || hasOwnAdvance)
+      if (sitePots || isAdmin)
+        _DrawerItem(
+          icon: PhosphorIcons.mapPinArea(),
+          selectedIcon: PhosphorIcons.mapPinArea(PhosphorIconsStyle.fill),
+          accent: AppColors.orange,
+          label: role == UserRole.employee ? 'My petty cash' : 'Petty cash',
+          selected: location == '/site-pca',
+          onTap: () => go('/site-pca'),
+        ),
+      if (!sitePots && (employeeAdvances || isAdmin || hasOwnAdvance))
         _DrawerItem(
           icon: PhosphorIcons.handCoins(),
           selectedIcon: PhosphorIcons.handCoins(PhosphorIconsStyle.fill),
@@ -106,7 +117,7 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/admin/people' || location.startsWith('/admin/people/'),
           onTap: () => go('/admin/people'),
         ),
-      if (!kIsWeb && isHod && !employeeAdvances)
+      if (!kIsWeb && isHod && !employeeAdvances && !sitePots)
         _DrawerItem(
           icon: PhosphorIcons.money(),
           selectedIcon: PhosphorIcons.money(PhosphorIconsStyle.fill),
@@ -115,7 +126,7 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/topups' || location == '/funds',
           onTap: () => go('/topups'),
         ),
-      if (!kIsWeb && (((isAccountant || isFinanceManager) && !employeeAdvances) || isAdmin))
+      if (!kIsWeb && (((isAccountant || isFinanceManager) && !employeeAdvances && !sitePots) || isAdmin))
         _DrawerItem(
           icon: PhosphorIcons.handCoins(),
           selectedIcon: PhosphorIcons.handCoins(PhosphorIconsStyle.fill),
@@ -478,7 +489,13 @@ class _PettyCashLeft extends ConsumerWidget {
     final ownAdvances = ref.watch(myPcaAdvancesProvider).valueOrNull ?? const <PettyCashFund>[];
 
     final cards = <(String, String)>[];
-    if (user?.usesEmployeeAdvances ?? false) {
+    if (user?.usesSitePots ?? false) {
+      // Blue Rhine Contracting: one petty cash per employee, for all their sites.
+      final own = funds
+          .where((f) => (f.regionCode ?? '').toUpperCase() == region && f.ownerType == 'employee')
+          .firstOrNull;
+      if (own != null) cards.add(('Your petty cash', '${formatMoney(own.currency, own.available)} left'));
+    } else if (user?.usesEmployeeAdvances ?? false) {
       // One advance per employee, for all their projects.
       final advance = ownAdvances.where((f) => (f.regionCode ?? '').toUpperCase() == region).firstOrNull;
       if (advance != null) cards.add(('Your petty cash', _amount(advance)));

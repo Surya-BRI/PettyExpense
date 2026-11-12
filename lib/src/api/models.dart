@@ -9,6 +9,8 @@ String roleLabelFor(String? role, {bool employeeAdvances = false}) {
       return employeeAdvances ? 'Accounts Manager' : 'Finance Manager';
     case 'accountant':
       return 'Accountant';
+    case 'head_accountant':
+      return 'Head of Accountant';
     case 'hod':
       return 'Head of Department';
     case 'admin':
@@ -51,6 +53,9 @@ class AuthUser {
   UserRole get userRole => UserRoleX.fromJson(role);
   bool get isApprover => userRole.isApprover;
   bool get usesEmployeeAdvances => pcaModel == 'employee';
+
+  /// Blue Rhine Contracting: petty cash per employee per site (OP code), no HODs.
+  bool get usesSitePots => pcaModel == 'site';
 
   /// Role name as this company calls it: Professional Signs (KSA) calls the Finance Manager
   /// the "Accounts Manager".
@@ -479,6 +484,7 @@ class ExpenseClaim {
     'hod': 'HOD',
     'department_hod': 'Department HOD',
     'accountant': 'Accountant',
+    'head_accountant': 'Head of Accountant',
     'finance_manager': 'Finance Manager',
     'employee': 'Employee',
   };
@@ -750,9 +756,11 @@ class RegionConfig {
   /// Currency this company keeps its books (and petty cash funds) in.
   final String? baseCurrency;
 
-  /// 'employee' = advances per employee and project (Professional Signs), else 'department'.
+  /// 'employee' = one advance per employee (Professional Signs), 'site' = pots per employee
+  /// per site (Blue Rhine Contracting), else 'department'.
   final String pcaModel;
   bool get usesEmployeeAdvances => pcaModel == 'employee';
+  bool get usesSitePots => pcaModel == 'site';
 
   factory RegionConfig.fromJson(Map<String, dynamic> json) {
     final region = RegionConfig(

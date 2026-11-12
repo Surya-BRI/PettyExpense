@@ -165,6 +165,22 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     return (user?.regionCode ?? '').toUpperCase() == code && (user?.usesEmployeeAdvances ?? false);
   }
 
+  /// The bill's company gives each employee one petty cash for all their sites (Blue Rhine
+  /// Contracting): no HODs or department pots, every bill names its site's OP code, and a
+  /// petty-cash bill comes off the employee's petty cash.
+  bool get _sitePots {
+    final code = (_billRegion ?? '').toUpperCase();
+    if (code.isEmpty) return false;
+    for (final r in _regions) {
+      if (r.regionCode.toUpperCase() == code) return r.usesSitePots;
+    }
+    final user = ref.read(authControllerProvider).user;
+    return (user?.regionCode ?? '').toUpperCase() == code && (user?.usesSitePots ?? false);
+  }
+
+  /// Companies where every bill names its project OP code.
+  bool get _needsOpCode => _employeeAdvances || _sitePots;
+
   static String? _normOp(String? op) {
     final v = (op ?? '').trim().toUpperCase();
     return v.isEmpty ? null : v;
@@ -173,7 +189,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   /// Employee-advance company: every bill names its project -- the claim's OP code, or one
   /// on each item (the server checks the same on submit).
   bool get _missingProject {
-    if (!_employeeAdvances) return false;
+    if (!_needsOpCode) return false;
     if (_normOp(_selectedOp?.opCode) != null) return false;
     if (!_multi || _lines.isEmpty) return true;
     return _lines.any((line) => _normOp(line.opResult?.opCode) == null);
@@ -182,7 +198,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   PettyCashFund? get _potForBill {
     final code = _billRegion;
     if (code == null || code.isEmpty) return null;
-    if (_employeeAdvances) {
+    if (_employeeAdvances || _sitePots) {
       // One advance per employee, for all their projects.
       for (final fund in _myFunds) {
         if (fund.regionCode == code && fund.ownerType == 'employee') return fund;
@@ -217,8 +233,9 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
   /// bill), e.g. IT items on a Sales bill. Those go to that department's HOD and, for
   /// petty cash, come out of that department's fund — the server checks those funds.
   Map<String, double> get _otherDepartmentAmounts {
-    // Employee-advance company: the employee's own HOD approves the whole bill.
-    if (_employeeAdvances) return const {};
+    // Employee-advance company: the employee's own HOD approves the whole bill. Site-pot
+    // company: no HODs, the bill comes off the employee's site pot.
+    if (_employeeAdvances || _sitePots) return const {};
     final own = ref.read(authControllerProvider).user?.departmentId;
     String? otherFor(int? categoryId) {
       for (final c in _categories) {
@@ -300,7 +317,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     if (ownPart <= 0.004) return false;
     final pot = _potForBill;
     if (pot == null) return true;
-    if (_employeeAdvances && pot.approvedLimit <= 0) return true; // advance not paid out yet
+    if ((_employeeAdvances || _sitePots) && pot.approvedLimit <= 0) return true; // not set yet
     // The fund is held in the company's base currency; with no rate yet the server decides.
     final rate = pot.currency.toUpperCase() == (_currency ?? '').toUpperCase() ? 1.0 : _rateToBase;
     if (rate == null) return false;
@@ -313,6 +330,15 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
           'You can still save as draft.';
     }
     final pot = _potForBill;
+    if (_sitePots) {
+      if (pot == null || pot.approvedLimit <= 0) {
+        return 'You don\'t have petty cash in this company. Ask the Accountant to set it, '
+            'or file this bill as a reimbursement.';
+      }
+      final left = formatMoney(pot.currency, _usableFor(pot) < 0 ? 0 : _usableFor(pot));
+      return 'This bill is more than what\'s left of your petty cash ($left left). '
+          'File the extra as a reimbursement, or wait for a top-up.';
+    }
     if (_employeeAdvances) {
       if (pot == null || pot.approvedLimit <= 0) {
         return 'You don\'t have a petty cash advance in this company. '
@@ -1245,7 +1271,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
                       showProblems: _showLineProblems,
                       ownDepartmentId: ref.read(authControllerProvider).user?.departmentId,
                       pettyCash: _type == 'petty_cash',
-                      splitsByDepartment: !_employeeAdvances,
+                      splitsByDepartment: !_employeeAdvances && !_sitePots,
                       onChanged: () => setState(() {
                         if (!_amountOverridden) _syncAmountExclVat();
                       }),
@@ -1430,7 +1456,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
           const SizedBox(height: 12),
           OpCodeField(
             // Professional Signs: every bill names its project (for the project-wise report).
-            label: _employeeAdvances ? 'Project / OP code *' : 'Project / OP code',
+            label: _sitePots ? 'Site (project OP code) *' : (_employeeAdvances ? 'Project / OP code *' : 'Project / OP code'),
             initial: _selectedOp,
             onResolved: (v) => setState(() => _selectedOp = v),
           ),

@@ -12,6 +12,7 @@ STAGE_LABELS = {
     "hod": "Head of Department",
     "department_hod": "Department HOD",
     "accountant": "Accountant",
+    "head_accountant": "Head of Accountant",
     "finance_manager": "Finance Manager",
 }
 

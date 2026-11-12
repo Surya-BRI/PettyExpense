@@ -59,6 +59,7 @@ const _stageLabels = {
   'hod': 'HOD queue',
   'department_hod': 'Department HOD queue',
   'accountant': 'Accountant queue',
+  'head_accountant': 'Head of Accountant queue',
   'finance_manager': 'Finance Manager queue',
 };
 

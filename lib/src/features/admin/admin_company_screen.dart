@@ -299,6 +299,40 @@ class _ApproversTab extends ConsumerWidget {
             ];
         // Professional Signs (employee advances) names and describes the steps its own way.
         final ps = region.usesEmployeeAdvances;
+        // Blue Rhine Contracting: no HODs -- Accountant -> Head of Accountant -> Finance Manager.
+        if (region.usesSitePots) {
+          return RefreshIndicator(
+            onRefresh: () async => ref.invalidate(_regionApproversProvider(region.id)),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+              children: [
+                _ApproverSection(
+                  title: '1. Accountant',
+                  emptyText: 'No Accountant for $company — those bills go to Admin.',
+                  people: people('accountant'),
+                  company: company,
+                  whatTheyApprove: (_) => 'Checks $company bills, sets site petty cash, prepares top-ups',
+                ),
+                const SizedBox(height: 16),
+                _ApproverSection(
+                  title: '2. Head of Accountant',
+                  emptyText: 'No Head of Accountant for $company — set one in People (App role).',
+                  people: people('head_accountant'),
+                  company: company,
+                  whatTheyApprove: (_) => 'Approves $company bills and top-ups',
+                ),
+                const SizedBox(height: 16),
+                _ApproverSection(
+                  title: '3. Finance Manager',
+                  emptyText: 'No Finance Manager for $company — those bills go to Admin.',
+                  people: people('finance_manager'),
+                  company: company,
+                  whatTheyApprove: (_) => 'Final approval and bank withdrawal for $company',
+                ),
+              ],
+            ),
+          );
+        }
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(_regionApproversProvider(region.id)),
           child: ListView(

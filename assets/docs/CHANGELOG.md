@@ -4,14 +4,31 @@ Newest first. Each entry says what changed for users, what changed in the code, 
 
 ---
 
-## 2026-11-09 — Blue Rhine Contracting (UAE): follows the department flow
+## 2026-11-12 — Blue Rhine Contracting (UAE): no HODs, one petty cash per employee
 
-Docs only. BRC's *PCA – Replenishment Process* (limit → bills → prepare PCA → Verifier → Financial Manager → bank withdrawal → top-up) is mapped in [`BRC_DEPARTMENT_PETTY_CASH.md`](BRC_DEPARTMENT_PETTY_CASH.md). Decision: BRC keeps the same department flow as Blue Rhine Industries, with no code or settings change. Known differences accepted for now: each bill is still approved HOD → Accountant → Finance Manager before it can go on a top-up, and the Finance Manager approves and records the bank payment in one step.
+Replaces the 2026-11-09 note that BRC would follow the department flow. Details: [`BRC_DEPARTMENT_PETTY_CASH.md`](BRC_DEPARTMENT_PETTY_CASH.md).
+
+### What changed for users
+
+- **Bills in Blue Rhine Contracting go Accountant → Head of Accountant → Finance Manager.** No HOD step. Bills waiting at the old HOD step move to the Accountant at startup.
+- **One petty cash per employee**, for all their sites. The Accountant sets it on **Petty cash** (menu), live at once. Every bill names its site's OP code; a petty-cash bill is blocked when it's more than what's left (submit it as a reimbursement instead).
+- **Top-up:** the Accountant taps **Prepare top-up** on an employee and ticks the approved bills → the Head of Accountant approves → the Finance Manager approves and records the bank withdrawal → the petty cash is back to its limit. Either approver can reject with a reason.
+- **New role, Head of Accountant.** Admin sets it (and Finance Manager) in People → **App role**. An ERP role named "Head of Accountant" / "Head of Accounts" would map automatically; ERP has none yet.
+- **BRC staff land in Blue Rhine Contracting** when ERP has them under the BRC company (subsidiary `BRC`). On ERP-Dev, region 46 "BRC UAE" was added and the test users `BRChod` and `BRCAccount` moved into it.
+- Admin's company page shows BRC's three approval steps. Dubai and KSA are unchanged.
+
+### Code
+
+- `region_policy`: `SITE_MODEL`, `SITE_PCA_SETTINGS` (applied to UAE by the startup seed), `matrix_stages`.
+- New `services/site_pca_service.py` and `api/routes_site_pca.py` (`/api/site-pca`). `fund_service`: BRC bills come off the employee's one petty cash; department pots and department top-ups are off in BRC.
+- Role `head_accountant` (`auth/security.APPROVER_ROLES`), `PUT /api/admin/users/{id}/role`.
+- App: `features/pca/site_pca_screen.dart`, `UserRole.headAccountant`, `usesSitePots`, claim form, drawer, People role picker, BRC approvers.
+- Tests: `backend/tests/test_site_pca.py` (12).
 
 ### Before go-live
 
-- Tick Blue Rhine Contracting for each BRC person in Admin → People (no ERP subsidiary maps to UAE).
-- Set the "Site-wise statement" department limit (5,000) for Blue Rhine Contracting, make Roshan Stanly its HOD, and set an Accountant and Finance Manager for the company.
+- ERP-Live: a region under the BRC company, with BRC staff in it.
+- Set a Head of Accountant and a Finance Manager for Blue Rhine Contracting; the Accountant sets each employee's petty cash.
 
 ---
 

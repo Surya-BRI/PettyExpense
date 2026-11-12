@@ -139,6 +139,7 @@ def resolve_stage_labels(txn: ErpExpenseTransaction) -> dict[str, str]:
         "hod": f"{emp_dept} HOD" if emp_dept else "HOD",
         DEPARTMENT_HOD: f"{cat_dept} HOD" if cat_dept else "Department HOD",
         "accountant": "Accountant",
+        "head_accountant": "Head of Accountant",
         "finance_manager": "Finance Manager",
         "employee": "Employee",
     }

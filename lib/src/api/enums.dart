@@ -1,7 +1,7 @@
 /// Role vocabulary matches the backend's ErpMasterExpenseRole codes exactly.
 /// 'department_hod' is a workflow *stage*, not a role — an 'hod' user acts on
 /// either the 'hod' stage or the 'department_hod' stage depending on the transaction.
-enum UserRole { employee, hod, accountant, financeManager, admin }
+enum UserRole { employee, hod, accountant, headAccountant, financeManager, admin }
 
 extension UserRoleX on UserRole {
   static UserRole fromJson(String? value) {
@@ -10,6 +10,8 @@ extension UserRoleX on UserRole {
         return UserRole.hod;
       case 'accountant':
         return UserRole.accountant;
+      case 'head_accountant':
+        return UserRole.headAccountant;
       case 'finance_manager':
         return UserRole.financeManager;
       case 'admin':
@@ -26,6 +28,8 @@ extension UserRoleX on UserRole {
         return 'hod';
       case UserRole.accountant:
         return 'accountant';
+      case UserRole.headAccountant:
+        return 'head_accountant';
       case UserRole.financeManager:
         return 'finance_manager';
       case UserRole.admin:

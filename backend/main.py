@@ -18,6 +18,7 @@ from api.routes_org import router as org_router
 from api.routes_payments import router as payments_router
 from api.routes_pca import router as pca_router
 from api.routes_public import router as public_router
+from api.routes_site_pca import router as site_pca_router
 from config import get_settings
 from database.models import init_db
 from scripts.seed_phase1_reference_data import seed_reference_data
@@ -46,6 +47,7 @@ app.include_router(org_router)
 app.include_router(payments_router)
 app.include_router(pca_router)
 app.include_router(public_router)
+app.include_router(site_pca_router)
 
 
 @app.on_event("startup")

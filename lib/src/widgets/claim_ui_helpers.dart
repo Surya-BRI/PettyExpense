@@ -174,6 +174,7 @@ class ClaimHistoryList extends StatelessWidget {
     'hod': 'HOD',
     'department_hod': 'Dept. HOD',
     'accountant': 'Accountant',
+    'head_accountant': 'Head of Accountant',
     'finance_manager': 'Finance Manager',
     'employee': 'Employee',
   };
