@@ -20,6 +20,7 @@ next person.
 from datetime import datetime
 from typing import Any, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from database.models import (
@@ -28,6 +29,7 @@ from database.models import (
     ErpExpenseFundTopupRequest,
     ErpExpensePettyCashFund,
     ErpExpenseRegionConfig,
+    ErpMasterExpenseRole,
 )
 from services.currency import region_base_currency
 from services.fund_service import (
@@ -42,7 +44,7 @@ from services.fund_service import (
 )
 from services.payment_service import PAYMENT_METHODS
 from services.region_policy import company_label, is_site_model
-from services.region_scope import covers_region, user_covers, user_region_ids
+from services.region_scope import belongs_to_region, user_covers, user_region_ids
 
 ADVANCE = "advance"
 TOPUP = "topup"
@@ -151,6 +153,22 @@ def _visible_query(db: Session, user: ErpAuthExpenseUsers):
     return q
 
 
+def _company_people(db: Session, region_id: int):
+    """Active people who belong to this company (home company, or ticked for it by Admin),
+    without Admins -- the people who can hold petty cash here."""
+    return (
+        db.query(ErpAuthExpenseUsers)
+        .options(joinedload(ErpAuthExpenseUsers.department))
+        .outerjoin(ErpMasterExpenseRole, ErpMasterExpenseRole.role_id == ErpAuthExpenseUsers.role_id)
+        .filter(
+            ErpAuthExpenseUsers.is_active == 1,
+            ErpAuthExpenseUsers.is_deleted == 0,
+            belongs_to_region(region_id),
+            or_(ErpMasterExpenseRole.role_code.is_(None), ErpMasterExpenseRole.role_code != "admin"),
+        )
+    )
+
+
 def _parse_date(value: Optional[str]) -> datetime:
     if not value:
         return datetime.utcnow()
@@ -177,20 +195,11 @@ class SitePcaService:
         return [fund_to_dict(db, f) for f in rows]
 
     def people(self, db: Session, user: ErpAuthExpenseUsers, region_id: int) -> list[dict[str, Any]]:
-        """Everyone in the company with their current petty cash (0 = not set), for the
-        Accountant's "Set petty cash" picker."""
+        """The company's own people (home company, or ticked for it in People; not Admins) with
+        their current petty cash (0 = not set), for the Accountant's "Set petty cash" picker."""
         region = _region(db, region_id)
         _require_role(db, user, ("accountant",), region.region_id, "Only the Accountant or Admin can set petty cash")
-        rows = (
-            db.query(ErpAuthExpenseUsers)
-            .options(joinedload(ErpAuthExpenseUsers.department))
-            .filter(
-                ErpAuthExpenseUsers.is_active == 1,
-                ErpAuthExpenseUsers.is_deleted == 0,
-                covers_region(region.region_id),
-            )
-            .all()
-        )
+        rows = _company_people(db, region.region_id).all()
         rows.sort(key=lambda u: (u.display_name or "").lower())
         limits = {
             employee_id: float(balance or 0)
@@ -270,18 +279,9 @@ class SitePcaService:
         amount = round(float(amount or 0), 2)
         if amount < 0:
             raise ValueError("The amount can't be negative")
-        employee = (
-            db.query(ErpAuthExpenseUsers)
-            .filter(
-                ErpAuthExpenseUsers.user_id == employee_id,
-                ErpAuthExpenseUsers.is_active == 1,
-                ErpAuthExpenseUsers.is_deleted == 0,
-                covers_region(region.region_id),
-            )
-            .first()
-        )
+        employee = _company_people(db, region.region_id).filter(ErpAuthExpenseUsers.user_id == employee_id).first()
         if employee is None:
-            raise ValueError("That person isn't in this company")
+            raise ValueError("That person isn't in this company (home company, or ticked for it in People)")
         fund = fund_service.employee_advance(db, employee_id, region.region_id)
         before = float(fund.opening_balance or 0) if fund else 0.0
         if fund is None:

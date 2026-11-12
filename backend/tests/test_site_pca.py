@@ -15,6 +15,7 @@ from database.models import (
     ErpAuthExpenseUsers,
     ErpExpenseCategory,
     ErpExpenseLineItem,
+    ErpExpenseMultiRegionUserRegion,
     ErpExpenseTransaction,
     ErpMasterExpenseRole,
 )
@@ -52,6 +53,10 @@ def w(db):  # noqa: F811
     )
     food = ErpExpenseCategory(category_name="Food")
     db.add_all([head, other, food])
+    db.flush()
+    # BRC people: Surya's home company is BRC; Aisha is ticked for BRC in People.
+    employee.home_region_id = uae.region_id
+    db.add(ErpExpenseMultiRegionUserRegion(user_id=other.user_id, region_id=uae.region_id, is_active=1))
     db.commit()
     head.role = head_role
     return dict(employee=employee, other=other, hod=hod, admin=admin, fm=fm, accountant=accountant,
@@ -162,6 +167,22 @@ def test_accountant_sets_one_petty_cash_per_employee(db, w, sent):  # noqa: F811
     assert ("surya", f"pca_site_set_{out['id']}", "Your petty cash") in sent
     with pytest.raises(ValueError, match="already"):
         _set(db, w, amount=6000)
+
+
+def test_accountant_sees_only_brc_people(db, w):  # noqa: F811
+    # In the list: home company BRC (Surya) and ticked for BRC (Aisha). Not in it: Admin,
+    # people with no company recorded (Priya HOD, Meera FM, the Accountant, Roshan) and
+    # people of another company only.
+    ksa_only = ErpAuthExpenseUsers(user_name="omar", display_name="Omar KSA", password_hash="x",
+                                   role_id=w["employee"].role_id, home_region_id=w["ksa"].region_id)
+    db.add(ksa_only)
+    w["admin"].home_region_id = w["uae"].region_id
+    db.commit()
+    names = [p["display_name"] for p in site.people(db, w["accountant"], w["uae"].region_id)]
+    assert names == ["Aisha Site", "Surya Sales"]
+    for outsider in (ksa_only, w["hod"], w["admin"]):
+        with pytest.raises(ValueError, match="isn't in this company"):
+            _set(db, w, employee=outsider)
 
 
 def test_pot_cannot_go_below_bills_not_topped_up(db, w):  # noqa: F811

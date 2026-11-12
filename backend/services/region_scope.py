@@ -36,6 +36,17 @@ def covers_region(region_id: Optional[int]):
     )
 
 
+def belongs_to_region(region_id: int):
+    """SQL filter on ErpAuthExpenseUsers: people who are actually in this company -- home
+    company, or ticked for it by Admin. Unlike covers_region, someone with no company recorded
+    is NOT included (they'd otherwise show up in every company's staff list)."""
+    mr = ErpExpenseMultiRegionUserRegion
+    return or_(
+        ErpAuthExpenseUsers.home_region_id == region_id,
+        exists().where(mr.user_id == ErpAuthExpenseUsers.user_id, mr.is_active == 1, mr.region_id == region_id),
+    )
+
+
 def user_region_ids(db: Session, user_id: int) -> Optional[set[int]]:
     """Companies this person covers, or None when unrestricted (see module docstring)."""
     home = db.query(ErpAuthExpenseUsers.home_region_id).filter(ErpAuthExpenseUsers.user_id == user_id).scalar()
