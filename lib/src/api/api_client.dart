@@ -974,6 +974,15 @@ class ApiException implements Exception {
   final int statusCode;
   final String message;
 
+  /// What users see: the server's own message, never the status code or class name.
   @override
-  String toString() => 'ApiException($statusCode): $message';
+  String toString() {
+    if (statusCode >= 500) return 'Something went wrong on the server. Please try again.';
+    final text = message.trim();
+    // Validation details come back as a list/map ("[{loc: ...}]"): not readable for users.
+    if (text.isEmpty || text.startsWith('[') || text.startsWith('{')) {
+      return 'Something isn\'t right with this request. Please check and try again.';
+    }
+    return text;
+  }
 }

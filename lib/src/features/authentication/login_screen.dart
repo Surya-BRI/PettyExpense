@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
-import '../../api/api_client.dart' show RegionSelectionRequired;
+import '../../api/api_client.dart' show ApiException, RegionSelectionRequired;
 import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
 import '../../theme/app_theme.dart';
@@ -71,8 +71,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _regionOptions = e.allowedRegions;
         _selectedRegion ??= e.allowedRegions.isNotEmpty ? e.allowedRegions.first : null;
       });
-    } catch (e) {
+    } on ApiException catch (e) {
+      // The server's own words ("Invalid username or password"), no codes.
       setState(() => _error = e.toString());
+    } catch (_) {
+      // No answer from the server (offline, wrong address, timeout).
+      setState(() => _error = 'Couldn\'t reach the server. Check your connection and try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
