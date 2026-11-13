@@ -118,7 +118,7 @@ def matrix_stages(region: Optional[ErpExpenseRegionConfig]) -> list[str]:
 
 
 def is_site_model(region: Optional[ErpExpenseRegionConfig]) -> bool:
-    """Blue Rhine Contracting: pots per employee per site (OP code), no HODs."""
+    """Blue Rhine Contracting: one pot per employee for all sites (bills name an OP code), no HODs."""
     return pca_model(region) == SITE_MODEL
 
 

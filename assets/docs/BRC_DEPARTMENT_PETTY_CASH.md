@@ -36,9 +36,9 @@ Entity in this app: **UAE / Blue Rhine Contracting** (`pca_model: "site"` in its
 
 | PDF step | In the app | Who |
 |---|---|---|
-| 1 | Petty cash → **Set petty cash**: pick the employee, enter the amount. Live at once | Accountant (or Admin) |
+| 1 | Petty cash → Employees → tap the employee → **Set petty cash** (or **Change amount**). Live at once | Accountant or Head of Accountant (or Admin) |
 | 2 | Employee submits a petty-cash bill with its site's OP code. It goes **Accountant → Head of Accountant → Finance Manager**, then comes off the employee's petty cash (5,000 → 4,000) | Employee, then approvers |
-| 3 | Petty cash → employee's card → **Prepare top-up**: tick the approved bills; amount = their total | Accountant |
+| 3 | Petty cash → Employees → tap the employee → **Top up**: tick the approved bills; amount = their total | Accountant |
 | 4 | Top-ups tab → **Approve** (or Reject with a reason) | Head of Accountant |
 | 5–6 | Top-ups tab → **Approve & record payment**: method, bank reference, date | Finance Manager |
 | 7 | Petty cash back to its limit (4,000 → 5,000) | System |

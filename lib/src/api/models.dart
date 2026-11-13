@@ -54,7 +54,7 @@ class AuthUser {
   bool get isApprover => userRole.isApprover;
   bool get usesEmployeeAdvances => pcaModel == 'employee';
 
-  /// Blue Rhine Contracting: petty cash per employee per site (OP code), no HODs.
+  /// Blue Rhine Contracting: one petty cash per employee for all sites (bills name an OP code), no HODs.
   bool get usesSitePots => pcaModel == 'site';
 
   /// Role name as this company calls it: Professional Signs (KSA) calls the Finance Manager
@@ -62,10 +62,16 @@ class AuthUser {
   String get roleLabel => roleLabelFor(role, employeeAdvances: usesEmployeeAdvances);
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
+    final pcaModel = json['pca_model'] as String? ?? 'department';
+    var role = (json['role'] as String? ?? 'employee').toLowerCase().trim();
+    // Blue Rhine Contracting has no HODs (bills go Accountant -> Head of Accountant -> Finance
+    // Manager): an HOD signed in under it is an employee there -- their own bills and petty
+    // cash, no empty approvals queue. Switching back to their HOD company restores the role.
+    if (pcaModel == 'site' && role == 'hod') role = 'employee';
     return AuthUser(
       id: (json['id'] as num).toInt(),
       displayName: (json['display_name'] ?? json['displayName'] ?? '') as String,
-      role: (json['role'] as String? ?? 'employee').toLowerCase().trim(),
+      role: role,
       username: json['username'] as String?,
       email: json['email'] as String?,
       departmentId: (json['department_id'] as num?)?.toInt(),
@@ -75,7 +81,7 @@ class AuthUser {
         for (final c in (json['allowed_regions'] as List? ?? const []))
           if (c is String && c.isNotEmpty) c,
       ],
-      pcaModel: json['pca_model'] as String? ?? 'department',
+      pcaModel: pcaModel,
     );
   }
 

@@ -770,6 +770,15 @@ class ApiClient {
     return [for (final row in _decodeList(res)) PcaStaff.fromJson(Map<String, dynamic>.from(row as Map))];
   }
 
+  /// One employee's bills in a site-model company, newest first (Accounts, Admin, or their own).
+  Future<List<ExpenseClaim>> siteEmployeeBills({required int regionId, required int employeeId}) async {
+    final res = await _authorized(() => http.get(
+          _uri('/api/site-pca/employees/$employeeId/bills', {'region_id': '$regionId'}),
+          headers: _headers,
+        ));
+    return [for (final row in _decodeList(res)) ExpenseClaim.fromJson(Map<String, dynamic>.from(row as Map))];
+  }
+
   /// Accountant / Admin: an employee's petty cash from now on (not an increase).
   Future<TopupRequest> setSitePot({
     required int regionId,

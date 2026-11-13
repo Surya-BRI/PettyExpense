@@ -34,7 +34,7 @@ class AppNavDrawer extends ConsumerWidget {
     final isAccountant = role == UserRole.accountant;
     // Professional Signs: petty cash is one advance per employee, not per department.
     final employeeAdvances = user?.usesEmployeeAdvances ?? false;
-    // Blue Rhine Contracting: petty cash per employee per site, no department pots.
+    // Blue Rhine Contracting: one petty cash per employee (all sites), no department pots.
     final sitePots = user?.usesSitePots ?? false;
     // An employee who also belongs to KSA sees "My advances" while signed in under Dubai too.
     final hasOwnAdvance = role == UserRole.employee &&
@@ -470,9 +470,9 @@ class _RegionOption extends StatelessWidget {
   }
 }
 
-/// Petty cash for the company the user is signed in under (their own pot, else their
-/// department's), plus -- for someone in Dubai and KSA -- their KSA petty cash too, so both
-/// show without switching company. Hidden when nothing is set up.
+/// Petty cash for the company the user is signed in under only (their own pot, else their
+/// department's). A multi-company user sees another company's after switching to it. Hidden
+/// when nothing is set up.
 class _PettyCashLeft extends ConsumerWidget {
   const _PettyCashLeft();
 
@@ -516,17 +516,7 @@ class _PettyCashLeft extends ConsumerWidget {
         cards.add((owner, '${formatMoney(fund.currency, fund.available)} left'));
       }
     }
-    // Petty cash in the other companies they belong to (e.g. KSA while signed in under Dubai).
-    final others = [
-      for (final f in ownAdvances)
-        if ((f.regionCode ?? '').toUpperCase() != region) f,
-    ];
-    if (others.isNotEmpty && cards.isNotEmpty) {
-      cards[0] = ('${cards[0].$1} (${companyLabel(region)})', cards[0].$2);
-    }
-    for (final f in others) {
-      cards.add(('Your petty cash (${companyLabel(f.regionCode ?? '')})', _amount(f)));
-    }
+    // Only the selected company: another company's petty cash shows once they switch to it.
     if (cards.isEmpty) return const SizedBox.shrink();
     return Column(
       children: [for (final (title, amount) in cards) _PettyCashCard(title: title, amount: amount)],

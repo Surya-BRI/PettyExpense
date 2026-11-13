@@ -45,8 +45,8 @@ COMPANY_BY_REGION = {
 # assets/docs/PS_EMPLOYEE_PCA_COMPARISON.md. Settings are overwritten once per settings
 # version (region_policy.EMPLOYEE_PCA_SETTINGS_VERSION), then only missing keys are added.
 EMPLOYEE_PCA_REGIONS = ("KSA",)
-# Companies on the site-pot model (Blue Rhine Contracting): pots per employee per site (OP
-# code), bills Accountant -> Head of Accountant -> Finance Manager -- services/site_pca_service.py.
+# Companies on the site-pot model (Blue Rhine Contracting): one pot per employee for all
+# sites, every bill names its site's OP code, bills Accountant -> Head of Accountant -> Finance Manager -- services/site_pca_service.py.
 SITE_PCA_REGIONS = ("UAE",)
 
 ROLE_NAMES = {

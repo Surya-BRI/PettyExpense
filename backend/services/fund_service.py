@@ -1027,7 +1027,7 @@ class FundService:
         if owner_type == "employee" and (region.region_code or "").upper() == "DUBAI":
             raise ValueError("Blue Rhine Industries uses department petty cash only")
         if owner_type == "department" and is_site_model(region):
-            raise ValueError(f"{region.company_name or region.region_name} gives petty cash per employee per site, not departments")
+            raise ValueError(f"{region.company_name or region.region_name} gives each employee one petty cash, not departments")
         if owner_type == "department" and is_employee_model(region):
             raise ValueError(f"{region.company_name or region.region_name} gives petty cash advances to employees, not departments")
         wanted = region_base_currency(region)

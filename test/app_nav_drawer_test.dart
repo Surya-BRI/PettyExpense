@@ -64,7 +64,7 @@ void main() {
     await _openDrawerAs(tester, 'employee', regions: const ['DUBAI', 'KSA']);
     expect(find.text('REGION'), findsOneWidget);
     // Region card + the company fallback in the department/company card at the bottom.
-    expect(find.text('Dubai'), findsWidgets);
+    expect(find.text('BRI UAE · Blue Rhine Industries'), findsWidgets); // DUBAI, by its ERP name
   });
 
   testWidgets('single-region user has no Region switcher', (tester) async {

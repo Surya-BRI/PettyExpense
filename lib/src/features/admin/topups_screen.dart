@@ -9,12 +9,12 @@ import '../../theme/app_theme.dart';
 import '../../utils/money.dart';
 import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
-import '../../widgets/pca_fund_figures.dart';
 import '../../widgets/region_filter_dropdown.dart';
 import '../../widgets/shimmer_box.dart';
 import '../authentication/auth_controller.dart';
 import 'admin_providers.dart';
 import 'my_funds_screen.dart';
+import '../../utils/company_names.dart';
 
 final topupsProvider = FutureProvider.autoDispose<List<TopupRequest>>((ref) {
   return ref.watch(apiClientProvider).listTopups();
@@ -199,7 +199,17 @@ class _TopupsScreenState extends ConsumerState<TopupsScreen> {
               onRequestTopup: () async {
                 await Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => RaiseTopupScreen(fundId: fund.id, regionId: fund.regionId, fund: fund),
+                    // Every department pot the HOD has (all companies, not just the filtered
+                    // ones), so they can still switch company / department on the form.
+                    builder: (_) => RaiseTopupScreen(
+                      fundId: fund.id,
+                      regionId: fund.regionId,
+                      fund: fund,
+                      funds: [
+                        for (final f in fundsAsync.valueOrNull ?? const <PettyCashFund>[])
+                          if (f.ownerType == 'department') f,
+                      ],
+                    ),
                   ),
                 );
                 invalidateFundProviders(ref);
@@ -241,56 +251,139 @@ class _HodFundCard extends StatelessWidget {
     final company = fundCompanyName(fund);
     final dept = (fund.departmentName ?? 'Department').trim();
     final code = (fund.regionCode ?? '').trim().toUpperCase();
+    final limit = fund.approvedLimit;
+    final available = fund.available;
+    final share = limit > 0 ? (available / limit).clamp(0.0, 1.0) : 0.0;
+    final low = limit > 0 && share < 0.25;
+    final secondary = const TextStyle(color: AppColors.textSecondary, fontSize: 12.5);
     return Material(
       color: AppColors.card,
       elevation: 0,
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              company,
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, height: 1.2, color: AppColors.darkBlue),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            // Company + region on one line, department under it.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (code.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(color: AppColors.lightBlue, borderRadius: BorderRadius.circular(6)),
-                    child: Text(
-                      code,
-                      style: const TextStyle(
-                        color: AppColors.darkBlue,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                        letterSpacing: 0.4,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        company,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          height: 1.2,
+                          color: AppColors.darkBlue,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 2),
+                      Text('$dept petty cash', style: secondary),
+                    ],
                   ),
-                Text('$dept petty cash', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                ),
+                if (code.isNotEmpty) RegionTag(code: code),
               ],
             ),
             const SizedBox(height: 14),
-            PcaFundFigures(fund: fund),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
+            // Available, against the limit.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Available', style: secondary),
+                      const SizedBox(height: 2),
+                      Text(
+                        formatMoney(fund.currency, available),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 22,
+                          height: 1.15,
+                          color: low ? AppColors.orange : AppColors.darkBlue,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Text('of ${formatMoney(fund.currency, limit)}', style: secondary),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: share,
+                minHeight: 6,
+                backgroundColor: AppColors.background,
+                color: low ? AppColors.orange : AppColors.darkBlue,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text.rich(
+              TextSpan(
+                style: secondary,
+                children: [
+                  const TextSpan(text: 'Spent '),
+                  TextSpan(
+                    text: formatMoney(fund.currency, fund.spent),
+                    style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                  ),
+                  const TextSpan(text: '   ·   Pending top-up '),
+                  TextSpan(
+                    text: formatMoney(fund.currency, fund.pendingTopup),
+                    style: TextStyle(
+                      color: fund.pendingTopup > 0 ? AppColors.orange : AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Divider(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonalIcon(
                 onPressed: onRequestTopup,
-                icon: Icon(PhosphorIcons.plus(), size: 16),
+                style: FilledButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: AppColors.orange.withValues(alpha: 0.12),
+                  foregroundColor: AppColors.orange,
+                ),
+                icon: Icon(PhosphorIcons.plus(), size: 15),
                 label: const Text('Request top-up'),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Small "DUBAI" / "UAE" / "KSA" tag: which company's (region's) petty cash this is.
+class RegionTag extends StatelessWidget {
+  const RegionTag({super.key, required this.code});
+
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: AppColors.lightBlue, borderRadius: BorderRadius.circular(6)),
+      child: Text(
+        code,
+        style: const TextStyle(color: AppColors.darkBlue, fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 0.4),
       ),
     );
   }
@@ -316,9 +409,17 @@ class TopupRequestTile extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              formatMoney(currency, t.amount),
-              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.darkBlue),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    formatMoney(currency, t.amount),
+                    style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: AppColors.darkBlue),
+                  ),
+                ),
+                if ((t.fund?.regionCode ?? '').trim().isNotEmpty)
+                  RegionTag(code: t.fund!.regionCode!.trim().toUpperCase()),
+              ],
             ),
             const SizedBox(height: 4),
             if (t.fund != null)
@@ -589,7 +690,7 @@ class _PaymentRefSheetState extends State<_PaymentRefSheet> {
 }
 
 class RaiseTopupScreen extends ConsumerStatefulWidget {
-  const RaiseTopupScreen({super.key, this.fundId, this.regionId, this.fund});
+  const RaiseTopupScreen({super.key, this.fundId, this.regionId, this.fund, this.funds});
 
   final int? fundId;
   final int? regionId;
@@ -597,6 +698,10 @@ class RaiseTopupScreen extends ConsumerStatefulWidget {
   /// The fund the HOD tapped "Request top-up" on: the screen then skips loading funds and
   /// goes straight to that fund's bills.
   final PettyCashFund? fund;
+
+  /// The HOD's department pots already loaded on the Funds screen (every company they
+  /// cover): lets a multi-company HOD switch company on the form without another request.
+  final List<PettyCashFund>? funds;
 
   @override
   ConsumerState<RaiseTopupScreen> createState() => _RaiseTopupScreenState();
@@ -664,7 +769,31 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
     return depts.first;
   }
 
-  String _fundLabel(PettyCashFund f) => fundCompanyLabel(f);
+  String _deptLabel(PettyCashFund f) => (f.departmentName ?? f.label ?? 'Department').trim();
+
+  /// "Blue Rhine UAE · UAE": which company's (region's) pot the top-up credits.
+  String _companyLabel(PettyCashFund f) {
+    final name = fundCompanyName(f);
+    final code = (f.regionCode ?? '').trim().toUpperCase();
+    return code.isEmpty || name.toUpperCase() == code ? name : '$name · $code';
+  }
+
+  /// HOD switching company: stay on the same department there if it has a pot.
+  void _pickHodRegion(String code) {
+    final current = _funds.cast<PettyCashFund?>().firstWhere((f) => f?.id == _fundId, orElse: () => null);
+    final inRegion = [
+      for (final f in _funds)
+        if ((f.regionCode ?? '').toUpperCase() == code) f,
+    ];
+    if (inRegion.isEmpty) return;
+    final next = inRegion.firstWhere(
+      (f) => f.departmentId != null && f.departmentId == current?.departmentId,
+      orElse: () => inRegion.first,
+    );
+    if (next.id == _fundId) return;
+    setState(() => _fundId = next.id);
+    _loadBills(next.id);
+  }
 
   Future<void> _load() async {
     setState(() {
@@ -675,7 +804,9 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
       final role = UserRoleX.fromJson(ref.read(authControllerProvider).user?.role);
       final api = ref.read(apiClientProvider);
       List<PettyCashFund> funds;
-      if (widget.fund != null && role != UserRole.admin) {
+      if (widget.funds != null && widget.funds!.isNotEmpty && role != UserRole.admin) {
+        funds = widget.funds!; // already loaded on the Funds screen
+      } else if (widget.fund != null && role != UserRole.admin) {
         funds = [widget.fund!]; // came from the fund's card: nothing else to load
       } else if (role == UserRole.admin) {
         if (_regions.isEmpty) {
@@ -787,7 +918,21 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
   Widget build(BuildContext context) {
     final fund = _funds.cast<PettyCashFund?>().firstWhere((f) => f?.id == _fundId, orElse: () => null);
     final currency = fund?.currency ?? '';
-    final lockDepartment = widget.fundId != null || _funds.length <= 1;
+    // HOD covering several companies: each company has its own pot, so they pick the
+    // company first, then the department within it. (Admin picks via _regions above.)
+    final hodRegions = <String>{
+      for (final f in _funds)
+        if ((f.regionCode ?? '').trim().isNotEmpty) f.regionCode!.trim().toUpperCase(),
+    }.toList();
+    final pickHodRegion = _regions.isEmpty && hodRegions.length > 1;
+    final fundRegion = (fund?.regionCode ?? '').trim().toUpperCase();
+    final deptFunds = pickHodRegion
+        ? [
+            for (final f in _funds)
+              if ((f.regionCode ?? '').trim().toUpperCase() == fundRegion) f,
+          ]
+        : _funds;
+    final lockDepartment = deptFunds.length <= 1;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: const BrandAppBar(title: 'Request top-up', automaticallyImplyLeading: true, showMenuAction: false),
@@ -805,7 +950,7 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
                     children: [
                       for (final r in _regions)
                         ChoiceChip(
-                          label: Text(companyLabel(r.regionCode)),
+                          label: Text(erpCompanyShort(r.regionCode)),
                           selected: r.id == _adminRegionId,
                           onSelected: _loading
                               ? null
@@ -822,6 +967,41 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
+                if (pickHodRegion) ...[
+                  DropdownButtonFormField<String>(
+                    key: ValueKey('company-$fundRegion'),
+                    isExpanded: true,
+                    initialValue: hodRegions.contains(fundRegion) ? fundRegion : null,
+                    decoration: const InputDecoration(labelText: 'Company'),
+                    items: [
+                      for (final code in hodRegions)
+                        DropdownMenuItem(
+                          value: code,
+                          child: Text(
+                            _companyLabel(
+                              _funds.firstWhere((f) => (f.regionCode ?? '').trim().toUpperCase() == code),
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                    onChanged: _busy || _loadingBills
+                        ? null
+                        : (code) {
+                            if (code != null) _pickHodRegion(code);
+                          },
+                  ),
+                  const SizedBox(height: 16),
+                ] else if (_regions.length <= 1 && fund != null) ...[
+                  InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Company'),
+                    child: Text(
+                      _companyLabel(fund),
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 if (_funds.isEmpty && !_loading)
                   const Text(
                     'No department pot is set up for you yet. Ask Admin to set an approved limit.',
@@ -831,7 +1011,7 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
                   InputDecorator(
                     decoration: const InputDecoration(labelText: 'Department'),
                     child: Text(
-                      fund != null ? _fundLabel(fund) : 'Your department',
+                      fund != null ? _deptLabel(fund) : 'Your department',
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
                     ),
                   )
@@ -842,10 +1022,10 @@ class _RaiseTopupScreenState extends ConsumerState<RaiseTopupScreen> {
                     initialValue: _fundId,
                     decoration: const InputDecoration(labelText: 'Department'),
                     items: [
-                      for (final f in _funds)
+                      for (final f in deptFunds)
                         DropdownMenuItem(
                           value: f.id,
-                          child: Text(_fundLabel(f), overflow: TextOverflow.ellipsis),
+                          child: Text(_deptLabel(f), overflow: TextOverflow.ellipsis),
                         ),
                     ],
                     onChanged: (v) {

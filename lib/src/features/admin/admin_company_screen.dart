@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
+import '../../api/enums.dart';
 import '../../api/models.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency.dart';
@@ -13,6 +14,7 @@ import '../../widgets/pca_fund_figures.dart';
 import '../../widgets/region_branding.dart';
 import '../pca/accounts_cash_view.dart' show AccountsCashView;
 import '../pca/advances_screen.dart' show PcaDepartmentsView, PcaRequestsView;
+import '../pca/site_pca_screen.dart' show SitePotsView, SiteTopupsView;
 import 'admin_providers.dart';
 import 'admin_regions_screen.dart';
 import 'limit_amount_sheet.dart';
@@ -189,7 +191,11 @@ class _CompanyWorkspaceState extends ConsumerState<_CompanyWorkspace> with Singl
                       Tab(text: 'Accounts cash'),
                       Tab(text: 'Approvers'),
                     ]
-                  : const [Tab(text: 'Departments'), Tab(text: 'Top-ups'), Tab(text: 'Approvers')],
+                  // Blue Rhine Contracting: no departments either -- each employee's petty
+                  // cash and its top-ups (Accountant -> Head of Accountant -> Finance Manager).
+                  : region.usesSitePots
+                      ? const [Tab(text: 'Employees'), Tab(text: 'Top-ups'), Tab(text: 'Approvers')]
+                      : const [Tab(text: 'Departments'), Tab(text: 'Top-ups'), Tab(text: 'Approvers')],
             ),
           ),
           Expanded(
@@ -200,6 +206,12 @@ class _CompanyWorkspaceState extends ConsumerState<_CompanyWorkspace> with Singl
                       PcaDepartmentsView(regionId: region.id),
                       const PcaRequestsView(),
                       AccountsCashView(regionId: region.id),
+                      _ApproversTab(region: region),
+                    ]
+                  : region.usesSitePots
+                  ? [
+                      SitePotsView(region: region, role: UserRole.admin),
+                      SiteTopupsView(region: region, role: UserRole.admin),
                       _ApproversTab(region: region),
                     ]
                   : [
@@ -319,7 +331,7 @@ class _ApproversTab extends ConsumerWidget {
                   emptyText: 'No Head of Accountant for $company — set one in People (App role).',
                   people: people('head_accountant'),
                   company: company,
-                  whatTheyApprove: (_) => 'Approves $company bills and top-ups',
+                  whatTheyApprove: (_) => 'Approves $company bills and top-ups, sets site petty cash',
                 ),
                 const SizedBox(height: 16),
                 _ApproverSection(
@@ -444,7 +456,7 @@ class _ApproverSection extends StatelessWidget {
             for (final p in groups[key]!)
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: _ApproverCard(person: p, why: whatTheyApprove(p), company: company),
+                child: _ApproverCard(person: p, why: whatTheyApprove(p)),
               ),
           ],
       ],
@@ -453,15 +465,13 @@ class _ApproverSection extends StatelessWidget {
 }
 
 class _ApproverCard extends StatelessWidget {
-  const _ApproverCard({required this.person, required this.why, required this.company});
+  const _ApproverCard({required this.person, required this.why});
 
   final Map<String, dynamic> person;
   final String why;
-  final String company;
 
   @override
   Widget build(BuildContext context) {
-    final home = person['home_region'] == true;
     return Material(
       color: AppColors.card,
       borderRadius: BorderRadius.circular(12),
@@ -489,51 +499,10 @@ class _ApproverCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(why, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12.5)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _WhyChip(
-                        label: home ? 'Home' : 'Added by Admin',
-                        home: home,
-                      ),
-                      Text(
-                        home ? 'This is their company' : 'You ticked $company for them',
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WhyChip extends StatelessWidget {
-  const _WhyChip({required this.label, required this.home});
-
-  final String label;
-  final bool home;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: home ? AppColors.lightBlue : AppColors.warningSoft,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: home ? AppColors.darkBlue : AppColors.orange,
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
         ),
       ),
     );

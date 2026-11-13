@@ -7,7 +7,8 @@ limit. Every bill names its site's project OP code (for site-wise reporting), an
 bills go Employee -> Accountant -> Head of Accountant -> Finance Manager; on final approval the
 whole bill comes off the employee's petty cash (fund_service._fund_portion).
 
-* Set: the Accountant (or Admin) gives an employee petty cash, or changes its amount. Live at
+* Set: the Accountant or Head of Accountant (or Admin) gives an employee petty cash, or changes
+  its amount. Live at
   once; logged as an ErpExpenseFundTopupRequest with kind 'advance', status 'set'.
 * Top-up (PDF steps 3-7): the Accountant prepares it from the employee's approved bills
   (submitted) -> the Head of Accountant approves (verified) -> the Finance Manager approves and
@@ -51,6 +52,9 @@ TOPUP = "topup"
 SET = "set"
 # Roles that see every employee's petty cash in a company they cover.
 _ACCOUNTS_ROLES = ("accountant", "head_accountant", "finance_manager")
+# Roles that set or change an employee's petty cash (Admin too). Preparing a top-up stays with
+# the Accountant: the Head of Accountant approves it.
+_SETTER_ROLES = ("accountant", "head_accountant")
 
 
 def _role(user: ErpAuthExpenseUsers) -> str:
@@ -196,9 +200,11 @@ class SitePcaService:
 
     def people(self, db: Session, user: ErpAuthExpenseUsers, region_id: int) -> list[dict[str, Any]]:
         """The company's own people (home company, or ticked for it in People; not Admins) with
-        their current petty cash (0 = not set), for the Accountant's "Set petty cash" picker."""
+        their current petty cash (0 = not set): the Employees list and the "Set petty cash"
+        picker. Accounts (all three levels) and Admin can read it; the Accountant, the Head of
+        Accountant and Admin set petty cash."""
         region = _region(db, region_id)
-        _require_role(db, user, ("accountant",), region.region_id, "Only the Accountant or Admin can set petty cash")
+        _require_role(db, user, _ACCOUNTS_ROLES, region.region_id, "Only Accounts or Admin can see the company's people")
         rows = _company_people(db, region.region_id).all()
         rows.sort(key=lambda u: (u.display_name or "").lower())
         limits = {
@@ -222,6 +228,21 @@ class SitePcaService:
             }
             for u in rows
         ]
+
+    def employee_bills(
+        self, db: Session, user: ErpAuthExpenseUsers, region_id: int, employee_id: int
+    ) -> list[dict[str, Any]]:
+        """Every bill one employee raised in this company (petty cash and reimbursements, any
+        status), newest first: their own, or anyone's for Accounts and Admin."""
+        region = _region(db, region_id)
+        if user.user_id != employee_id:
+            _require_role(db, user, _ACCOUNTS_ROLES, region.region_id, "Only Accounts or Admin can see someone's bills")
+        from services.transaction_service import transaction_service
+
+        rows = transaction_service.list_admin(db, employee_id=employee_id)
+        rows = [r for r in rows if r.get("region_id") == region.region_id and r.get("status") != "draft"]
+        rows.sort(key=lambda r: r["id"], reverse=True)  # newest first, stable for same-second bills
+        return rows
 
     def list_requests(
         self,
@@ -275,7 +296,10 @@ class SitePcaService:
         """Give an employee petty cash, or change its amount (the new total, not an increase).
         Live at once. It can't go below the bills not yet topped up."""
         region = _region(db, region_id)
-        _require_role(db, user, ("accountant",), region.region_id, "Only the Accountant or Admin can set petty cash")
+        _require_role(
+            db, user, _SETTER_ROLES, region.region_id,
+            "Only the Accountant, Head of Accountant or Admin can set petty cash",
+        )
         amount = round(float(amount or 0), 2)
         if amount < 0:
             raise ValueError("The amount can't be negative")

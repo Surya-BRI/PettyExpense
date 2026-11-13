@@ -50,7 +50,7 @@ class MainShell extends ConsumerWidget {
         role == UserRole.headAccountant;
     // Professional Signs: the money tab is employee advances, not department top-ups.
     final employeeAdvances = user?.usesEmployeeAdvances ?? false;
-    // Blue Rhine Contracting: the money tab is site petty cash (per employee per site).
+    // Blue Rhine Contracting: the money tab is site petty cash (one per employee, all sites).
     final sitePots = user?.usesSitePots ?? false;
     final topupsSelected =
         location == '/topups' || location == '/funds' || location == '/advances' || location == '/site-pca';
@@ -251,6 +251,17 @@ class MainShell extends ConsumerWidget {
                           ref,
                           () => showCaptureReceiptSheet(context, ref),
                         ),
+                      ),
+                    ),
+                  // Blue Rhine Contracting: every employee has their own petty cash.
+                  if (sitePots)
+                    Expanded(
+                      child: _NavItem(
+                        icon: PhosphorIcons.wallet(),
+                        selectedIcon: PhosphorIcons.wallet(PhosphorIconsStyle.fill),
+                        label: 'Petty cash',
+                        selected: topupsSelected,
+                        onTap: () => navigateGuarded(ref, () => context.go('/site-pca')),
                       ),
                     ),
                   Expanded(

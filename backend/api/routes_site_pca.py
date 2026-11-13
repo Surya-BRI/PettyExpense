@@ -1,6 +1,6 @@
 """Site petty cash (Blue Rhine Contracting): see services/site_pca_service.py.
 
-Pot:     the Accountant (or Admin) sets an employee's petty cash (one per employee, all sites); live at once.
+Pot:     the Accountant or Head of Accountant (or Admin) sets an employee's petty cash (one per employee, all sites); live at once.
 Top-up:  the Accountant prepares it from approved bills -> Head of Accountant approves ->
          Finance Manager approves and records the cash withdrawal from the bank.
 """
@@ -75,6 +75,16 @@ def pots(
 @router.get("/people")
 def people(region_id: int = Query(...), user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
     return _run(lambda: site_pca_service.people(db, _orm_user(db, user), region_id))
+
+
+@router.get("/employees/{employee_id}/bills")
+def employee_bills(
+    employee_id: int,
+    region_id: int = Query(...),
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _run(lambda: site_pca_service.employee_bills(db, _orm_user(db, user), region_id, employee_id))
 
 
 @router.post("/pots")

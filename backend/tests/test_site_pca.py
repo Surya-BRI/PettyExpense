@@ -148,9 +148,7 @@ def test_bill_goes_accountant_then_head_of_accountant_then_finance_manager(db, w
 
 def test_accountant_sets_one_petty_cash_per_employee(db, w, sent):  # noqa: F811
     with pytest.raises(PermissionError):
-        _set(db, w, by=w["hod"])
-    with pytest.raises(PermissionError):
-        _set(db, w, by=w["head"])
+        _set(db, w, by=w["hod"])  # the Head of Accountant may (see the test below); an HOD may not
     out = _set(db, w, amount=5000)
     assert (out["kind"], out["status"], out["amount"]) == ("advance", "set", 5000)
     assert (out["fund"]["approved_limit"], out["fund"]["label"]) == (5000, "Surya Sales · petty cash")
@@ -185,6 +183,41 @@ def test_accountant_sees_only_brc_people(db, w):  # noqa: F811
             _set(db, w, employee=outsider)
 
 
+def test_head_of_accountant_sets_petty_cash_but_does_not_prepare_top_ups(db, w, sent):  # noqa: F811
+    out = _set(db, w, amount=3000, by=w["head"])
+    assert _pot(db, w)["opening_balance"] == 3000
+    _bill(db, w, 500)
+    with pytest.raises(PermissionError, match="prepare a top-up"):
+        site.request_topup(db, w["head"], out["fund"]["id"], [], None)
+    for outsider in ("fm", "employee"):
+        with pytest.raises(PermissionError, match="Head of Accountant or Admin can set"):
+            _set(db, w, amount=4000, by=w[outsider])
+
+
+def test_employees_list_and_an_employees_bills(db, w):  # noqa: F811
+    # Accounts at every level (and Admin) see the company's people; an employee doesn't.
+    for viewer in ("accountant", "head", "fm", "admin"):
+        assert [p["display_name"] for p in site.people(db, w[viewer], w["uae"].region_id)] == ["Aisha Site", "Surya Sales"]
+    with pytest.raises(PermissionError):
+        site.people(db, w["employee"], w["uae"].region_id)
+    # One employee's bills in this company, newest first, no drafts; not another company's.
+    first = _bill(db, w, 100)
+    second = _bill(db, w, 200, status="submitted")
+    _bill(db, w, 300, status="draft")
+    other = _bill(db, w, 400, employee=w["other"])
+    elsewhere = _bill(db, w, 500)
+    elsewhere.region_id = w["ksa"].region_id
+    db.commit()
+    ids = [b["id"] for b in site.employee_bills(db, w["accountant"], w["uae"].region_id, w["employee"].user_id)]
+    assert ids == [second.transaction_id, first.transaction_id]
+    assert len(site.employee_bills(db, w["employee"], w["uae"].region_id, w["employee"].user_id)) == 2  # own
+    with pytest.raises(PermissionError):
+        site.employee_bills(db, w["employee"], w["uae"].region_id, w["other"].user_id)
+    assert [b["id"] for b in site.employee_bills(db, w["head"], w["uae"].region_id, w["other"].user_id)] == [
+        other.transaction_id
+    ]
+
+
 def test_pot_cannot_go_below_bills_not_topped_up(db, w):  # noqa: F811
     _set(db, w, amount=5000)
     _bill(db, w, 1500)
@@ -213,7 +246,7 @@ def test_bills_on_any_site_come_off_the_one_petty_cash(db, w):  # noqa: F811
 
 
 def test_department_pots_and_department_topups_are_off_in_brc(db, w):  # noqa: F811
-    with pytest.raises(ValueError, match="per site"):
+    with pytest.raises(ValueError, match="each employee one petty cash, not departments"):
         fund_service.create(db, region_id=w["uae"].region_id, owner_type="department",
                             department_id=w["employee"].department_id, opening_balance=5000)
     _set(db, w, amount=5000)
