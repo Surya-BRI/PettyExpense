@@ -111,12 +111,19 @@ UAE_USERS = [
     (9033, "uae_accountant",   "Mariam", "Accountant UAE", "uae_accountant@expense.local",   "Accountant",      None),
     (9034, "uae_finance_mgr",  "Sultan", "Finance UAE",    "uae_finance_mgr@expense.local",  None,              None),
     (9035, "uae_sales_emp",    "Aisha",  "Sales UAE",      "uae_sales_emp@expense.local",    None,              "Sales"),
+    # BRC's second accounts step (Accountant -> Head of Accountant -> Finance Manager). No ERP
+    # role maps to it, so like finance_manager it's set on the local row (LOCAL_ROLE_BY_ID).
+    (9036, "uae_head_accountant", "Layla", "Head of Accountant UAE", "uae_head_accountant@expense.local", None, None),
 ]
 UAE_HOD_ASSIGNMENTS = [
     (9031, "Sales"),
     (9032, "IT"),
 ]
 UAE_FINANCE_MANAGER_IDS = {9034}
+
+# App roles ERP has no mapping for, pre-set on the local ErpAuthExpenseUsers row (login never
+# overwrites a hand-set role -- see authenticate_user in auth/security.py).
+LOCAL_ROLE_BY_ID = {9036: "head_accountant"}
 
 # erp_role_name -> local ErpAuthExpenseUsers.role_code. Used when THIS script has to
 # pre-create a user's local row (see section 3) -- a first login would resolve the same
@@ -137,6 +144,14 @@ DEV_ERP_ROLES = [
     (102055, "Accountant"),
     (102068, "Sub Admin"),
 ]
+
+
+def _app_role(user_id: int, erp_role_name, finance_manager_ids: set[int]) -> str:
+    if user_id in LOCAL_ROLE_BY_ID:
+        return LOCAL_ROLE_BY_ID[user_id]
+    if user_id in finance_manager_ids:
+        return "finance_manager"
+    return ROLE_CODE_BY_ERP_ROLE_NAME.get(erp_role_name, "employee")
 
 
 def seed_dev_erp_users() -> None:
@@ -283,11 +298,7 @@ def _seed_users(
             if dept_name and dept_id is None:
                 print(f"  WARNING: department {dept_name!r} not found -- {user_name} left without one")
 
-            role_code = (
-                "finance_manager"
-                if user_id in finance_manager_ids
-                else ROLE_CODE_BY_ERP_ROLE_NAME.get(erp_role_name, "employee")
-            )
+            role_code = _app_role(user_id, erp_role_name, finance_manager_ids)
             role = db.query(ErpMasterExpenseRole).filter(ErpMasterExpenseRole.role_code == role_code).first()
 
             local = db.query(ErpAuthExpenseUsers).filter(ErpAuthExpenseUsers.user_id == user_id).first()
@@ -370,9 +381,7 @@ def _seed_users(
 
         print("Dev ERP users seeded:")
         for uid, uname, *_, erp_role, dept_name in users:
-            app_role = (
-                "finance_manager" if uid in finance_manager_ids else ROLE_CODE_BY_ERP_ROLE_NAME.get(erp_role, "employee")
-            )
+            app_role = _app_role(uid, erp_role, finance_manager_ids)
             dept_suffix = f"  dept={dept_name}" if dept_name else ""
             home = f"  home={home_region_code}" if home_region_id else ""
             assigned = f"  assigned={','.join(assigned_region_codes)}" if assigned_region_codes else ""

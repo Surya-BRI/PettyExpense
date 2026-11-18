@@ -756,6 +756,11 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     });
     try {
       List<Map<String, dynamic>>? lineItems;
+      // Multiple items: the figures sent are worked out from the lines here, WITHOUT writing
+      // them into the Amount / Total fields -- "Go back and check" on the cross-check box must
+      // return to exactly what the employee entered, not to numbers changed behind their back.
+      double? linesTotal;
+      double? linesAmount;
       if (_multi) {
         if (_lines.isEmpty) throw Exception('Add at least one item');
         final incomplete = _lines.indexWhere((l) => l.problem != null);
@@ -767,21 +772,20 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
         }
         lineItems = _lines.map((l) => l.toJson()).toList();
         // Totals come from the lines (the backend recomputes them the same way).
-        final total = double.parse(_linesTotal.toStringAsFixed(2));
-        if (_vatValue > total) {
+        linesTotal = double.parse(_linesTotal.toStringAsFixed(2));
+        if (_vatValue > linesTotal) {
           throw Exception("VAT can’t be more than the items total");
         }
-        _total.text = total.toStringAsFixed(2);
-        // If user hasn’t manually set Amount excl. VAT, fill it now.
+        // Amount excl. VAT: what the employee typed, else items total minus VAT.
         if (!_amountOverridden || _amount.text.trim().isEmpty) {
-          _amount.text = (total - _vatValue).toStringAsFixed(2);
+          linesAmount = double.parse((linesTotal - _vatValue).toStringAsFixed(2));
         }
         _categoryId = _mainLineCategory ?? _categoryId;
       }
-      final amount = double.tryParse(_amount.text.trim());
+      final amount = linesAmount ?? double.tryParse(_amount.text.trim());
       final vatText = _vat.text.trim();
       final vat = vatText.isEmpty ? 0.0 : double.tryParse(vatText);
-      final totalText = _total.text.trim();
+      final totalText = linesTotal?.toStringAsFixed(2) ?? _total.text.trim();
       double? total = totalText.isEmpty ? null : double.tryParse(totalText);
       if (totalText.isNotEmpty && total == null) {
         throw ClaimFieldError('Enter a valid total amount');

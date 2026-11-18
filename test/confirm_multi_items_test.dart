@@ -178,6 +178,9 @@ void main() {
   testWidgets('going back from the cross-check box submits nothing', (tester) async {
     final api = await _pumpScreen(tester);
     await _enterBillNumber(tester);
+    String fieldText(String label) => tester.widget<TextField>(_field(label)).controller!.text;
+    final amountBefore = fieldText('Amount excl. VAT (AED)');
+    final vatBefore = fieldText('VAT amount included in the items (leave blank if none)');
 
     await tester.tap(find.text('Submit for approval'));
     await tester.pumpAndSettle();
@@ -191,6 +194,25 @@ void main() {
     expect(api.createdBody, isNull);
     expect(find.text('Please cross-check before submitting'), findsNothing);
     expect(find.text('Submit for approval'), findsOneWidget);
+    // Back on the form, the amounts are exactly what was there before Submit.
+    expect(fieldText('Amount excl. VAT (AED)'), amountBefore);
+    expect(fieldText('VAT amount included in the items (leave blank if none)'), vatBefore);
+  });
+
+  testWidgets('a typed amount survives going back from the cross-check box', (tester) async {
+    final api = await _pumpScreen(tester);
+    await _enterBillNumber(tester);
+    await tester.enterText(_field('Amount excl. VAT (AED)'), '50.00');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Submit for approval'));
+    await tester.pumpAndSettle();
+    expect(find.text('AED 50.00'), findsWidgets); // shown in the cross-check box
+    await tester.tap(find.text('Go back and check'));
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<TextField>(_field('Amount excl. VAT (AED)')).controller!.text, '50.00');
+    expect(api.createdBody, isNull);
   });
 
   testWidgets('saving a draft skips the cross-check box', (tester) async {

@@ -3,6 +3,10 @@
 > Companion to [`PETTY_CASH_PHASED_PLAN.md`](PETTY_CASH_PHASED_PLAN.md). Scopes a React + TypeScript
 > web app for the Accountant and HOD approval roles, reusing the existing FastAPI backend as-is.
 >
+> **Update 2026-11-18:** the current web portal is the separate repo `d:/expense_app_web`
+> (`Surya-BRI/expense_web`), serving HOD, Accountant, Finance Manager and Admin. See
+> [`WEB_PORTAL.md`](WEB_PORTAL.md). This plan is kept as history.
+>
 > **Update 2026-11-04:** this plan was built as [`web-admin/`](../../web-admin/README.md), not `webapp/`.
 > Vendor matching and vendor resolution were removed on 2026-11-02 (see [`CHANGELOG.md`](CHANGELOG.md)),
 > so the vendor items below are struck out. The current endpoint list is in the root `README.md`

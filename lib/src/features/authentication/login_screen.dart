@@ -43,8 +43,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ('ksa_sales_hod',      'Test@1234', 'HOD · Sales · KSA'),
     ('ksa_accountant',     'Test@1234', 'Accountant · KSA'),
     ('ksa_finance_mgr',    'Test@1234', 'Accounts Manager · KSA'),
-    ('BRChod',             'BRChod@2026',     'Head of Accountant · BRC'),
+    // Blue Rhine Contracting: no HODs -- Accountant -> Head of Accountant -> Finance Manager.
+    ('uae_sales_emp',      'Test@1234', 'Employee · Sales · BRC'),
     ('BRCAccount',         'BRCAccount@2026', 'Accountant · BRC'),
+    // Seeded by backend/scripts/seed_dev_erp_users.py --uae (BRChod's password stopped working).
+    ('uae_head_accountant', 'Test@1234',      'Head of Accountant · BRC'),
+    ('uae_finance_mgr',    'Test@1234', 'Finance Manager · BRC'),
   ];
 
   @override
