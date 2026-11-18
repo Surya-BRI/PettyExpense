@@ -13,6 +13,13 @@ router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 # Types that originally pointed the recipient at an approval action (as opposed to 'approval' /
 # 'rejection' / 'dispute' / 'paid', which always just inform the employee about their own claim).
 _APPROVER_FACING_TYPES = {"submission", "approval_pending", "resubmit"}
+# SLA alerts ('slaw_<stage>_<n>' overdue warning, 'slae_<stage>_<n>' escalation): actionable
+# for whoever is still the approver; escalation recipients just get to see the claim.
+_APPROVER_FACING_PREFIXES = ("slaw_", "slae_")
+
+
+def _approver_facing(type_: Optional[str]) -> bool:
+    return bool(type_) and (type_ in _APPROVER_FACING_TYPES or type_.startswith(_APPROVER_FACING_PREFIXES))
 
 
 def _type_ids(type_: Optional[str]) -> tuple[Optional[int], Optional[int]]:
@@ -124,7 +131,7 @@ def list_notifications(
     result = []
     for r in rows:
         txn = txns.get(r.transaction_id)
-        actionable = r.type in _APPROVER_FACING_TYPES and _is_actionable(txn)
+        actionable = _approver_facing(r.type) and _is_actionable(txn)
         result.append(_to_dict(r, txn, actionable, regions.get(r.notification_id)))
     return result
 

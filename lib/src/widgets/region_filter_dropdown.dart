@@ -56,9 +56,26 @@ class RegionFilterDropdown extends StatelessWidget {
           icon: Icon(PhosphorIcons.caretDown(), size: 14, color: AppColors.textSecondary),
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
           borderRadius: BorderRadius.circular(8),
+          // Open menu is wide enough for full company names on one line.
+          menuWidth: 260,
+          // Closed button stays small ("All regions" / "BRI UAE"); the open menu shows full names.
+          selectedItemBuilder: (context) => [
+            const Center(child: Text('All regions')),
+            for (final code in options)
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 70, maxWidth: 110),
+                  child: Text(code, overflow: TextOverflow.ellipsis, maxLines: 1),
+                ),
+              ),
+          ],
           items: [
             const DropdownMenuItem<String?>(value: null, child: Text('All regions')),
-            for (final code in options) DropdownMenuItem<String?>(value: code, child: Text(companyLabel(code))),
+            for (final code in options)
+              DropdownMenuItem<String?>(
+                value: code,
+                child: Text(companyLabel(code), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
           ],
           onChanged: onChanged,
         ),

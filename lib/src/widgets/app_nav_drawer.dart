@@ -118,6 +118,15 @@ class AppNavDrawer extends ConsumerWidget {
           selected: location == '/admin/people' || location.startsWith('/admin/people/'),
           onTap: () => go('/admin/people'),
         ),
+      if (!kIsWeb && isAdmin)
+        _DrawerItem(
+          icon: PhosphorIcons.hourglassMedium(),
+          selectedIcon: PhosphorIcons.hourglassMedium(PhosphorIconsStyle.fill),
+          accent: AppColors.darkBlue,
+          label: 'Aging report',
+          selected: location == '/admin/aging',
+          onTap: () => go('/admin/aging'),
+        ),
       if (!kIsWeb && isHod && !employeeAdvances && !sitePots)
         _DrawerItem(
           icon: PhosphorIcons.money(),
@@ -135,6 +144,15 @@ class AppNavDrawer extends ConsumerWidget {
           label: 'Top-ups',
           selected: location == '/topups',
           onTap: () => go('/topups'),
+        ),
+      if (isApprover && !isAdmin)
+        _DrawerItem(
+          icon: PhosphorIcons.userSwitch(),
+          selectedIcon: PhosphorIcons.userSwitch(PhosphorIconsStyle.fill),
+          accent: AppColors.darkBlue,
+          label: 'My backup',
+          selected: location == '/backup',
+          onTap: () => go('/backup'),
         ),
       _DrawerItem(
         icon: PhosphorIcons.bell(),
@@ -476,10 +494,21 @@ class _RegionOption extends StatelessWidget {
 class _PettyCashLeft extends ConsumerWidget {
   const _PettyCashLeft();
 
-  /// "SAR 2,000.00 can use now" for an employee advance with a hard limit, else "… left".
-  static String _amount(PettyCashFund f) => f.spendLimit != null
-      ? '${formatMoney(f.currency, f.uncommitted < 0 ? 0 : f.uncommitted)} can use now'
-      : '${formatMoney(f.currency, f.available)} left';
+  /// The same figure Submit checks: what's left minus bills still waiting for approval (they
+  /// are held so two bills can't overspend together). "AED 20.00 can use now" plus a note
+  /// on what's held, or plain "AED 100.00 left" when nothing is waiting.
+  static (String, String?) _figures(PettyCashFund f) {
+    final canUse = formatMoney(f.currency, f.uncommitted < 0 ? 0 : f.uncommitted);
+    if (f.spendLimit != null) return ('$canUse can use now', null); // employee advance, hard limit
+    if (f.pendingBills > 0.004) {
+      return (
+        '$canUse can use now',
+        '${formatMoney(f.currency, f.available)} left · '
+            '${formatMoney(f.currency, f.pendingBills)} held for bills waiting for approval',
+      );
+    }
+    return ('${formatMoney(f.currency, f.available)} left', null);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -488,17 +517,17 @@ class _PettyCashLeft extends ConsumerWidget {
     final funds = ref.watch(myFundsProvider).valueOrNull ?? const <PettyCashFund>[];
     final ownAdvances = ref.watch(myPcaAdvancesProvider).valueOrNull ?? const <PettyCashFund>[];
 
-    final cards = <(String, String)>[];
+    final cards = <(String, PettyCashFund)>[];
     if (user?.usesSitePots ?? false) {
       // Blue Rhine Contracting: one petty cash per employee, for all their sites.
       final own = funds
           .where((f) => (f.regionCode ?? '').toUpperCase() == region && f.ownerType == 'employee')
           .firstOrNull;
-      if (own != null) cards.add(('Your petty cash', '${formatMoney(own.currency, own.available)} left'));
+      if (own != null) cards.add(('Your petty cash', own));
     } else if (user?.usesEmployeeAdvances ?? false) {
       // One advance per employee, for all their projects.
       final advance = ownAdvances.where((f) => (f.regionCode ?? '').toUpperCase() == region).firstOrNull;
-      if (advance != null) cards.add(('Your petty cash', _amount(advance)));
+      if (advance != null) cards.add(('Your petty cash', advance));
     } else {
       PettyCashFund? fund;
       for (final f in funds) {
@@ -513,22 +542,31 @@ class _PettyCashLeft extends ConsumerWidget {
         final owner = fund.ownerType == 'employee'
             ? 'Your petty cash'
             : '${(fund.departmentName ?? 'Department').trim()} petty cash';
-        cards.add((owner, '${formatMoney(fund.currency, fund.available)} left'));
+        cards.add((owner, fund));
       }
     }
     // Only the selected company: another company's petty cash shows once they switch to it.
     if (cards.isEmpty) return const SizedBox.shrink();
     return Column(
-      children: [for (final (title, amount) in cards) _PettyCashCard(title: title, amount: amount)],
+      children: [
+        for (final (title, fund) in cards)
+          () {
+            final (amount, note) = _figures(fund);
+            return _PettyCashCard(title: title, amount: amount, note: note);
+          }(),
+      ],
     );
   }
 }
 
 class _PettyCashCard extends StatelessWidget {
-  const _PettyCashCard({required this.title, required this.amount});
+  const _PettyCashCard({required this.title, required this.amount, this.note});
 
   final String title;
   final String amount;
+
+  /// e.g. "AED 100.00 left · AED 80.00 held for bills waiting for approval".
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -565,6 +603,10 @@ class _PettyCashCard extends StatelessWidget {
               amount,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.darkBlue),
             ),
+            if (note != null) ...[
+              const SizedBox(height: 2),
+              Text(note!, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary, height: 1.3)),
+            ],
           ],
         ),
       ),

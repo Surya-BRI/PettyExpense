@@ -418,6 +418,45 @@ def resubmit_email(ctx: ClaimEmailContext, _force_dark_preview: bool = False) ->
     return EmailContent(subject, html_body, text_body)
 
 
+def _sla_rows(ctx: ClaimEmailContext, approver_names: str, waiting: str, due: str) -> list:
+    return _common_rows(ctx) + [
+        ("Waiting with", approver_names or "-", "default"),
+        ("Waiting for", waiting, "default"),
+        ("Was due", due, "default"),
+    ]
+
+
+def sla_warning_email(
+    ctx: ClaimEmailContext, *, approver_names: str, waiting: str, due: str, _force_dark_preview: bool = False
+) -> EmailContent:
+    subject = f"Overdue: expense claim awaiting your approval - {_money(ctx.total_amount, ctx.currency)}"
+    heading = "Approval overdue"
+    intro = "This expense claim has passed its approval time limit and is still waiting for your action."
+    html_body = _shell(
+        heading, intro, _sla_rows(ctx, approver_names, waiting, due), ctx, tone="dispute",
+        _force_dark_preview=_force_dark_preview,
+    )
+    text_body = _text(heading, ctx, f"Waiting for {waiting}. It was due {due}.")
+    return EmailContent(subject, html_body, text_body)
+
+
+def sla_escalation_email(
+    ctx: ClaimEmailContext, *, approver_names: str, waiting: str, due: str, _force_dark_preview: bool = False
+) -> EmailContent:
+    subject = f"Escalated: approval overdue - {_money(ctx.total_amount, ctx.currency)}"
+    heading = "Approval escalated"
+    intro = (
+        "This expense claim is still waiting at its approval step well past the time limit. "
+        "Please follow up with the approver."
+    )
+    html_body = _shell(
+        heading, intro, _sla_rows(ctx, approver_names, waiting, due), ctx, tone="rejection",
+        _force_dark_preview=_force_dark_preview,
+    )
+    text_body = _text(heading, ctx, f"Waiting with {approver_names or '-'} for {waiting}. It was due {due}.")
+    return EmailContent(subject, html_body, text_body)
+
+
 def paid_email(ctx: ClaimEmailContext, _force_dark_preview: bool = False) -> EmailContent:
     subject = f"Your expense claim was paid - {_money(ctx.total_amount, ctx.currency)}"
     heading = "Expense claim paid"

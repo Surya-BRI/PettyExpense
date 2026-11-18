@@ -469,6 +469,94 @@ class ApiClient {
     return _decodeMap(res);
   }
 
+  /// Approval time limit (SLA) per step for a company: `{stages: [{stage, label, hours}],
+  /// min_hours, max_hours}`.
+  Future<Map<String, dynamic>> regionSla(int regionId) async {
+    final res = await _authorized(
+      () => http.get(_uri('/api/admin/config/regions/$regionId/sla'), headers: _headers),
+    );
+    return _decodeMap(res);
+  }
+
+  /// Saves time limits (step -> hours, e.g. `{'hod': 0.25}` for 15 minutes). Other company
+  /// settings are kept; open bills move to the new limits.
+  Future<Map<String, dynamic>> updateRegionSla(int regionId, Map<String, double> hoursByStage) async {
+    final res = await _authorized(() => http.put(
+          _uri('/api/admin/config/regions/$regionId/sla'),
+          headers: _headers,
+          body: jsonEncode({'sla_hours': hoursByStage}),
+        ));
+    return _decodeMap(res);
+  }
+
+  /// Admin's Aging report: bills waiting on an approver with SLA status and age bucket.
+  Future<Map<String, dynamic>> agingReport({int? regionId}) async {
+    final res = await _authorized(() => http.get(
+          _uri('/api/admin/reports/aging', regionId == null ? null : {'region_id': '$regionId'}),
+          headers: _headers,
+        ));
+    return _decodeMap(res);
+  }
+
+  // -- Backup approvers (delegation). Approvers manage their own; Admin manages anyone's. --
+
+  /// The signed-in approver's current/upcoming backups and who can be one:
+  /// `{backups: [...], candidates: [...], today: 'YYYY-MM-DD'}`.
+  Future<Map<String, dynamic>> myBackup() async {
+    final res = await _authorized(() => http.get(_uri('/api/approvals/backup'), headers: _headers));
+    return _decodeMap(res);
+  }
+
+  Future<Map<String, dynamic>> setMyBackup(int backupId, String startDate, String endDate) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/approvals/backup'),
+          headers: _headers,
+          body: jsonEncode({'backup_id': backupId, 'start_date': startDate, 'end_date': endDate}),
+        ));
+    return _decodeMap(res);
+  }
+
+  Future<void> removeMyBackup(int delegationId) async {
+    final res = await _authorized(() => http.delete(_uri('/api/approvals/backup/$delegationId'), headers: _headers));
+    _decodeMap(res);
+  }
+
+  /// Admin: one approver's backups and candidates, same shape as [myBackup].
+  Future<Map<String, dynamic>> adminBackup(int approverId) async {
+    final results = await Future.wait([
+      _authorized(() => http.get(
+            _uri('/api/admin/config/delegations', {'approver_id': '$approverId'}),
+            headers: _headers,
+          )),
+      _authorized(() => http.get(
+            _uri('/api/admin/config/delegations/candidates', {'approver_id': '$approverId'}),
+            headers: _headers,
+          )),
+    ]);
+    return {'backups': _decodeList(results[0]), 'candidates': _decodeList(results[1])};
+  }
+
+  Future<Map<String, dynamic>> adminSetBackup(int approverId, int backupId, String startDate, String endDate) async {
+    final res = await _authorized(() => http.post(
+          _uri('/api/admin/config/delegations'),
+          headers: _headers,
+          body: jsonEncode({
+            'approver_id': approverId,
+            'backup_id': backupId,
+            'start_date': startDate,
+            'end_date': endDate,
+          }),
+        ));
+    return _decodeMap(res);
+  }
+
+  Future<void> adminRemoveBackup(int delegationId) async {
+    final res = await _authorized(
+      () => http.delete(_uri('/api/admin/config/delegations/$delegationId'), headers: _headers),
+    );
+    _decodeMap(res);
+  }
+
   Future<List<Map<String, dynamic>>> adminDepartments() async {
     final res = await _authorized(() => http.get(_uri('/api/admin/config/departments'), headers: _headers));
     return [for (final row in _decodeList(res)) Map<String, dynamic>.from(row as Map)];

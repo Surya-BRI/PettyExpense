@@ -117,6 +117,37 @@ def matrix_stages(region: Optional[ErpExpenseRegionConfig]) -> list[str]:
     return [str(s) for s in stages] if isinstance(stages, list) and stages else ["hod", "accountant", "finance_manager"]
 
 
+# Approval time limit (SLA) per step, in hours, when Admin hasn't set one.
+DEFAULT_SLA_HOURS = {"hod": 24.0, "department_hod": 24.0}
+DEFAULT_SLA_HOURS_OTHER = 48.0
+# Admin can set anything from 5 minutes (for testing) to 30 days.
+MIN_SLA_HOURS = 5 / 60
+MAX_SLA_HOURS = 30 * 24.0
+
+
+def sla_hours(region: Optional[ErpExpenseRegionConfig], stage_base_name: str) -> float:
+    """How long an approver has at this step (base stage name, e.g. 'department_hod')."""
+    configured = matrix(region).get("sla_hours")
+    if isinstance(configured, dict):
+        value = configured.get(stage_base_name)
+        try:
+            hours = float(value) if value is not None else None
+        except (TypeError, ValueError):
+            hours = None
+        if hours is not None and hours > 0:
+            return hours
+    return DEFAULT_SLA_HOURS.get(stage_base_name, DEFAULT_SLA_HOURS_OTHER)
+
+
+def sla_stages(region: Optional[ErpExpenseRegionConfig]) -> list[str]:
+    """The steps a time limit can be set for: the company's stages, plus the other-department
+    HOD step when bills are split by department."""
+    stages = list(matrix_stages(region))
+    if splits_by_department(region) and "department_hod" not in stages:
+        stages.insert(stages.index("hod") + 1 if "hod" in stages else 0, "department_hod")
+    return stages
+
+
 def is_site_model(region: Optional[ErpExpenseRegionConfig]) -> bool:
     """Blue Rhine Contracting: one pot per employee for all sites (bills name an OP code), no HODs."""
     return pca_model(region) == SITE_MODEL

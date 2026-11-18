@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
-import '../../services/document_capture/auto_capture_check.dart';
 import '../../services/document_capture/capture_state_machine.dart';
 import '../../services/document_capture/doclens_bridge.dart';
 import '../../services/document_capture/models.dart' as capture;
@@ -46,22 +45,11 @@ class GuidedCaptureScreen extends StatefulWidget {
 
 class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
     with WidgetsBindingObserver {
-  late doclens.DoclensController _controller;
+  late final doclens.DoclensController _controller;
   final _stateMachine = CaptureStateMachine();
-  final _prefs = CaptureModePrefs();
 
   StreamSubscription<doclens.DetectionStatus>? _statusSub;
   StreamSubscription<doclens.Quad?>? _quadSub;
-  StreamSubscription<doclens.ScanResult>? _autoSub;
-
-  // Manual (default): shutter only. Auto: doclens shoots once the outline is stable,
-  // aligned and in focus, and we keep the shot only if it also passes the blur/glare gate.
-  bool _autoMode = false;
-  // True while the camera restarts for a mode change (the setting is fixed per controller).
-  bool _switching = false;
-  // Why an auto shot was thrown away ("Too much glare"...), shown briefly.
-  String? _autoNote;
-  Timer? _autoNoteTimer;
 
   // Only ever read inside _onQuad, which fires on the same detection cycle as
   // the matching status update -- see doclens_bridge.dart for why a possible
@@ -81,18 +69,11 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _controller = _newController(auto: false);
-    unawaited(_start());
-  }
-
-  static doclens.DoclensController _newController({required bool auto}) {
-    return doclens.DoclensController(
-      config: doclens.ScannerConfig(
-        // Manual: photos are only taken when the user taps the shutter; live detection
-        // just draws the outline and hints. Auto: doclens also fires once the outline is
-        // stable (0.8 s), aligned and sharp (it drives focus onto the receipt), after a
-        // short "confirming" pause -- the shutter keeps working either way.
-        enableAutoCapture: auto,
+    _controller = doclens.DoclensController(
+      config: const doclens.ScannerConfig(
+        // Photos are only taken when the user taps the shutter; live detection just
+        // draws the outline and framing hints.
+        enableAutoCapture: false,
         enableLiveDetection: true,
         enableStabilityStatus: true,
         // Crop to the detected outline and flatten it, then turn it upright so the
@@ -103,38 +84,7 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
         jpegQuality: 92,
       ),
     );
-  }
-
-  /// Starts in the user's remembered mode (Manual unless they picked Auto before).
-  Future<void> _start() async {
-    final auto = await _prefs.loadAuto();
-    if (!mounted) return;
-    if (auto) {
-      _autoMode = true;
-      _controller = _newController(auto: true);
-    }
-    await _init();
-  }
-
-  /// The capture setting is fixed per controller, so switching restarts the camera.
-  Future<void> _setAutoMode(bool auto) async {
-    if (auto == _autoMode || _switching || _busy) return;
-    setState(() {
-      _switching = true;
-      _autoMode = auto;
-      _autoNote = null;
-    });
-    unawaited(_prefs.saveAuto(auto));
-    await _statusSub?.cancel();
-    await _quadSub?.cancel();
-    await _autoSub?.cancel();
-    await _controller.dispose();
-    if (!mounted) return;
-    _controller = _newController(auto: auto);
-    _stateMachine.reset();
-    _guidance = const capture.DocumentGuidance(state: capture.GuidanceState.notFound);
-    await _init();
-    if (mounted) setState(() => _switching = false);
+    unawaited(_init());
   }
 
   Future<void> _init() async {
@@ -151,46 +101,6 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
     setState(() {});
     _statusSub = _controller.statusStream.listen((s) => _lastDoclensStatus = s);
     _quadSub = _controller.quadStream.listen(_onQuad);
-    _autoSub = _controller.autoCaptureStream.listen(_onAutoCaptured);
-  }
-
-  /// doclens fired an auto shot (outline stable + aligned + focused). Keep it only if the
-  /// photo also passes our blur/glare check -- doclens shoots anyway after a focus timeout,
-  /// and the spec says auto-capture only once the bill is in focus. A rejected shot is
-  /// dropped with a hint and scanning simply continues.
-  Future<void> _onAutoCaptured(doclens.ScanResult result) async {
-    if (_busy || !_autoMode || !mounted) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    final framing = _guidance;
-    final path = result.croppedImagePath ?? result.rawImagePath;
-    final capture.QualityResult quality;
-    try {
-      quality = await compute(qualityOfImageFile, path);
-    } catch (e) {
-      _log('auto quality check failed: $e');
-      await _review(result, framing); // never lose a shot over a check hiccup
-      return;
-    }
-    if (!mounted) return;
-    if (!quality.passes) {
-      _log('auto shot rejected: ${quality.reason?.name}');
-      _stateMachine.reset();
-      _showAutoNote(capture.messageForBlockReason(quality.reason!));
-      setState(() => _busy = false);
-      return;
-    }
-    await _review(result, framing);
-  }
-
-  void _showAutoNote(String note) {
-    _autoNoteTimer?.cancel();
-    setState(() => _autoNote = note);
-    _autoNoteTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _autoNote = null);
-    });
   }
 
   void _onQuad(doclens.Quad? quad) {
@@ -232,8 +142,7 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
     await _review(result, framing);
   }
 
-  /// Every photo -- shutter or auto -- goes through the review screen before it's used.
-  /// Auto-detection can lock onto the wrong lines (e.g. a table border when the paper is
+  /// Every photo goes through the review screen before it's used. Auto-detection can lock onto the wrong lines (e.g. a table border when the paper is
   /// wider than the frame), so the user always checks the crop.
   Future<void> _review(doclens.ScanResult result, capture.DocumentGuidance framing) async {
     unawaited(_controller.pause());
@@ -303,8 +212,6 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
     WidgetsBinding.instance.removeObserver(this);
     _statusSub?.cancel();
     _quadSub?.cancel();
-    _autoSub?.cancel();
-    _autoNoteTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -316,12 +223,7 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
   /// Framing hints ("Move closer", "Hold steady") come from the guidance; when the
   /// receipt is well framed, prompt the user to take the photo themselves.
   String? get _statusMessage {
-    if (_busy) return _autoMode ? 'Checking the photo…' : 'Taking photo…';
-    if (_autoNote != null) return _autoNote;
-    if (_autoMode) {
-      if (_wellFramed) return 'Hold still, taking the photo…';
-      return _guidance.message ?? 'Fit the whole receipt in the frame, it captures automatically';
-    }
+    if (_busy) return 'Taking photo…';
     if (_wellFramed) return 'Looks good, tap the button to take the photo';
     return _guidance.message ??
         'Fit the whole receipt in the frame, then tap the button';
@@ -329,7 +231,7 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (_switching || !_controller.isInitialized) {
+    if (!_controller.isInitialized) {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(child: CircularProgressIndicator(color: Colors.white)),
@@ -343,20 +245,7 @@ class _GuidedCaptureScreenState extends State<GuidedCaptureScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Keyed by controller: a mode switch creates a new controller and preview.
-          Positioned.fill(
-            child: doclens.DoclensView(key: ObjectKey(_controller), controller: _controller),
-          ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: _ModeToggle(auto: _autoMode, enabled: !_busy, onChanged: _setAutoMode),
-              ),
-            ),
-          ),
+          Positioned.fill(child: doclens.DoclensView(controller: _controller)),
           Positioned.fill(
             child: CustomPaint(
               painter: _QuadPainter(
@@ -706,55 +595,3 @@ final _outlinedOnDark = OutlinedButton.styleFrom(
   side: const BorderSide(color: Colors.white54),
   padding: const EdgeInsets.symmetric(vertical: 14),
 );
-
-/// Manual | Auto pill on the camera. Manual = shutter only; Auto = also shoots by itself
-/// once the whole receipt is still, aligned and in focus.
-class _ModeToggle extends StatelessWidget {
-  const _ModeToggle({required this.auto, required this.enabled, required this.onChanged});
-
-  final bool auto;
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget option(String label, bool value) {
-      final selected = auto == value;
-      return Semantics(
-        button: true,
-        selected: selected,
-        label: '$label capture',
-        child: GestureDetector(
-          onTap: enabled && !selected ? () => onChanged(value) : null,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: selected ? Colors.white : Colors.transparent,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: selected ? Colors.black : Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(21),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [option('Manual', false), option('Auto', true)],
-      ),
-    );
-  }
-}

@@ -6,6 +6,7 @@ import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/enums.dart';
 import '../../routing/role_routes.dart';
+import '../../services/offline_bills/offline_bill_sync.dart';
 import '../admin/admin_hub_screen.dart';
 import '../authentication/auth_controller.dart';
 import '../claims/capture_receipt_sheet.dart';
@@ -25,14 +26,17 @@ class MainShell extends ConsumerWidget {
     // Read here, outside the LayoutBuilder callback -- go_router's state lookup is only
     // reliable from this widget's own build.
     final location = GoRouterState.of(context).uri.path;
+    // Bills scanned offline upload by themselves once the phone is back online.
     // Wide screens (the web build on a desktop browser) get the sidebar layout instead.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth >= kWebShellBreakpoint) {
-          return WebShell(location: location, child: child);
-        }
-        return _buildMobile(context, ref, location);
-      },
+    return OfflineBillSyncListener(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= kWebShellBreakpoint) {
+            return WebShell(location: location, child: child);
+          }
+          return _buildMobile(context, ref, location);
+        },
+      ),
     );
   }
 

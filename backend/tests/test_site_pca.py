@@ -233,7 +233,7 @@ def test_bill_must_fit_the_employees_petty_cash(db, w):  # noqa: F811
     _set(db, w, amount=1000)
     _check(db, w, _bill(db, w, 600, op="OP-999", status="draft"))  # any site
     _bill(db, w, 600, status="submitted")  # in approval: reserved
-    with pytest.raises(ValueError, match="400.00 left"):
+    with pytest.raises(ValueError, match=r"400\.00 can be used now\)\. AED 600\.00 is held for bills already waiting"):
         _check(db, w, _bill(db, w, 600, status="draft"))
 
 

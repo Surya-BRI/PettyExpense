@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Any, Callable, Iterator, Optional, TypeVar
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from auth.security import CurrentUser
@@ -178,7 +179,7 @@ def realign_open_bills(db: Session, region_id: int) -> int:
         before = txn.current_stage
         _realign_stage(db, txn)
         if txn.current_stage != before:
-            _update_stage_due(db, txn)
+            _enter_stage(db, txn)
             moved += 1
     return moved
 
@@ -253,7 +254,9 @@ def _active_with_role(db: Session, role_code: str, region_id: Optional[int] = No
 def _todays_backups(db: Session) -> dict[int, ErpAuthExpenseUsers]:
     """approver_id -> backup user for every delegation active today, in two queries total.
     Earliest delegation wins when one approver has overlapping ones."""
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    from services.delegation_service import today as gulf_today
+
+    today = gulf_today()
     delegations = (
         db.query(ErpExpenseApproverDelegation)
         .filter(
@@ -281,7 +284,9 @@ def _apply_delegation(db: Session, approver: Optional[ErpAuthExpenseUsers]) -> O
         return None
     if _CACHE_KEY in db.info:
         return _cached(db, ("backups",), lambda: _todays_backups(db)).get(approver.user_id, approver)
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    from services.delegation_service import today as gulf_today
+
+    today = gulf_today()
     delegation = (
         db.query(ErpExpenseApproverDelegation)
         .filter(
@@ -310,6 +315,38 @@ def resolve_stage_approvers(db: Session, txn: ErpExpenseTransaction, stage: str)
     in it, and all of them are valid approvers, not just one arbitrarily-picked row. Callers
     check membership (`user.id in {a.user_id for a in approvers}`) rather than equality, and
     notify every entry rather than a single target."""
+    # Delegation is per-person -- each active approver might have their own backup covering
+    # them for a date range, independent of who else is also active on this stage. Dedup by
+    # user_id afterward: two different approvers could delegate to the same backup, or a
+    # delegate might already be an active approver on this stage in their own right.
+    resolved = [_apply_delegation(db, a) for a in _stage_people(db, txn, stage)]
+    seen: set[int] = set()
+    deduped: list[ErpAuthExpenseUsers] = []
+    for a in resolved:
+        if a is not None and a.user_id not in seen:
+            seen.add(a.user_id)
+            deduped.append(a)
+    return deduped
+
+
+def covering_for(db: Session, txn: ErpExpenseTransaction, user_id: int) -> list[str]:
+    """Names of the approvers `user_id` is standing in for on this bill's current step (empty
+    when they're an approver of the step in their own right, or not involved at all)."""
+    if not txn.current_stage:
+        return []
+    people = _stage_people(db, txn, txn.current_stage)
+    if any(p.user_id == user_id for p in people):
+        return []
+    out = []
+    for p in people:
+        backup = _apply_delegation(db, p)
+        if backup is not None and backup.user_id == user_id and p.display_name:
+            out.append(p.display_name)
+    return out
+
+
+def _stage_people(db: Session, txn: ErpExpenseTransaction, stage: str) -> list[ErpAuthExpenseUsers]:
+    """Who normally handles `stage` for this bill, before backups are applied."""
     # Relationship access, not a fresh query -- see the same note in resolve_stage_sequence.
     employee = txn.employee
     category = txn.category
@@ -343,18 +380,7 @@ def resolve_stage_approvers(db: Session, txn: ErpExpenseTransaction, stage: str)
             if cache is not None:
                 cache[warn_key] = True
         approvers = _active_with_role(db, "admin")
-    # Delegation is per-person -- each active approver might have their own backup covering
-    # them for a date range, independent of who else is also active on this stage. Dedup by
-    # user_id afterward: two different approvers could delegate to the same backup, or a
-    # delegate might already be an active approver on this stage in their own right.
-    resolved = [_apply_delegation(db, a) for a in approvers]
-    seen: set[int] = set()
-    deduped: list[ErpAuthExpenseUsers] = []
-    for a in resolved:
-        if a is not None and a.user_id not in seen:
-            seen.add(a.user_id)
-            deduped.append(a)
-    return deduped
+    return approvers
 
 
 def _ensure_stage(db: Session, txn: ErpExpenseTransaction) -> None:
@@ -365,17 +391,35 @@ def _ensure_stage(db: Session, txn: ErpExpenseTransaction) -> None:
         return
     seq = resolve_stage_sequence(db, txn)
     txn.current_stage = seq[0] if seq else None
-    _update_stage_due(db, txn)
+    _enter_stage(db, txn)
     db.commit()
 
 
-def _update_stage_due(db: Session, txn: ErpExpenseTransaction) -> None:
+def stage_sla(db: Session, txn: ErpExpenseTransaction, stage: Optional[str] = None) -> timedelta:
+    """The approval time limit for `stage` (default: the bill's current step) in its company."""
+    from services.region_policy import sla_hours
+
+    region = txn.region or db.query(ErpExpenseRegionConfig).filter(
+        ErpExpenseRegionConfig.region_id == txn.region_id
+    ).first()
+    return timedelta(hours=sla_hours(region, stage_base(stage or txn.current_stage or "")))
+
+
+def _enter_stage(db: Session, txn: ErpExpenseTransaction) -> None:
+    """Starts the SLA clock for the bill's current step (or stops it when there is none)."""
     if not txn.current_stage:
-        txn.stage_due_at = None
+        _stop_sla_clock(txn)
         return
-    region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == txn.region_id).first()
-    sla_hours = _matrix(region).get("sla_hours", {}).get(stage_base(txn.current_stage), 48)
-    txn.stage_due_at = datetime.utcnow() + timedelta(hours=sla_hours)
+    now = datetime.utcnow()
+    txn.stage_entered_at = now
+    txn.stage_due_at = now + stage_sla(db, txn)
+    txn.sla_state = 0
+
+
+def _stop_sla_clock(txn: ErpExpenseTransaction) -> None:
+    """The bill isn't waiting on an approver any more (approved, rejected or disputed)."""
+    txn.stage_due_at = None
+    txn.sla_state = 0
 
 
 def _history(db: Session, transaction_id: int, actor_id: int, stage: str, action: str, comment: Optional[str]) -> None:
@@ -457,10 +501,57 @@ def list_queue(db: Session, user: CurrentUser, stage: str) -> list[dict[str, Any
                 approvers = resolve_stage_approvers(db, txn, txn.current_stage)
                 if user.id not in {a.user_id for a in approvers}:
                     continue
-            results.append(transaction_to_dict(txn, db=db))
+            results.append(_queue_row(db, txn, user))
+
+        # A backup sees the bills they cover in their own queue, even when the step isn't one
+        # their role normally has (a Finance Manager covering an HOD). Only when they are
+        # someone's backup today, and only on their main queue so nothing shows twice.
+        if not user.is_admin and stage == _home_stage(user.role):
+            backups = _cached(db, ("backups",), lambda: _todays_backups(db))
+            if any(b.user_id == user.id for b in backups.values()):
+                other_steps = (
+                    db.query(ErpExpenseTransaction)
+                    .options(*_eager_opts)
+                    .filter(
+                        ErpExpenseTransaction.status.in_(ACTIONABLE_STATUSES),
+                        ErpExpenseTransaction.current_stage.isnot(None),
+                        ~_own_steps_filter(user.role),
+                    )
+                    .order_by(ErpExpenseTransaction.created_on.desc())
+                    .all()
+                )
+                for txn in other_steps:
+                    approvers = resolve_stage_approvers(db, txn, txn.current_stage)
+                    if user.id in {a.user_id for a in approvers}:
+                        results.append(_queue_row(db, txn, user))
     # Approved-but-unpaid reimbursements are no longer mixed in here: they're listed (paged,
     # per company) by GET /api/payments — see payment_service.
     return results
+
+
+def _home_stage(role: Optional[str]) -> Optional[str]:
+    """The queue a role's app opens on (lib/src/routing/role_routes.dart defaultStageFor)."""
+    return role if role in ("hod", "accountant", "head_accountant", "finance_manager") else None
+
+
+def _own_steps_filter(role: Optional[str]):
+    """SQL filter: bills at a step this role's queues already list."""
+    if role == "hod":
+        return or_(
+            ErpExpenseTransaction.current_stage == "hod",
+            ErpExpenseTransaction.current_stage.like(f"{DEPARTMENT_HOD}%"),
+        )
+    return ErpExpenseTransaction.current_stage == (role or "")
+
+
+def _queue_row(db: Session, txn: ErpExpenseTransaction, user: CurrentUser) -> dict[str, Any]:
+    from services.transaction_service import transaction_to_dict
+
+    row = transaction_to_dict(txn, db=db)
+    names = [] if user.is_admin else covering_for(db, txn, user.id)
+    if names:
+        row["covering_for"] = names
+    return row
 
 
 def _review_stage(txn: ErpExpenseTransaction) -> str:
@@ -541,19 +632,22 @@ def advance(
             # _SPEND_STATUSES); it was already reserved against the fund at submit.
             txn.status = "approved"
             txn.current_stage = None
-            txn.stage_due_at = None
+            _stop_sla_clock(txn)
             txn.decided_on = datetime.utcnow()
         else:
             txn.current_stage = seq[idx + 1]
             txn.dispute_returned = 0
-            _update_stage_due(db, txn)
+            _enter_stage(db, txn)
     elif action == "reject":
         txn.status = "rejected"
         txn.decided_on = datetime.utcnow()
+        _stop_sla_clock(txn)
         _history(db, txn.transaction_id, user.id, stage, "reject", comment)
     else:  # dispute
         txn.status = "disputed"
         txn.dispute_returned = 1
+        # Back with the employee: the approver's clock restarts on resubmit.
+        _stop_sla_clock(txn)
         _history(db, txn.transaction_id, user.id, stage, "dispute", comment)
 
     db.commit()
@@ -640,6 +734,8 @@ def resubmit_after_dispute(db: Session, user: CurrentUser, transaction_id: int) 
     txn.status = "submitted"
     txn.dispute_returned = 0
     _realign_stage(db, txn)
+    # A fresh approver clock: the time the employee spent correcting doesn't count against them.
+    _enter_stage(db, txn)
     db.commit()
     txn = _load_txn(db, transaction_id)
 

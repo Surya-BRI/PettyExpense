@@ -310,6 +310,10 @@ class ErpExpenseTransaction(Base):
     current_stage: Mapped[Optional[str]] = mapped_column("currentStage", String(32), nullable=True)
     dispute_returned: Mapped[int] = mapped_column("disputeReturned", Integer, default=0)
     stage_due_at: Mapped[Optional[datetime]] = mapped_column("stageDueAt", DateTime, nullable=True)
+    # SLA clock (scripts/add_sla_columns.py adds these): when the bill reached its current step,
+    # and how far the overdue alerts have gone -- 0 on time, 1 approver warned, 2 escalated.
+    stage_entered_at: Mapped[Optional[datetime]] = mapped_column("stageEnteredAt", DateTime, nullable=True)
+    sla_state: Mapped[int] = mapped_column("slaState", Integer, default=0)
     remarks: Mapped[Optional[str]] = mapped_column("remarks", UnicodeText, nullable=True)
     duplicate_flag: Mapped[int] = mapped_column("duplicateFlag", Integer, default=0)
     # The bill's vendor as plain text (typed or OCR'd). There is no vendor matching: new bills

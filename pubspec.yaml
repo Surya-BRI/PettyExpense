@@ -48,6 +48,8 @@ dependencies:
   doclens: ^0.0.12
   phosphor_icons: ^3.0.1
   cunning_document_scanner: ^3.0.4
+  path_provider: ^2.1.6
+  connectivity_plus: ^7.3.2
 
 dev_dependencies:
   flutter_test:

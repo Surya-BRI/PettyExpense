@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,12 +8,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
+import '../../api/models.dart';
+import '../../services/offline_bills/offline_bill_store.dart';
+import '../../services/offline_bills/offline_bill_sync.dart';
 import '../../theme/app_theme.dart';
 import 'bill_language.dart';
 import 'bill_line_mode.dart';
 import 'guided_capture_screen.dart';
 
-/// Simple sheet: camera or gallery. Every scan is read by GPT.
+/// Simple sheet: scan, camera or gallery. Every bill is read by GPT.
 Future<void> showCaptureReceiptSheet(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<void>(
     context: context,
@@ -67,10 +71,49 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
     }
   }
 
-  /// Camera (Spec 5.1): our capture screen takes a photo only when the user presses the
-  /// shutter, then lets them check the crop. (The phone's built-in document scanner was
-  /// dropped here: it snaps by itself as soon as it thinks it sees a page, and that can't
-  /// be switched off from the app.) Multi-page bills: one shutter press per page, asking
+  /// Scan bill (main button): the phone's own document scanner (ML Kit on Android,
+  /// VisionKit on iOS). It finds the bill's edges far more reliably than our camera --
+  /// including bills shown on a computer screen -- and returns just the bill, cropped and
+  /// flattened. It may snap by itself once it sees a page; "Use camera" is the
+  /// shutter-only option. Falls back to our camera if the scanner can't run.
+  Future<void> _scanDocument() async {
+    final List<String>? paths;
+    try {
+      paths = await CunningDocumentScanner.getPictures(
+        noOfPages: _multiPage ? _maxPages : 1,
+        scannerSource: ScannerSource.camera,
+      );
+    } on CunningDocumentScannerException catch (e) {
+      if (!mounted) return;
+      if (e.code == 'permission_denied') {
+        setState(() => _error = 'Camera permission is needed to scan receipts.');
+        return;
+      }
+      await _captureWithCamera();
+      return;
+    } catch (_) {
+      // Scanner missing on this phone (e.g. no Google Play services): use our camera.
+      if (!mounted) return;
+      await _captureWithCamera();
+      return;
+    }
+    if (!mounted || paths == null || paths.isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _uploadAndContinue(paths);
+    } catch (e) {
+      setState(() {
+        _busy = false;
+        _error = 'Could not upload receipt. Check connection and try again.';
+      });
+    }
+  }
+
+  /// Use camera: our capture screen takes a photo only when the user presses the shutter,
+  /// then lets them check the crop. Multi-page bills: one shutter press per page, asking
   /// after each whether to add another.
   Future<void> _captureWithCamera() async {
     final pages = <String>[];
@@ -128,11 +171,29 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
     return more ?? false;
   }
 
-  /// Uploads every page of the bill in one request, then opens the confirm screen.
+  /// Uploads every page of the bill in one request, then opens the confirm screen. With no
+  /// connection the bill is kept on the phone instead and uploads when the phone is back
+  /// online (Spec Section 2, Offline handling); any other failure is rethrown to the caller.
   Future<void> _uploadAndContinue(List<String> paths) async {
-    final stored = await ref
-        .read(apiClientProvider)
-        .uploadReceipt([for (final p in paths) File(p)]);
+    final OcrResult stored;
+    try {
+      stored = await ref.read(apiClientProvider).uploadReceipt([for (final p in paths) File(p)]);
+    } catch (e) {
+      if (!isOfflineError(e)) rethrow;
+      final saved = await ref
+          .read(offlineBillsProvider.notifier)
+          .add(paths, _mode ?? BillLineMode.single, _billLanguage.apiValue);
+      if (saved == null) rethrow;
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).pop();
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("No connection. Bill saved on this phone and will upload when you're back online."),
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pop();
     context.push(
@@ -253,9 +314,15 @@ class _CaptureReceiptSheetState extends ConsumerState<_CaptureReceiptSheet> {
                 ),
               ),
             FilledButton.icon(
+              onPressed: _mode == null ? null : _scanDocument,
+              icon: Icon(PhosphorIcons.scan()),
+              label: const Text('Scan bill'),
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
               onPressed: _mode == null ? null : _captureWithCamera,
               icon: Icon(PhosphorIcons.camera()),
-              label: const Text('Open camera'),
+              label: const Text('Use camera'),
             ),
             const SizedBox(height: 14),
             OutlinedButton.icon(

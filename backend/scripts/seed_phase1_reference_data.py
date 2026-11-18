@@ -102,24 +102,35 @@ def _sync_erp_departments(db) -> None:
 
 
 def seed_reference_data() -> None:
+    import logging
+
+    log = logging.getLogger(__name__)
+    # Each step adds columns create_all() can't. A failure is logged (not silently skipped):
+    # a missing column otherwise only shows up later as an "internal error" on some screen.
     try:
         from scripts.add_pca_topup_columns import ensure_pca_topup_columns
 
         ensure_pca_topup_columns()
     except Exception:
-        pass
+        log.exception("Could not add the petty cash top-up columns")
     try:
         from scripts.add_currency_region_payment_schema import ensure_columns
 
         ensure_columns()
     except Exception:
-        pass
+        log.exception("Could not add the currency / payment columns")
     try:
         from scripts.add_employee_pca_columns import ensure_employee_pca_columns
 
         ensure_employee_pca_columns()
     except Exception:
-        pass
+        log.exception("Could not add the employee advance (PCA) / payment source columns")
+    try:
+        from scripts.add_sla_columns import ensure_sla_columns
+
+        ensure_sla_columns()
+    except Exception:
+        log.exception("Could not add the SLA columns")
     db = SessionLocal()
     try:
         # Roles

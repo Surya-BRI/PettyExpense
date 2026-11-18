@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from auth.security import CurrentUser, require_admin
 from database.models import get_db
+from services import delegation_service
 from services.config_service import config_service
 
 router = APIRouter(prefix="/api/admin/config", tags=["config"])
@@ -106,6 +107,32 @@ def region_approvers(region_id: int, user: CurrentUser = Depends(require_admin),
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+class RegionSlaRequest(BaseModel):
+    # step -> hours, e.g. {"hod": 0.25} for 15 minutes
+    sla_hours: dict[str, float]
+
+
+@router.get("/regions/{region_id}/sla")
+def region_sla(region_id: int, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
+    """This company's approval time limit per step."""
+    try:
+        return config_service.region_sla(db, region_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.put("/regions/{region_id}/sla")
+def update_region_sla(
+    region_id: int, body: RegionSlaRequest, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)
+):
+    try:
+        return config_service.update_region_sla(db, region_id, body.sla_hours)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 # -- Categories --
 @router.get("/categories")
 def list_categories(user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
@@ -152,12 +179,34 @@ def create_hod_assignment(
     return config_service.create_hod_assignment(db, body.user_id, body.department_id)
 
 
-# -- Approver delegations (Phase 2) --
+# -- Backup approvers (delegation, Spec 5.2) --
 @router.get("/delegations")
-def list_delegations(user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
-    return config_service.list_delegations(db)
+def list_delegations(
+    approver_id: Optional[int] = None, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)
+):
+    """Current and upcoming backups -- for one approver, or everyone."""
+    return delegation_service.list_for(db, approver_id)
+
+
+@router.get("/delegations/candidates")
+def delegation_candidates(approver_id: int, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
+    return delegation_service.candidates(db, approver_id)
 
 
 @router.post("/delegations")
 def create_delegation(body: DelegationRequest, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
-    return config_service.create_delegation(db, body.approver_id, body.backup_id, body.start_date, body.end_date)
+    try:
+        return delegation_service.create(db, body.approver_id, body.backup_id, body.start_date, body.end_date)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.delete("/delegations/{delegation_id}")
+def delete_delegation(delegation_id: int, user: CurrentUser = Depends(require_admin), db: Session = Depends(get_db)):
+    try:
+        delegation_service.remove(db, delegation_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True}

@@ -310,6 +310,10 @@ def transaction_to_dict(
         "updated_at": txn.modified_on.isoformat() if txn.modified_on else None,
         "submitted_at": txn.submitted_on.isoformat() if txn.submitted_on else None,
         "decided_at": txn.decided_on.isoformat() if txn.decided_on else None,
+        # Approval SLA: when the current step's time limit runs out; 0 on time, 1 approver
+        # warned, 2 escalated.
+        "stage_due_at": txn.stage_due_at.isoformat() if txn.stage_due_at else None,
+        "sla_state": txn.sla_state or 0,
         "paid_at": txn.paid_on.isoformat() if txn.paid_on else None,
         "receipt": None,
         "duplicate_warning": None,

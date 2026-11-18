@@ -4,7 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
+import '../../api/enums.dart';
 import '../../api/models.dart';
+import '../../routing/role_routes.dart';
+import '../authentication/auth_controller.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
@@ -78,8 +81,12 @@ class _ApprovalDetailScreenState extends ConsumerState<ApprovalDetailScreen> {
     try {
       await action();
       ref.invalidate(approvalDetailProvider(widget.transactionId));
-      // Department HOD steps are listed in the HOD's own queue.
-      final queueStage = widget.stage == 'department_hod' ? 'hod' : widget.stage;
+      // Back to the user's own queue: Department HOD steps are listed in the HOD's queue, and a
+      // backup covering another step (an Accounts Manager covering an HOD) returns to theirs.
+      final role = UserRoleX.fromJson(ref.read(authControllerProvider).user?.role);
+      final queueStage = role.isApprover && role != UserRole.admin
+          ? defaultStageFor(role)
+          : (widget.stage == 'department_hod' ? 'hod' : widget.stage);
       ref.invalidate(approvalsQueueProvider(widget.stage));
       ref.invalidate(approvalsQueueProvider(queueStage));
       ref.invalidate(claimDetailProvider(widget.transactionId));

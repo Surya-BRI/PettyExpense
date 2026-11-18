@@ -8,6 +8,7 @@ import '../api/models.dart';
 import '../features/approvals/approval_detail_screen.dart';
 import '../features/approvals/approval_queue_screen.dart';
 import '../features/approvals/approver_history_screen.dart';
+import '../features/approvals/backup_approver_screen.dart';
 import '../features/authentication/auth_controller.dart';
 import '../features/authentication/login_screen.dart';
 import '../features/claims/claim_detail_screen.dart';
@@ -19,6 +20,7 @@ import '../features/notifications/notifications_screen.dart';
 import '../features/admin/admin_company_screen.dart';
 import '../features/admin/admin_hub_screen.dart';
 import '../features/admin/admin_people_screen.dart';
+import '../features/admin/aging_report_screen.dart';
 import '../features/admin/my_funds_screen.dart';
 import '../features/admin/topups_screen.dart';
 import '../features/payments/payments_screen.dart';
@@ -66,6 +68,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       // Approvers review queues, not a personal "My claims" / capture flow.
       if (approver && (loc == '/claims' || loc == '/confirm')) {
+        return homeRouteFor(role);
+      }
+
+      // Backups are for approvers (Admin sets anyone's from People).
+      if (loc == '/backup' && (!approver || role == UserRole.admin)) {
         return homeRouteFor(role);
       }
 
@@ -159,6 +166,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             },
           ),
           GoRoute(
+            path: '/admin/aging',
+            builder: (context, state) => const AgingReportScreen(),
+          ),
+          GoRoute(
             path: '/admin/regions',
             redirect: (context, state) => '/admin',
             builder: (context, state) => const AdminHubScreen(),
@@ -218,6 +229,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const SitePcaScreen(),
           ),
           GoRoute(
+            path: '/backup',
+            builder: (context, state) => const MyBackupScreen(),
+          ),
+          GoRoute(
             path: '/notifications',
             builder: (context, state) => const NotificationsScreen(),
           ),
@@ -232,6 +247,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   runOcr: extra['runOcr'] == true,
                   lineMode: extra['lineMode'] as BillLineMode? ?? BillLineMode.single,
                   ocrMode: extra['ocrMode'] as String? ?? 'auto',
+                  offlineBillId: extra['offlineBillId'] as String?,
                 );
               }
               return const Scaffold(

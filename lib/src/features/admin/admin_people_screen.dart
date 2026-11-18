@@ -10,6 +10,7 @@ import '../../widgets/app_nav_drawer.dart';
 import '../../widgets/brand_app_bar.dart';
 import '../../widgets/claim_ui_helpers.dart';
 import '../../widgets/region_branding.dart';
+import '../approvals/backup_approver_screen.dart' show BackupApproverPanel;
 import 'admin_providers.dart';
 
 class AdminPeopleScreen extends ConsumerWidget {
@@ -601,6 +602,8 @@ class _AdminPersonScreenState extends ConsumerState<AdminPersonScreen> {
     'finance_manager': 'Finance Manager',
   };
 
+  static const _approverRoles = {'hod', 'accountant', 'head_accountant', 'finance_manager'};
+
   Future<void> _setRole(String role) async {
     final user = _user;
     if (user == null || role == user.role) return;
@@ -724,6 +727,18 @@ class _AdminPersonScreenState extends ConsumerState<AdminPersonScreen> {
                               DropdownMenuItem(value: e.key, child: Text(e.value)),
                           ],
                           onChanged: _busy ? null : (v) => v == null ? null : _setRole(v),
+                        ),
+                      ],
+                      // Backup approver while this person is away (approvers only).
+                      if (user.hasAppLogin && _approverRoles.contains(user.role)) ...[
+                        const SizedBox(height: 16),
+                        BackupApproverPanel(
+                          key: ValueKey('backup_${user.id}'),
+                          whose: "${user.displayName}'s",
+                          load: () => ref.read(apiClientProvider).adminBackup(user.id),
+                          save: (backupId, start, end) =>
+                              ref.read(apiClientProvider).adminSetBackup(user.id, backupId, start, end),
+                          remove: ref.read(apiClientProvider).adminRemoveBackup,
                         ),
                       ],
                       const SizedBox(height: 18),

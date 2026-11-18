@@ -43,6 +43,19 @@ def list_claims(
     )
 
 
+@router.get("/reports/aging")
+def aging_report(
+    region_id: Optional[int] = Query(None),
+    user: CurrentUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Bills waiting on an approver, most overdue first, with SLA status (on time / breached /
+    escalated) and age bucket."""
+    from services.sla_service import aging_report as build
+
+    return build(db, region_id=region_id)
+
+
 @router.get("/activity")
 def recent_activity(
     limit: int = Query(50, ge=1, le=200),

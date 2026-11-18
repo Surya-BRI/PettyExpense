@@ -213,7 +213,8 @@ class _EditRegionScreenState extends ConsumerState<EditRegionScreen> {
   }
 
   Future<void> _pickLogo() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 90);
+    // Keep transparency (no JPEG re-encode) and don't send more pixels than the server keeps.
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1800, maxHeight: 1800);
     if (picked == null) return;
     setState(() {
       _busy = true;
@@ -286,6 +287,14 @@ class _EditRegionScreenState extends ConsumerState<EditRegionScreen> {
             onPressed: _busy ? null : _pickLogo,
             icon: Icon(PhosphorIcons.image()),
             label: const Text('Upload or replace logo'),
+          ),
+          const SizedBox(height: 6),
+          // Same rules the server applies (backend services/logo_image.py).
+          const Text(
+            'Best: a wide logo, PNG with a transparent background, about 600 × 200 px '
+            '(at least 200 × 60 px, up to 5 MB). Empty margins are trimmed and large images '
+            'are scaled down automatically.',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5, height: 1.35),
           ),
           const SizedBox(height: 10),
           FilledButton(

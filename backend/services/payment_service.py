@@ -14,6 +14,7 @@ reference and date. Paying a petty-cash bill tops the employee's PCA back up: it
 paid top-up of that bill (ErpExpenseFundTopupRequest kind='topup'), which is what the fund
 figures count as replenished.
 """
+import logging
 from datetime import date, datetime
 from typing import Any, Optional, Union
 
@@ -31,6 +32,8 @@ from database.models import (
 )
 from services.currency import region_base_currency
 from services.region_scope import user_covers, user_region_ids
+
+logger = logging.getLogger("expense.payments")
 
 PAYMENT_METHODS = ("bank_transfer", "cash", "payroll", "cheque")
 PAYMENT_METHOD_LABELS = {
@@ -217,8 +220,14 @@ class PaymentService:
         if notify:
             from services.transaction_service import transaction_service
 
-            db.refresh(txn)
-            transaction_service._notify_employee(db, txn, "paid", record.remarks)
+            # The payment is already saved: a failing email / notification must not turn that
+            # into an "internal error" (the Finance Manager would retry and get "already paid").
+            try:
+                db.refresh(txn)
+                transaction_service._notify_employee(db, txn, "paid", record.remarks)
+            except Exception:
+                db.rollback()
+                logger.exception("Payment %s saved, but notifying the employee failed", txn.transaction_id)
         return payment_to_dict(record)
 
     def _top_up_pca(

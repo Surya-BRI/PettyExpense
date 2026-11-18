@@ -52,8 +52,12 @@ final approvalsQueueProvider =
 });
 
 /// Detail route for a queued claim: cross-department steps open in the department_hod view.
-String _detailStageFor(String queueStage, ExpenseClaim c) =>
-    queueStage == 'hod' && c.currentStage == 'department_hod' ? 'department_hod' : queueStage;
+/// A bill the user covers as someone's backup opens at its real step (e.g. an Accounts
+/// Manager covering an HOD sees the HOD step, not the journal fields of their own step).
+String _detailStageFor(String queueStage, ExpenseClaim c) {
+  if (c.coveringFor.isNotEmpty && (c.currentStage ?? '').isNotEmpty) return c.currentStage!;
+  return queueStage == 'hod' && c.currentStage == 'department_hod' ? 'department_hod' : queueStage;
+}
 
 const _stageLabels = {
   'hod': 'HOD queue',
@@ -244,6 +248,18 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                                               fontSize: 12.5,
                                             ),
                                           ),
+                                          // Here because this user is someone's backup approver today.
+                                          if (c.coveringFor.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Covering for ${c.coveringFor.join(', ')}',
+                                              style: const TextStyle(
+                                                color: AppColors.orange,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
                                           const SizedBox(height: 10),
                                           // Bill amount, plus region amount when the bill is foreign.
                                           Text(
@@ -298,6 +314,22 @@ class _ApprovalQueueScreenState extends ConsumerState<ApprovalQueueScreen> {
                                                   fontSize: 11.5,
                                                 ),
                                               ),
+                                              // Past this step's approval time limit (SLA).
+                                              if (!isPendingPayment && c.isOverdue) ...[
+                                                const SizedBox(width: 8),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  color: AppColors.danger.withValues(alpha: 0.12),
+                                                  child: const Text(
+                                                    'Overdue',
+                                                    style: TextStyle(
+                                                      color: AppColors.danger,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
                                               const Spacer(),
                                               FilledButton(
                                                 onPressed: () => context.push('/approvals/${_detailStageFor(widget.stage, c)}/${c.id}'),

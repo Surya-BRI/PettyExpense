@@ -49,6 +49,14 @@ def base_currency_for_region(region_code: Optional[str]) -> str:
     return default_base_currency(region_code)
 
 
+def _held_note(figures: dict[str, Any]) -> str:
+    """Why less can be used than the "left" figure people see: bills still in approval are held."""
+    held = float(figures.get("pending_bills") or 0)
+    if held <= 0.004:
+        return ""
+    return f" {figures['currency']} {held:,.2f} is held for bills already waiting for approval."
+
+
 def _fund_label(fund: ErpExpensePettyCashFund) -> str:
     if fund.owner_type == "employee":
         name = fund.employee.display_name if fund.employee else f"employee #{fund.employee_id}"
@@ -747,8 +755,8 @@ class FundService:
                     f"({available:.2f} left). Submit the extra as a reimbursement, or wait for a top-up."
                 )
             raise ValueError(
-                f"This bill exceeds available petty cash ({available:.2f} left). "
-                "Submit a smaller amount or wait for a top-up."
+                f"This bill exceeds available petty cash ({max(available, 0):.2f} can be used now)."
+                f"{_held_note(figures)} Submit a smaller amount or wait for a top-up."
             )
 
     def require_bill_within_limits(
@@ -804,11 +812,13 @@ class FundService:
                 "You don't have petty cash in this company. Ask the Accountant to set it, "
                 "or submit this bill as a reimbursement."
             )
-        available = float(fund_to_dict(db, pot, txn.transaction_id)["uncommitted"] or 0)
+        figures = fund_to_dict(db, pot, txn.transaction_id)
+        available = float(figures["uncommitted"] or 0)
         if part > available + 0.004:
             raise ValueError(
                 f"This bill ({pot.currency} {part:,.2f}) is more than what's left of your petty cash "
-                f"({max(available, 0):,.2f} left). Submit the extra as a reimbursement, or wait for a top-up."
+                f"({max(available, 0):,.2f} can be used now).{_held_note(figures)} "
+                "Submit the extra as a reimbursement, or wait for a top-up."
             )
 
     def employee_advance(

@@ -58,6 +58,10 @@ def _orm_user(db: Session, user: CurrentUser):
     return row
 
 
+# Read one byte past the logo limit, so an oversized file is refused without loading all of it.
+MAX_LOGO_READ = 5 * 1024 * 1024 + 1
+
+
 def _logo_public_url(region_code: str) -> str:
     return f"/api/branding/{region_code}/logo"
 
@@ -102,13 +106,15 @@ def upload_region_logo(
     user: CurrentUser = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    raw = file.file.read()
-    if not raw:
-        raise HTTPException(status_code=400, detail="Empty file")
-    ext = (file.filename or "logo.png").rsplit(".", 1)[-1].lower()
-    if ext not in ("png", "jpg", "jpeg", "webp"):
-        ext = "png"
-    key = storage_service.save_bytes(raw, content_type=file.content_type or "image/png", ext=ext)
+    from services.logo_image import LogoError, normalize_logo
+
+    # Checked, margins trimmed, scaled to fit and saved as PNG (services/logo_image.py), so any
+    # reasonable upload shows well everywhere -- and it really is a PNG, as it's served.
+    try:
+        png, _size = normalize_logo(file.file.read(MAX_LOGO_READ))
+    except LogoError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    key = storage_service.save_bytes(png, content_type="image/png", ext="png")
     try:
         updated = config_service.set_region_logo_key(db, region_id, key)
     except LookupError as exc:

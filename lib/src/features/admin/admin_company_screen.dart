@@ -17,6 +17,7 @@ import '../pca/advances_screen.dart' show PcaDepartmentsView, PcaRequestsView;
 import '../pca/site_pca_screen.dart' show SitePotsView, SiteTopupsView;
 import 'admin_providers.dart';
 import 'admin_regions_screen.dart';
+import 'approval_time_limits_card.dart';
 import 'limit_amount_sheet.dart';
 import 'topups_screen.dart';
 
@@ -314,10 +315,15 @@ class _ApproversTab extends ConsumerWidget {
         // Blue Rhine Contracting: no HODs -- Accountant -> Head of Accountant -> Finance Manager.
         if (region.usesSitePots) {
           return RefreshIndicator(
-            onRefresh: () async => ref.invalidate(_regionApproversProvider(region.id)),
+            onRefresh: () async {
+              ref.invalidate(_regionApproversProvider(region.id));
+              ref.invalidate(regionSlaProvider(region.id));
+            },
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
               children: [
+                SlaTimeButton(regionId: region.id),
+                const SizedBox(height: 12),
                 _ApproverSection(
                   title: '1. Accountant',
                   emptyText: 'No Accountant for $company — those bills go to Admin.',
@@ -346,10 +352,15 @@ class _ApproversTab extends ConsumerWidget {
           );
         }
         return RefreshIndicator(
-          onRefresh: () async => ref.invalidate(_regionApproversProvider(region.id)),
+          onRefresh: () async {
+            ref.invalidate(_regionApproversProvider(region.id));
+            ref.invalidate(regionSlaProvider(region.id));
+          },
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             children: [
+              SlaTimeButton(regionId: region.id),
+              const SizedBox(height: 12),
               _ApproverSection(
                 title: '1. Department HOD',
                 emptyText: 'No HOD for $company — those bills go to Admin.',

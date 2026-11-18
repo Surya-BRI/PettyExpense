@@ -43,6 +43,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ('ksa_sales_hod',      'Test@1234', 'HOD · Sales · KSA'),
     ('ksa_accountant',     'Test@1234', 'Accountant · KSA'),
     ('ksa_finance_mgr',    'Test@1234', 'Accounts Manager · KSA'),
+    ('BRChod',             'BRChod@2026',     'Head of Accountant · BRC'),
+    ('BRCAccount',         'BRCAccount@2026', 'Accountant · BRC'),
   ];
 
   @override

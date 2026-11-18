@@ -23,6 +23,11 @@ class AdminHubScreen extends ConsumerWidget {
         title: 'Companies',
         actions: [
           IconButton(
+            tooltip: 'Aging report',
+            onPressed: () => context.push('/admin/aging'),
+            icon: Icon(PhosphorIcons.hourglassMedium()),
+          ),
+          IconButton(
             tooltip: 'People',
             onPressed: () => context.push('/admin/people'),
             icon: Icon(PhosphorIcons.users()),

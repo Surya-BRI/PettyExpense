@@ -57,6 +57,22 @@ def on_startup() -> None:
     seed_reference_data()
 
 
+@app.on_event("startup")
+async def start_background_jobs() -> None:
+    # Approval SLA: warns overdue approvers and escalates (services/sla_service.py). Runs in
+    # this process; production has one gunicorn worker, so it runs once.
+    from services.sla_service import start_sla_loop
+
+    app.state.sla_task = start_sla_loop()
+
+
+@app.on_event("shutdown")
+async def stop_background_jobs() -> None:
+    task = getattr(app.state, "sla_task", None)
+    if task is not None:
+        task.cancel()
+
+
 @app.get("/health")
 def health():
     return {

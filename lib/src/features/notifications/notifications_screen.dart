@@ -71,6 +71,12 @@ String _bodyOf(String message) {
 // notification falls back to the read-only claim view instead of a stage you no longer own.
 const _approverFacingTypes = {'submission', 'approval_pending', 'resubmit'};
 
+// Approval SLA alerts carry the step and a visit stamp in the type: 'slaw_hod_1795..' (overdue
+// warning to the approver) and 'slae_hod_1795..' (escalation to the next step + Admin).
+bool _isSlaWarning(String? type) => type != null && type.startsWith('slaw_');
+bool _isSlaEscalation(String? type) => type != null && type.startsWith('slae_');
+bool _isSla(String? type) => _isSlaWarning(type) || _isSlaEscalation(type);
+
 // Petty-cash top-up steps ('topup_verified_12') and low-fund alerts ('fund_low_3_0') carry
 // their id in the type, aren't tied to a claim, and open the Top-ups / Funds screen.
 // Employee advances (Professional Signs: 'pca_advance_paid_7', 'pca_reminder_4_0') open Advances.
@@ -88,14 +94,19 @@ String _fundKind(String type) {
   return 'info';
 }
 
+// "You are the backup approver for Rashid" ('delegation_12') -- opens the backup's queue,
+// where the covered bills are listed.
+bool _isBackupType(String? type) => type != null && type.startsWith('delegation_');
+
 String? _routeFor(Map<String, dynamic> row, UserRole role) {
   final type = row['type'] as String?;
+  if (_isBackupType(type)) return '/approvals/${defaultStageFor(role)}';
   if (_isAdvanceType(type)) return '/advances';
   if (_isFundType(type)) return '/topups';
   final txnId = row['transaction_id'];
   if (txnId == null) return null;
   if (type == 'test') return null;
-  if (_approverFacingTypes.contains(type) && row['actionable'] == true) {
+  if ((_approverFacingTypes.contains(type) || _isSla(type)) && row['actionable'] == true) {
     final stage = (row['current_stage'] as String?) ?? defaultStageFor(role);
     return '/approvals/$stage/$txnId';
   }
@@ -114,10 +125,17 @@ final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(
       final message = row['message'] as String? ?? '';
       return AppNotification(
         id: row['id'] as int,
-        title: _titleByType[type] ?? (_isFundType(type) ? _subjectOf(message) : 'Notification'),
+        title: _titleByType[type] ??
+            (_isSlaWarning(type)
+                ? 'Approval overdue'
+                : _isSlaEscalation(type)
+                    ? 'Approval escalated'
+                    : _isFundType(type) || _isBackupType(type)
+                        ? _subjectOf(message)
+                        : 'Notification'),
         body: _bodyOf(message),
         createdAt: _parseDate(row['sent_at'] as String?),
-        kind: _kindByType[type] ?? (_isFundType(type) ? _fundKind(type) : 'info'),
+        kind: _kindByType[type] ?? (_isSla(type) ? 'overdue' : _isFundType(type) ? _fundKind(type) : 'info'),
         unread: row['status'] != 'read',
         route: _routeFor(row, role),
         regionCode: row['region_code'] as String?,
@@ -356,6 +374,8 @@ class NotificationsScreen extends ConsumerWidget {
         return PhosphorIcons.xCircle();
       case 'paid':
         return PhosphorIcons.money();
+      case 'overdue':
+        return PhosphorIcons.warningCircle();
       default:
         return PhosphorIcons.receipt();
     }
@@ -369,6 +389,8 @@ class NotificationsScreen extends ConsumerWidget {
         return AppColors.danger;
       case 'paid':
         return AppColors.darkBlue;
+      case 'overdue':
+        return AppColors.danger;
       default:
         return AppColors.orange;
     }

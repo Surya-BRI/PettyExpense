@@ -12,7 +12,9 @@ import '../../widgets/brand_app_bar.dart';
 import '../../widgets/claim_stage_tracker.dart';
 import '../../widgets/shimmer_box.dart';
 import '../authentication/auth_controller.dart';
+import '../../services/offline_bills/offline_bill_sync.dart';
 import '../shared/status_chip.dart';
+import 'offline_bills_card.dart';
 import '../../utils/company_names.dart';
 
 const _pageSize = 6;
@@ -171,6 +173,8 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
               selected: state.regionCode,
               onSelected: ref.read(myClaimsControllerProvider.notifier).setRegion,
             ),
+          // Bills scanned without a connection (waiting to upload / ready to review).
+          const OfflineBillsCard(),
           Expanded(
             child: state.isLoading
                 ? const _MyClaimsSkeleton()
@@ -187,7 +191,10 @@ class _MyClaimsScreenState extends ConsumerState<MyClaimsScreen> {
                             ),
                           )
                         : RefreshIndicator(
-                            onRefresh: () => ref.read(myClaimsControllerProvider.notifier).refresh(),
+                            onRefresh: () async {
+                              await ref.read(offlineBillsProvider.notifier).sync();
+                              await ref.read(myClaimsControllerProvider.notifier).refresh();
+                            },
                             child: ListView.separated(
                               padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                               itemCount: state.items.length,

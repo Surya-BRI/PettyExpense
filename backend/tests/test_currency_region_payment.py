@@ -346,6 +346,40 @@ def test_totals_include_old_claims_without_a_stored_base_amount(db, world, appro
     assert listed["totals"]["AED"] == pytest.approx(980.0 + 490.0)
 
 
+def test_recording_payment_with_the_real_paid_email_does_not_fail(db, world, monkeypatch):
+    """The real notification path (paid email template + in-app row), not the stub above --
+    "Mark as paid" must not end in an internal error."""
+    from services import notification_service
+
+    emails = []
+    monkeypatch.setattr(
+        notification_service.email_service, "notify",
+        lambda to, subject, body, html_body=None: emails.append((to, subject)) or True,
+    )
+    txn = _txn(db, _claim(db, world, currency="SAR", total=1000.0))
+    txn.status = "approved"
+    db.commit()
+    rec = _pay(db, _as(world["fm_uae"], "finance_manager"), txn.transaction_id, remarks="June batch")
+    assert rec["payment_reference"] == "TRX-1"
+    db.refresh(txn)
+    assert txn.status == "paid"
+    assert len(emails) == 1
+
+
+def test_a_failing_notification_does_not_undo_or_fail_the_payment(db, world, monkeypatch):
+    def broken(*_args, **_kw):
+        raise RuntimeError("mail server down")
+
+    monkeypatch.setattr(transaction_service, "_notify_employee", broken)
+    txn = _txn(db, _claim(db, world, currency="SAR", total=1000.0))
+    txn.status = "approved"
+    db.commit()
+    rec = _pay(db, _as(world["fm_uae"], "finance_manager"), txn.transaction_id)
+    assert rec["payment_reference"] == "TRX-1"
+    db.refresh(txn)
+    assert txn.status == "paid"
+
+
 def test_recording_payment_marks_paid_and_notifies_once(db, world, approved):
     txn, sent = approved
     day = (date.today() - timedelta(days=1)).isoformat()

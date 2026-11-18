@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from database.models import (
     ErpAuthExpenseUsers,
-    ErpExpenseApproverDelegation,
     ErpExpenseCategory,
     ErpExpenseDepartment,
     ErpExpenseHodAssignment,
@@ -65,16 +64,6 @@ def hod_assignment_to_dict(a: ErpExpenseHodAssignment) -> dict[str, Any]:
         "user_id": a.user_id,
         "department_id": a.department_id,
         "is_active": bool(a.is_active),
-    }
-
-
-def delegation_to_dict(d: ErpExpenseApproverDelegation) -> dict[str, Any]:
-    return {
-        "id": d.delegation_id,
-        "approver_id": d.approver_id,
-        "backup_id": d.backup_id,
-        "start_date": d.start_date,
-        "end_date": d.end_date,
     }
 
 
@@ -258,6 +247,63 @@ class ConfigService:
         db.refresh(r)
         return region_to_dict(r)
 
+    # -- Approval time limits (SLA) --
+    def _region(self, db: Session, region_id: int) -> ErpExpenseRegionConfig:
+        r = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == region_id).first()
+        if not r:
+            raise LookupError("Region not found")
+        return r
+
+    def region_sla(self, db: Session, region_id: int) -> dict[str, Any]:
+        """This company's approval steps with their time limit in hours."""
+        from services.region_policy import MAX_SLA_HOURS, MIN_SLA_HOURS, sla_hours, sla_stages, stage_label_overrides
+
+        r = self._region(db, region_id)
+        labels = {
+            "hod": "Head of Department (HOD)",
+            "department_hod": "Other department's HOD",
+            "accountant": "Accountant",
+            "head_accountant": "Head of Accountant",
+            "finance_manager": "Finance Manager",
+            **stage_label_overrides(r),
+        }
+        return {
+            "region_id": r.region_id,
+            "region_code": r.region_code,
+            "min_hours": MIN_SLA_HOURS,
+            "max_hours": MAX_SLA_HOURS,
+            "stages": [
+                {"stage": s, "label": labels.get(s, s), "hours": sla_hours(r, s)} for s in sla_stages(r)
+            ],
+        }
+
+    def update_region_sla(self, db: Session, region_id: int, hours_by_stage: dict[str, Any]) -> dict[str, Any]:
+        """Saves only `sla_hours` in the company's matrix (every other setting is kept), then
+        moves open bills' due times to the new limits."""
+        from services.region_policy import MAX_SLA_HOURS, MIN_SLA_HOURS, matrix, sla_stages
+        from services.sla_service import recalculate_due_times
+
+        r = self._region(db, region_id)
+        allowed = set(sla_stages(r))
+        cleaned: dict[str, float] = {}
+        for stage, value in (hours_by_stage or {}).items():
+            if stage not in allowed:
+                raise ValueError(f"{stage} is not an approval step for this company")
+            try:
+                hours = float(value)
+            except (TypeError, ValueError):
+                raise ValueError(f"Enter a time limit for {stage}") from None
+            if not (MIN_SLA_HOURS - 1e-9 <= hours <= MAX_SLA_HOURS):
+                raise ValueError("A time limit must be between 5 minutes and 720 hours")
+            cleaned[stage] = round(hours, 4)
+        current = matrix(r)
+        existing = current.get("sla_hours") if isinstance(current.get("sla_hours"), dict) else {}
+        current["sla_hours"] = {**existing, **cleaned}
+        r.approval_matrix_json = json.dumps(current)
+        db.commit()
+        recalculate_due_times(db, r.region_id)
+        return self.region_sla(db, region_id)
+
     def region_approvers(self, db: Session, region_id: int) -> dict[str, Any]:
         """Per role, who handles this company's bills (home company or Admin-assigned)."""
         region = db.query(ErpExpenseRegionConfig).filter(ErpExpenseRegionConfig.region_id == region_id).first()
@@ -348,18 +394,7 @@ class ConfigService:
         db.refresh(a)
         return hod_assignment_to_dict(a)
 
-    # -- Approver delegations (Phase 2) --
-    def list_delegations(self, db: Session) -> list[dict[str, Any]]:
-        return [delegation_to_dict(d) for d in db.query(ErpExpenseApproverDelegation).all()]
-
-    def create_delegation(self, db: Session, approver_id: int, backup_id: int, start_date: str, end_date: str) -> dict[str, Any]:
-        d = ErpExpenseApproverDelegation(
-            approver_id=approver_id, backup_id=backup_id, start_date=start_date, end_date=end_date
-        )
-        db.add(d)
-        db.commit()
-        db.refresh(d)
-        return delegation_to_dict(d)
+    # Backup approvers (delegations): services/delegation_service.py.
 
     # -- People / ERP directory (no local copy) --
     def list_users(

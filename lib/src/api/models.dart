@@ -398,6 +398,9 @@ class ExpenseClaim {
     this.history,
     this.duplicateWarning,
     this.duplicateFlag = false,
+    this.stageDueAt,
+    this.slaState = 0,
+    this.coveringFor = const [],
     this.stageSequence = const [],
     this.stageLabels = const {},
     this.lineItems = const [],
@@ -480,6 +483,26 @@ class ExpenseClaim {
   /// Persisted at submission time (same employee + vendor + amount + date) -- unlike
   /// [duplicateWarning], this is present on list endpoints too.
   final bool duplicateFlag;
+
+  /// When the current approval step's time limit runs out (naive UTC ISO), null when the
+  /// bill isn't waiting on an approver.
+  final String? stageDueAt;
+
+  /// 0 on time, 1 approver warned (overdue), 2 escalated.
+  final int slaState;
+
+  /// Past the current step's time limit.
+  bool get isOverdue {
+    final due = DateTime.tryParse(stageDueAt ?? '');
+    if (due == null) return false;
+    final dueUtc = DateTime.utc(due.year, due.month, due.day, due.hour, due.minute, due.second);
+    return DateTime.now().toUtc().isAfter(dueUtc);
+  }
+
+  /// Approver queue only: the people the signed-in user is standing in for on this bill
+  /// (they are those approvers' backup today). Empty when it's their own step.
+  final List<String> coveringFor;
+
   final List<String> stageSequence;
 
   /// Per-claim names so a cross-dept bill shows "Sales HOD" then "IT HOD"
@@ -570,6 +593,9 @@ class ExpenseClaim {
           ? null
           : DuplicateWarning.fromJson(json['duplicate_warning'] as Map<String, dynamic>),
       duplicateFlag: json['duplicate_flag'] as bool? ?? false,
+      stageDueAt: json['stage_due_at'] as String?,
+      slaState: (json['sla_state'] as num?)?.toInt() ?? 0,
+      coveringFor: [for (final n in (json['covering_for'] as List? ?? const [])) '$n'],
       stageSequence: (json['stage_sequence'] as List?)?.map((e) => e as String).toList() ?? const [],
       stageLabels: {
         if (json['stage_labels'] is Map)

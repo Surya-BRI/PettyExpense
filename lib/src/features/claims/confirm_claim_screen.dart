@@ -8,6 +8,7 @@ import 'package:phosphor_icons/phosphor_icons.dart';
 
 import '../../api/api_client.dart';
 import '../../api/models.dart';
+import '../../services/offline_bills/offline_bill_sync.dart';
 import '../../theme/app_theme.dart';
 import '../../utils/currency.dart';
 import '../../utils/money.dart';
@@ -75,6 +76,7 @@ class ConfirmClaimScreen extends ConsumerStatefulWidget {
     this.lineMode = BillLineMode.single,
     this.ocrMode = 'auto',
     this.existingClaimId,
+    this.offlineBillId,
   }) : assert(
          ocr != null || existingClaimId != null,
          'Provide either a freshly-OCRd ocr result or an existingClaimId to edit',
@@ -90,6 +92,10 @@ class ConfirmClaimScreen extends ConsumerStatefulWidget {
 
   /// Language hint chosen on Add receipt (`auto` / `en` / `ar`).
   final String ocrMode;
+
+  /// Opened from a bill that was scanned offline and uploaded later: once it's saved (draft or
+  /// submitted) it's removed from the phone's offline list.
+  final String? offlineBillId;
 
   /// Set instead of [ocr] when opening this screen to edit a previously-saved draft --
   /// fetches and seeds the form from the server instead of from a fresh OCR read, and
@@ -324,6 +330,11 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     return ownPart * rate > _usableFor(pot) + 0.004;
   }
 
+  /// Why less is usable than the "left" figure: bills still in approval are held against the pot.
+  String _heldNote(PettyCashFund pot) => pot.pendingBills > 0.004 && !_editingDisputed
+      ? ' ${formatMoney(pot.currency, pot.pendingBills)} is held for bills already waiting for approval.'
+      : '';
+
   String get _pettyCashBlockMessage {
     if (_billRegion == null || _billRegion!.isEmpty) {
       return 'Select the company for this bill before submitting petty cash. '
@@ -336,8 +347,8 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
             'or file this bill as a reimbursement.';
       }
       final left = formatMoney(pot.currency, _usableFor(pot) < 0 ? 0 : _usableFor(pot));
-      return 'This bill is more than what\'s left of your petty cash ($left left). '
-          'File the extra as a reimbursement, or wait for a top-up.';
+      return 'This bill is more than what\'s left of your petty cash ($left can be used now).'
+          '${_heldNote(pot)} File the extra as a reimbursement, or wait for a top-up.';
     }
     if (_employeeAdvances) {
       if (pot == null || pot.approvedLimit <= 0) {
@@ -367,7 +378,7 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
     final converted = rate != null && pot.currency.toUpperCase() != (_currency ?? '').toUpperCase()
         ? ' (${formatMoney(pot.currency, _ownPotAmount * rate)})'
         : '';
-    return '$subject$converted exceeds available petty cash ($left left). '
+    return '$subject$converted exceeds available petty cash ($left can be used now).${_heldNote(pot)} '
         'Submit a smaller amount or wait for a top-up. You can still save as draft.';
   }
 
@@ -861,6 +872,10 @@ class _ConfirmClaimScreenState extends ConsumerState<ConfirmClaimScreen> {
           's3_key': _ocr.s3Key,
           'submit': !asDraft,
         });
+        final offlineId = widget.offlineBillId;
+        if (offlineId != null) {
+          await ref.read(offlineBillsProvider.notifier).remove(offlineId);
+        }
       }
       if (!mounted) return;
       if (claim.duplicateWarning != null) {

@@ -299,7 +299,8 @@ def test_submitted_bill_is_reserved_not_deducted(db):
     assert mine["remaining"] == 1000
     assert mine["pending_bills"] == 300
     assert mine["uncommitted"] == 700
-    with pytest.raises(ValueError, match="exceeds available petty cash"):
+    # The refusal says why less than the 1000 "left" can be used: 300 is held for the bill in approval.
+    with pytest.raises(ValueError, match=r"700\.00 can be used now\)\. AED 300\.00 is held for bills already waiting"):
         fund_service.require_petty_cash_within_limit(db, employee, uae.region_id, 700.01)
 
     txn.status = "approved"

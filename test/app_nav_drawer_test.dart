@@ -12,6 +12,10 @@ import 'package:go_router/go_router.dart';
 
 /// Opens the side menu for a user with [role] and returns the visible menu labels.
 Future<void> _openDrawerAs(WidgetTester tester, String role, {List<String> regions = const ['DUBAI']}) async {
+  // A phone-height screen, so the longest menu (Finance Manager) fits without scrolling.
+  tester.view.physicalSize = const Size(800, 1400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final router = GoRouter(
     initialLocation: '/home',
@@ -51,6 +55,20 @@ void main() {
       expect(find.text('People'), findsNothing);
       expect(find.text('Companies'), findsNothing);
       expect(find.text('Profile'), findsOneWidget);
+    });
+  }
+
+  for (final role in ['hod', 'accountant', 'finance_manager']) {
+    testWidgets('$role can set their own backup', (tester) async {
+      await _openDrawerAs(tester, role);
+      expect(find.text('My backup'), findsOneWidget);
+    });
+  }
+
+  for (final role in ['employee', 'admin']) {
+    testWidgets('$role has no My backup entry', (tester) async {
+      await _openDrawerAs(tester, role);
+      expect(find.text('My backup'), findsNothing);
     });
   }
 

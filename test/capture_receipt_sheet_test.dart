@@ -32,20 +32,22 @@ ButtonStyleButton _button(WidgetTester tester, String label) =>
     tester.widget<ButtonStyleButton>(find.ancestor(of: find.text(label), matching: find.bySubtype<ButtonStyleButton>()).first);
 
 void main() {
-  testWidgets('camera and gallery stay disabled until a bill type is chosen', (tester) async {
+  testWidgets('scan, camera and gallery stay disabled until a bill type is chosen', (tester) async {
     await _openSheet(tester);
 
     expect(find.text('Single item'), findsOneWidget);
     expect(find.text('Multiple items'), findsOneWidget);
     expect(find.text('Choose the bill type above to continue'), findsOneWidget);
-    expect(_button(tester, 'Open camera').onPressed, isNull);
+    expect(_button(tester, 'Scan bill').onPressed, isNull);
+    expect(_button(tester, 'Use camera').onPressed, isNull);
     expect(_button(tester, 'Upload from gallery').onPressed, isNull);
 
     await tester.tap(find.text('Multiple items'));
     await tester.pumpAndSettle();
 
     expect(find.text('Choose the bill type above to continue'), findsNothing);
-    expect(_button(tester, 'Open camera').onPressed, isNotNull);
+    expect(_button(tester, 'Scan bill').onPressed, isNotNull);
+    expect(_button(tester, 'Use camera').onPressed, isNotNull);
     expect(_button(tester, 'Upload from gallery').onPressed, isNotNull);
   });
 
